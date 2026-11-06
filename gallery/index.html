@@ -18,10 +18,13 @@
     <div id="status" role="status">Loading the gallery…</div>
     <noscript>This gallery requires JavaScript and WebAssembly.</noscript>
     <script>
-      window.addEventListener("unhandledrejection", () => {
+      function showLoadError() {
         const status = document.getElementById("status");
         if (status) status.textContent = "The gallery could not load. Check the browser console and reload.";
-      });
+      }
+      // Module evaluation and resource loading errors use the error event.
+      window.addEventListener("error", showLoadError, true);
+      window.addEventListener("unhandledrejection", showLoadError);
     </script>
   </body>
 </html>

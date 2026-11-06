@@ -21,7 +21,8 @@ is unchanged, and the requested no-color behavior is preserved.
 
 The core depends only on egui, without its default features. It re-exports egui
 so hosts use compatible types; no custom widget API is introduced yet. Only the
-gallery depends on eframe, enabling bundled default fonts, glow, Wayland and X11.
+gallery depends on eframe, enabling bundled default fonts, glow, native clipboard
+and link handling, Wayland and X11.
 Native uses OpenGL; the browser explicitly requires WebGL 2, with no WebGPU
 fallback. Initialization failures leave a visible message. Themes, systematic
 input testing, and accessibility integration belong to later quests.

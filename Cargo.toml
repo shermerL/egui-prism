@@ -12,7 +12,7 @@ repository = "https://github.com/shermerL/egui-prism"
 [workspace.dependencies]
 egui = { version = "=0.37.0", default-features = false }
 egui-prism = { path = "crates/egui-prism" }
-eframe = { version = "=0.37.0", default-features = false, features = ["default_fonts", "glow", "wayland", "x11"] }
+eframe = { version = "=0.37.0", default-features = false, features = ["clipboard", "default_fonts", "glow", "links", "wayland", "x11"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
