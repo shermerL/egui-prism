@@ -29,6 +29,21 @@ from the actual reference. Reusing an egui operation is acceptable only when the
 observed behavior satisfies that contract. A platform limitation is an open gap,
 not permission to substitute egui behavior or claim parity.
 
+## Shared compositing boundary
+
+CSS opacity applies to a completed group. Multiplying each overlapping egui
+shape's alpha produces different text, image, border and shadow colors. Strict
+parity therefore requires host-owned group compositing over the actual surface;
+a fixed background-color approximation is insufficient.
+
+The planned [host compositing capability](/quest/m1/shadcn-parity/host-compositing.md)
+keeps the core egui-only and adds a separately installed glow adapter for the
+Gallery's native OpenGL and WebGL2 paths. The host owns GPU resources and frame
+ordering. Backend setup failures are explicit, and other renderers need an
+equivalent adapter. Component implementation and acceptance stay with their own
+Quests after the shared capability lands. This capability is planned, not yet
+implemented or accepted.
+
 ## Acceptance for every component
 
 Capture the reference and Rust implementation at matching size, scale, font,

@@ -15,3 +15,7 @@ in the same PR. Propose material API choices before implementing them.
 Follow [the strict shadcn contract](/docs/shadcn-parity.md), including actual
 reference comparison for every supported state. Earlier themed-egui candidates
 do not satisfy this requirement.
+
+## Required
+
+- [Host-owned group compositing](/quest/m1/shadcn-parity/host-compositing.md) - shared opacity and transition rendering
