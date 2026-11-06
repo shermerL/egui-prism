@@ -34,6 +34,17 @@ An additional increasing step reaches the clamped maximum.
   pointer maps its position over the entire rail, even beyond its bounds.
 - Pressing the track maps immediately. Releasing ends that pointer interaction.
 
+Only a new pointer press requests keyboard focus. Releasing an existing capture
+does not override a host's explicit `surrender_focus`. Normal track release can
+still lose thumb focus under egui's separate track/thumb interaction routing;
+the regression requiring immediate keyboard input after that release remains an
+open failure.
+
+Other open input boundaries include the first arrow immediately after Tab or an
+external focus request, deferred reverse-Tab focus, and same-batch Tab/arrow
+ordering. Escape currently follows egui's default focus-release behavior, even
+when focus is stable. These are separate from capture-release ownership.
+
 Merely displaying an out-of-range caller value does not rewrite it: the thumb
 displays the nearest endpoint until the next edit. Disabled calls reject pointer,
 keyboard and accessibility writes, including while a drag is in progress.

@@ -21,6 +21,7 @@ struct Harness {
     transform: egui::emath::TSTransform,
     modal: bool,
     navigation_neighbor: bool,
+    release_focus_before_widgets: Option<egui::Id>,
 }
 
 impl Harness {
@@ -46,6 +47,7 @@ impl Harness {
             transform: egui::emath::TSTransform::IDENTITY,
             modal: false,
             navigation_neighbor: false,
+            release_focus_before_widgets: None,
         }
     }
 
@@ -64,6 +66,9 @@ impl Harness {
                 ..Default::default()
             },
             |ui| {
+                if let Some(id) = self.release_focus_before_widgets {
+                    ui.memory_mut(|memory| memory.surrender_focus(id));
+                }
                 ui.ctx().set_transform_layer(ui.layer_id(), self.transform);
                 if self.modal {
                     ui.memory_mut(|memory| {
@@ -534,4 +539,30 @@ fn track_click_retains_thumb_focus_for_following_keys() {
     h.key(egui::Key::ArrowLeft);
     assert_eq!(h.values[0], 95.0);
     assert!(h.frame(vec![])[0].has_focus());
+}
+
+#[test]
+fn capture_release_preserves_host_surrender_until_a_new_press() {
+    for release_before_widgets in [false, true] {
+        let mut h = Harness::new();
+        h.frame(vec![]);
+        let responses = h.frame(vec![]);
+        let id = responses[0].id;
+        let pos = responses[0].rect.right_center();
+        h.pointer(pos, true);
+        assert!(h.context.memory(|memory| memory.has_focus(id)));
+        if release_before_widgets {
+            h.release_focus_before_widgets = Some(id);
+        } else {
+            responses[0].surrender_focus();
+        }
+        h.pointer(pos, false);
+        assert!(!h.context.memory(|memory| memory.has_focus(id)));
+        assert_eq!(h.values[0], 100.0);
+        h.release_focus_before_widgets = None;
+        h.key(egui::Key::ArrowLeft);
+        assert_eq!(h.values[0], 100.0);
+        h.pointer(pos, true);
+        assert!(h.context.memory(|memory| memory.has_focus(id)));
+    }
 }
