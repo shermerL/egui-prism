@@ -7,6 +7,7 @@ use egui_prism::{
 pub(super) struct ButtonCase {
     icon: egui::TextureHandle,
     disabled: bool,
+    invalid: bool,
     reversed: bool,
     preview_activations: u64,
     counts: [u64; 2],
@@ -26,6 +27,7 @@ impl ButtonCase {
         Self {
             icon: context.load_texture("gallery-plus", image, egui::TextureOptions::LINEAR),
             disabled: false,
+            invalid: false,
             reversed: false,
             preview_activations: 0,
             counts: [0; 2],
@@ -35,21 +37,33 @@ impl ButtonCase {
     pub(super) fn show(&mut self, ui: &mut egui::Ui, theme: &Theme) {
         ui.heading("Prism buttons");
         ui.label("Hover, press, or use Tab and Enter/Space. Theme and scale changes preserve action counts.");
-        ui.checkbox(&mut self.disabled, "Disable buttons");
-        ui.label("Roles and sizes");
+        ui.horizontal_wrapped(|ui| {
+            ui.checkbox(&mut self.disabled, "Disable buttons");
+            ui.checkbox(&mut self.invalid, "Invalid buttons");
+        });
+        ui.label("Roles and sizes: XS / Small / Default / Large");
         for (name, role) in [
             ("Primary", ButtonRole::Primary),
             ("Secondary", ButtonRole::Secondary),
             ("Outline", ButtonRole::Outline),
             ("Ghost", ButtonRole::Ghost),
             ("Destructive", ButtonRole::Destructive),
+            ("Link", ButtonRole::Link),
         ] {
             ui.horizontal_wrapped(|ui| {
-                for size in [ButtonSize::Small, ButtonSize::Medium, ButtonSize::Large] {
+                for size in [
+                    ButtonSize::ExtraSmall,
+                    ButtonSize::Small,
+                    ButtonSize::Medium,
+                    ButtonSize::Large,
+                ] {
                     if ui
                         .add_enabled(
                             !self.disabled,
-                            Button::new(theme, name).role(role).size(size),
+                            Button::new(theme, name)
+                                .role(role)
+                                .size(size)
+                                .invalid(self.invalid),
                         )
                         .clicked()
                     {
@@ -68,7 +82,12 @@ impl ButtonCase {
             {
                 self.preview_activations += 1;
             }
-            for size in [ButtonSize::Small, ButtonSize::Medium, ButtonSize::Large] {
+            for size in [
+                ButtonSize::ExtraSmall,
+                ButtonSize::Small,
+                ButtonSize::Medium,
+                ButtonSize::Large,
+            ] {
                 if ui
                     .add_enabled(
                         !self.disabled,
@@ -77,7 +96,8 @@ impl ButtonCase {
                             (self.icon.id(), egui::vec2(16.0, 16.0)),
                             "Add item",
                         )
-                        .size(size),
+                        .size(size)
+                        .invalid(self.invalid),
                     )
                     .clicked()
                 {
@@ -110,9 +130,23 @@ impl ButtonCase {
                 self.preview_activations += 1;
             }
         });
-        if ui.add_enabled(!self.disabled, Button::new(theme, "A deliberately long action label that wraps within the available content width").role(ButtonRole::Outline)).clicked() {
-            self.preview_activations += 1;
-        }
+        egui::ScrollArea::horizontal()
+            .id_salt("long-button")
+            .show(ui, |ui| {
+                if ui
+                    .add_enabled(
+                        !self.disabled,
+                        Button::new(
+                            theme,
+                            "A deliberately long action label that keeps its intrinsic width",
+                        )
+                        .role(ButtonRole::Outline),
+                    )
+                    .clicked()
+                {
+                    self.preview_activations += 1;
+                }
+            });
         ui.label(format!("Preview activations: {}", self.preview_activations));
         ui.separator();
         ui.label("Independent instances");

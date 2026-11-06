@@ -102,7 +102,7 @@ pub struct Theme {
     pub metrics: Metrics,
     /// Text sizes that preserve the host's font families.
     pub typography: Typography,
-    dark: bool,
+    pub(crate) dark: bool,
 }
 
 const fn pair(background: u32, foreground: u32) -> ColorPair {
