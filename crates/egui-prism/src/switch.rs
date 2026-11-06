@@ -113,7 +113,8 @@ impl egui::Widget for Switch<'_, '_> {
             );
             ui.painter().circle_filled(center, radius, pair.foreground);
             ui.painter().galley(
-                egui::pos2(track.right() + gap, rect.center().y - galley.size().y * 0.5),
+                egui::pos2(track.right() + gap, rect.center().y - galley.size().y * 0.5)
+                    - galley.rect.min.to_vec2(),
                 galley,
                 colors.surface.foreground,
             );

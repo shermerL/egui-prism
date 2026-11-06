@@ -223,3 +223,41 @@ fn painted_thumb_and_accessibility_follow_the_value_at_different_sizes() {
         assert_eq!(node.label(), Some("Enable this option"));
     }
 }
+
+#[test]
+fn aligned_labels_stay_beside_the_track_and_inside_the_hit_target() {
+    for align in [egui::Align::Center, egui::Align::Max] {
+        let context = egui::Context::default();
+        let theme = Theme::light();
+        let mut value = false;
+        let mut response = None;
+        let mut text_bounds = None;
+        for _ in 0..2 {
+            let output = context.run_ui(Default::default(), |ui| {
+                let mut job = egui::text::LayoutJob::simple(
+                    "Aligned switch label".into(),
+                    egui::FontId::proportional(14.0),
+                    egui::Color32::WHITE,
+                    240.0,
+                );
+                job.halign = align;
+                response = Some(ui.add(Switch::new(&theme, &mut value, job)));
+            });
+            for shape in &output.shapes {
+                if let egui::Shape::Text(text) = &shape.shape {
+                    text_bounds = Some(text.galley.rect.translate(text.pos.to_vec2()));
+                }
+            }
+            output.drop_without_applying_deltas();
+        }
+        let response = response.unwrap();
+        let text = text_bounds.unwrap();
+        let label_left = response.rect.left()
+            + theme.metrics.control_height * 0.625 * 1.8
+            + theme.metrics.item_spacing.x;
+        assert!(text.left() >= label_left - 0.1, "{align:?}: {text:?}");
+        assert!(text.right() <= response.rect.right() + 0.1);
+        assert!(text.top() >= response.rect.top() - 0.1);
+        assert!(text.bottom() <= response.rect.bottom() + 0.1);
+    }
+}
