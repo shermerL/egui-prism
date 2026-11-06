@@ -1,15 +1,14 @@
 # egui-prism
 
-A shadcn-inspired component library for egui.
+A Rust component library implementing shadcn/ui designs with egui.
 
 [egui](https://github.com/emilk/egui) is an immediate-mode GUI library written in
 Rust for native and web applications. [shadcn/ui](https://ui.shadcn.com/docs)
-provides the design reference for composable components and carefully chosen
-default styles. egui-prism aims to bring reusable widgets, semantic themes, and
-consistent interactions to egui, with one Rust implementation shared by native
-and WebAssembly galleries.
+defines the component appearance, geometry, states, and interaction contract.
+egui-prism implements that contract in Rust, shared by native and WebAssembly
+galleries.
 
-The library workspace and native/WebAssembly engineering gallery are in development. Semantic light/dark themes, Button, IconButton, TextInput, and Checkbox are available. The gallery distinguishes Prism components from standard egui harness controls; other widgets are planned. There is no published crate or live component gallery yet.
+The library workspace and native/WebAssembly engineering gallery are in development. Semantic light/dark themes, Button, IconButton, TextInput, and Checkbox have initial implementations undergoing strict shadcn parity correction. The gallery distinguishes Prism components from standard egui harness controls; other widgets are planned. There is no published crate or live component gallery yet.
 
 The planned GitHub Pages site will display the actual components, their states, and Rust examples.
 
