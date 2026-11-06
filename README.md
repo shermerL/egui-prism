@@ -45,3 +45,11 @@ See [buttons](docs/buttons.md) for roles, sizes, icons, and caller-owned actions
 See [text input](docs/text-input.md) for editing, validation, IDs, and IME evidence.
 
 See [checkboxes](docs/checkboxes.md) for caller-owned boolean editing.
+
+## shadcn parity
+
+Every component targets strict parity with the pinned shadcn source in appearance,
+geometry, state styling and interaction. egui is the rendering/input substrate.
+The current components are undergoing a full parity correction; existing test and
+CI results do not establish visual acceptance. See the [reference contract and
+component audit](docs/shadcn-parity.md) and [correction Quests](quest/m1/shadcn-parity/README.md).

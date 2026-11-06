@@ -8,6 +8,8 @@ component. All implementations use the same library on native and wasm.
 
 ## Required
 
+- [Strict shadcn parity for existing components](/quest/m1/shadcn-parity/README.md)
+
 - [Switch](/quest/m1/switch.md)
 - [Slider](/quest/m1/slider.md)
 - [Select](/quest/m1/select.md)
