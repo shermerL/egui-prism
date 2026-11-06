@@ -16,12 +16,14 @@ Follow [the strict shadcn contract](/docs/shadcn-parity.md), including actual
 reference comparison for every supported state. Earlier themed-egui candidates
 do not satisfy this requirement.
 
-
 The previous draft is being replaced with fixed default/small geometry, reference
 focus-visible and keyboard timing, and controlled reference/Gallery comparisons.
 Completion still requires actual browser and native comparison, independent
 review, latest-head GitHub reviews, and CI. Keep this Quest until those gates pass.
 
+## Required
+
+- [Host-owned group compositing](/quest/m1/shadcn-parity/host-compositing.md) - shared opacity and transition rendering
 
 ## Waiting
 
