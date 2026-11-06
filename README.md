@@ -8,7 +8,7 @@ defines the component appearance, geometry, states, and interaction contract.
 egui-prism implements that contract in Rust, shared by native and WebAssembly
 galleries.
 
-The library workspace and native/WebAssembly engineering gallery are in development. Semantic light/dark themes, Button, IconButton, TextInput, and Checkbox have initial implementations undergoing strict shadcn parity correction. The gallery distinguishes Prism components from standard egui harness controls; other widgets are planned. There is no published crate or live component gallery yet.
+The library workspace and native/WebAssembly engineering gallery are in development. Semantic light/dark themes, Button, IconButton, TextInput, Checkbox, and Switch have initial implementations undergoing strict shadcn parity correction. The gallery distinguishes Prism components from standard egui harness controls; other widgets are planned. There is no published crate or live component gallery yet.
 
 The planned GitHub Pages site will display the actual components, their states, and Rust examples.
 
@@ -44,6 +44,7 @@ See [buttons](docs/buttons.md) for roles, sizes, icons, and caller-owned actions
 See [text input](docs/text-input.md) for editing, validation, IDs, and IME evidence.
 
 See [checkboxes](docs/checkboxes.md) for caller-owned boolean editing.
+See [switches](docs/switches.md) for controlled boolean changes and interaction.
 
 ## shadcn parity
 

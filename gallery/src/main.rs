@@ -3,6 +3,7 @@
 mod buttons;
 mod checkboxes;
 mod interaction;
+mod switches;
 mod text_inputs;
 
 use egui_prism::{egui, theme::Theme};
@@ -14,6 +15,7 @@ enum Case {
     Buttons,
     Inputs,
     Checkboxes,
+    Switches,
     Interaction,
     Layout,
 }
@@ -26,6 +28,7 @@ struct Gallery {
     buttons: buttons::ButtonCase,
     inputs: text_inputs::InputCase,
     checkboxes: checkboxes::CheckboxCase,
+    switches: switches::SwitchCase,
 }
 
 impl Gallery {
@@ -39,6 +42,7 @@ impl Gallery {
             buttons: buttons::ButtonCase::new(context),
             inputs: text_inputs::InputCase::default(),
             checkboxes: checkboxes::CheckboxCase::default(),
+            switches: switches::SwitchCase::default(),
         };
         gallery.apply_theme(context);
         gallery
@@ -76,6 +80,7 @@ impl eframe::App for Gallery {
                     ui.selectable_value(&mut self.case, Case::Buttons, "Buttons");
                     ui.selectable_value(&mut self.case, Case::Inputs, "Inputs");
                     ui.selectable_value(&mut self.case, Case::Checkboxes, "Checkboxes");
+                    ui.selectable_value(&mut self.case, Case::Switches, "Switches");
                     ui.selectable_value(&mut self.case, Case::Interaction, "Interaction");
                     ui.selectable_value(&mut self.case, Case::Layout, "Layout");
                 });
@@ -108,6 +113,7 @@ impl eframe::App for Gallery {
                         Case::Buttons => self.buttons.show(ui, &theme),
                         Case::Inputs => self.inputs.show(ui, &theme),
                         Case::Checkboxes => self.checkboxes.show(ui, &theme),
+                        Case::Switches => self.switches.show(ui, &theme),
                         Case::Interaction | Case::Layout => {
                             ui.heading("Harness controls (egui)");
                             ui.label("Activate with the pointer or Tab and Enter. Counts change once per activation and remain still while idle.");
