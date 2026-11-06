@@ -151,9 +151,11 @@ impl<'theme, 'a> Button<'theme, 'a> {
             .image
             .as_ref()
             .is_some_and(|image| image.image_options().tint == egui::Color32::WHITE);
-        let text = self
-            .text
-            .map(|text| text.fallback_text_style(egui::TextStyle::Button));
+        let text_style = style
+            .override_text_style
+            .clone()
+            .unwrap_or(egui::TextStyle::Button);
+        let text = self.text.map(|text| text.fallback_text_style(text_style));
         let button = egui::Button::opt_image_and_text(self.image, text)
             .image_tint_follows_text_color(tint_follows_text)
             .wrap()

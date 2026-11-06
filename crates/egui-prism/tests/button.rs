@@ -269,22 +269,28 @@ fn labels_use_the_host_button_font_and_keep_explicit_formatting() {
             _ => {}
         }
     }
-    let context = egui::Context::default();
-    let theme = Theme::light();
-    let output = context.run_ui(egui::RawInput::default(), |ui| {
-        ui.style_mut()
-            .text_styles
-            .insert(egui::TextStyle::Button, egui::FontId::proportional(24.0));
-        ui.add(Button::new(&theme, "Host button font"));
-        ui.add(Button::new(
-            &theme,
-            egui::RichText::new("Explicit font").size(30.0),
-        ));
-    });
-    let mut sizes = Vec::new();
-    for clipped in &output.shapes {
-        text_sizes(&clipped.shape, &mut sizes);
+    for (override_style, expected) in [(None, 24.0), (Some(egui::TextStyle::Heading), 28.0)] {
+        let context = egui::Context::default();
+        let theme = Theme::light();
+        let output = context.run_ui(egui::RawInput::default(), |ui| {
+            ui.style_mut()
+                .text_styles
+                .insert(egui::TextStyle::Button, egui::FontId::proportional(24.0));
+            ui.style_mut()
+                .text_styles
+                .insert(egui::TextStyle::Heading, egui::FontId::proportional(28.0));
+            ui.style_mut().override_text_style = override_style.clone();
+            ui.add(Button::new(&theme, "Host button font"));
+            ui.add(Button::new(
+                &theme,
+                egui::RichText::new("Explicit font").size(30.0),
+            ));
+        });
+        let mut sizes = Vec::new();
+        for clipped in &output.shapes {
+            text_sizes(&clipped.shape, &mut sizes);
+        }
+        output.drop_without_applying_deltas();
+        assert_eq!(sizes, vec![expected, 30.0]);
     }
-    output.drop_without_applying_deltas();
-    assert_eq!(sizes, vec![24.0, 30.0]);
 }
