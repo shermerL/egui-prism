@@ -13,3 +13,7 @@ The previous approximate implementation entered in PR #7. Correct it in this
 Quest, with public API migration notes where needed, reference/Rust state captures,
 meaningful behavior/geometry regressions, independent and GitHub review, and CI.
 Do not mark complete from passing compilation or the previous tests alone.
+
+## Required
+
+- [Host-owned group compositing](/quest/m1/shadcn-parity/host-compositing.md) - shared opacity and transition rendering

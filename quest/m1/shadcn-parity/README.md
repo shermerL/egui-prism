@@ -16,6 +16,8 @@ this epic owns the shared foundation and corrections to completed components.
 
 ## Required
 
+- [Host-owned group compositing](/quest/m1/shadcn-parity/host-compositing.md) - one opacity for complete components
+
 - [Button and IconButton parity](/quest/m1/shadcn-parity/button.md)
 - [TextInput parity](/quest/m1/shadcn-parity/text-input.md)
 - [Checkbox parity](/quest/m1/shadcn-parity/checkbox.md)
