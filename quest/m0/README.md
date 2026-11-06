@@ -7,6 +7,5 @@ and browser harness before shipping custom components.
 
 ## Required
 
-- [Repository foundation](/quest/m0/repository-foundation.md)
 - [Theme tokens](/quest/m0/theme-tokens.md)
 - [Gallery harness](/quest/m0/gallery-harness.md)

@@ -1,0 +1,10 @@
+trunk-version = "=0.21.14"
+
+[build]
+target = "gallery/index.html"
+dist = "dist/egui-prism"
+public_url = "/egui-prism/"
+locked = true
+
+[tools]
+wasm_bindgen = "0.2.129"

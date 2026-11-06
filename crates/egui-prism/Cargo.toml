@@ -1,0 +1,15 @@
+[package]
+name = "egui-prism"
+description = "A shadcn-inspired component library for egui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+egui.workspace = true
+
+[lints]
+workspace = true
