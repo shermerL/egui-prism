@@ -85,6 +85,31 @@ impl ButtonCase {
                 }
             }
         });
+        ui.horizontal_wrapped(|ui| {
+            let red_icon =
+                egui::Image::new((self.icon.id(), egui::vec2(16.0, 16.0))).tint(egui::Color32::RED);
+            if ui
+                .add_enabled(
+                    !self.disabled,
+                    IconButton::new(theme, red_icon, "Explicit red icon"),
+                )
+                .clicked()
+            {
+                self.preview_activations += 1;
+            }
+            ui.label("Explicit image tint");
+        });
+        ui.scope(|ui| {
+            ui.style_mut()
+                .text_styles
+                .insert(egui::TextStyle::Button, egui::FontId::proportional(24.0));
+            if ui
+                .add_enabled(!self.disabled, Button::new(theme, "Host button font"))
+                .clicked()
+            {
+                self.preview_activations += 1;
+            }
+        });
         if ui.add_enabled(!self.disabled, Button::new(theme, "A deliberately long action label that wraps within the available content width").role(ButtonRole::Outline)).clicked() {
             self.preview_activations += 1;
         }

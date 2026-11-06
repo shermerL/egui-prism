@@ -216,3 +216,75 @@ fn icon_rejects_an_empty_accessible_name() {
     let image = egui::Image::new((egui::TextureId::User(1), egui::vec2(16.0, 16.0)));
     let _button = IconButton::new(&theme, image, "  ");
 }
+
+#[test]
+fn explicitly_tinted_images_preserve_their_rendered_color() {
+    let context = egui::Context::default();
+    let theme = Theme::dark();
+    for _ in 0..2 {
+        let output = context.run_ui(egui::RawInput::default(), |ui| {
+            let image = egui::Image::new((egui::TextureId::User(42), egui::vec2(16.0, 16.0)))
+                .tint(egui::Color32::RED);
+            ui.add(IconButton::new(&theme, image, "Red action"));
+        });
+        let primitives = context.tessellate(output.shapes.clone(), output.pixels_per_point);
+        let colors: Vec<_> = primitives
+            .iter()
+            .filter_map(|primitive| match &primitive.primitive {
+                egui::epaint::Primitive::Mesh(mesh)
+                    if mesh.texture_id == egui::TextureId::User(42) =>
+                {
+                    Some(mesh.vertices.iter().map(|vertex| vertex.color))
+                }
+                _ => None,
+            })
+            .flatten()
+            .collect();
+        output.drop_without_applying_deltas();
+        let colors: Vec<_> = colors.into_iter().filter(|color| color.a() != 0).collect();
+        assert!(!colors.is_empty());
+        assert!(
+            colors.iter().all(|color| *color == egui::Color32::RED),
+            "rendered colors: {colors:?}"
+        );
+    }
+}
+
+#[test]
+fn labels_use_the_host_button_font_and_keep_explicit_formatting() {
+    fn text_sizes(shape: &egui::Shape, sizes: &mut Vec<f32>) {
+        match shape {
+            egui::Shape::Vec(shapes) => {
+                for shape in shapes {
+                    text_sizes(shape, sizes);
+                }
+            }
+            egui::Shape::Text(text) => sizes.extend(
+                text.galley
+                    .job
+                    .sections
+                    .iter()
+                    .map(|section| section.format.font_id.size),
+            ),
+            _ => {}
+        }
+    }
+    let context = egui::Context::default();
+    let theme = Theme::light();
+    let output = context.run_ui(egui::RawInput::default(), |ui| {
+        ui.style_mut()
+            .text_styles
+            .insert(egui::TextStyle::Button, egui::FontId::proportional(24.0));
+        ui.add(Button::new(&theme, "Host button font"));
+        ui.add(Button::new(
+            &theme,
+            egui::RichText::new("Explicit font").size(30.0),
+        ));
+    });
+    let mut sizes = Vec::new();
+    for clipped in &output.shapes {
+        text_sizes(&clipped.shape, &mut sizes);
+    }
+    output.drop_without_applying_deltas();
+    assert_eq!(sizes, vec![24.0, 30.0]);
+}

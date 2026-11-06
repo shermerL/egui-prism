@@ -147,8 +147,15 @@ impl<'theme, 'a> Button<'theme, 'a> {
             style.visuals.widgets.hovered.weak_bg_fill = colors.muted.background;
             style.visuals.widgets.hovered.fg_stroke.color = colors.muted.foreground;
         }
-        let button = egui::Button::opt_image_and_text(self.image, self.text)
-            .image_tint_follows_text_color(true)
+        let tint_follows_text = self
+            .image
+            .as_ref()
+            .is_some_and(|image| image.image_options().tint == egui::Color32::WHITE);
+        let text = self
+            .text
+            .map(|text| text.fallback_text_style(egui::TextStyle::Button));
+        let button = egui::Button::opt_image_and_text(self.image, text)
+            .image_tint_follows_text_color(tint_follows_text)
             .wrap()
             .frame(true)
             .min_size(egui::vec2(if square { height } else { 0.0 }, height));
