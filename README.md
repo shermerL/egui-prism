@@ -9,7 +9,7 @@ default styles. egui-prism aims to bring reusable widgets, semantic themes, and
 consistent interactions to egui, with one Rust implementation shared by native
 and WebAssembly galleries.
 
-This independent project is in its planning and bootstrap stage. There is no published crate or live component gallery yet.
+The library workspace and native/WebAssembly engineering gallery are in development. The gallery uses labeled egui harness controls; Prism components and themes are planned. There is no published crate or live component gallery yet.
 
 The planned GitHub Pages site will display the actual components, their states, and Rust examples.
 
@@ -18,6 +18,18 @@ Development will use [Quest](https://github.com/moq-dev/quest): M0 establishes t
 ## License
 
 Original project code is licensed under MIT. Third-party code and assets retain their respective notices and licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Try the engineering gallery
+
+With Nix and flakes enabled:
+
+```sh
+nix develop --command cargo run --locked -p egui-prism-gallery
+```
+
+For the browser build and complete checks, see [CONTRIBUTING.md](CONTRIBUTING.md).
+The core library depends on egui; the gallery owns the eframe window and rendering
+backend. Applications can use the library with their own host.
 
 ## Development
 

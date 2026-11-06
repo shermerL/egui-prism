@@ -10,14 +10,27 @@ permissions:
   contents: read
 
 jobs:
-  quest:
+  check:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
       - uses: cachix/install-nix-action@d9186cbdca7adedf113a159fa91f725a27866771 # v31
-      - name: Check the Quest tree with the pinned CLI
-        run: nix develop --command quest check
+      - name: Check native and WebAssembly targets
+        run: nix develop --command quest gate python3 scripts/check.py
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: gallery-web-${{ github.sha }}
+          path: dist/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: gallery-linux-${{ github.sha }}
+          path: |
+            target/debug/egui-prism-gallery
+            LICENSE
+            THIRD_PARTY_NOTICES.md
+          if-no-files-found: error

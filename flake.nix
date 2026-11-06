@@ -25,7 +25,33 @@
         in
         {
           default = pkgs.mkShell {
-            packages = [ quest.packages.${system}.default ];
+            packages = [
+              quest.packages.${system}.default
+              pkgs.rustup
+              pkgs.trunk
+              pkgs.wasm-bindgen-cli
+              pkgs.python3
+              pkgs.nixfmt
+              pkgs.actionlint
+              pkgs.shellcheck
+              pkgs.pkg-config
+            ]
+            ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+              pkgs.libxkbcommon
+              pkgs.wayland
+              pkgs.libGL
+            ];
+            env = pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+              LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
+                pkgs.libxkbcommon
+                pkgs.wayland
+                pkgs.libGL
+                pkgs.xorg.libX11
+                pkgs.xorg.libXcursor
+                pkgs.xorg.libXi
+                pkgs.xorg.libXrandr
+              ];
+            };
           };
         }
       );

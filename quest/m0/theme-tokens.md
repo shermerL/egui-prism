@@ -17,7 +17,3 @@ Document where page, container, and widget spacing are owned to avoid double
 padding. Verify both themes in the native harness with actual screenshots and
 record contrast observations, including selected text. State any untested input
 or platform behavior explicitly.
-
-## Required
-
-- [Repository foundation](/quest/m0/repository-foundation.md)
