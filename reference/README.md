@@ -25,3 +25,7 @@ fonts/OFL.txt, as well as THIRD_PARTY_NOTICES.md.
 Observed in the browser: light/dark rendering, checkbox Enter leaves state
 unchanged, Space toggles, Slider Home selects minimum, and Shift+Right advances
 ten steps. This is reference evidence, not Rust component acceptance.
+
+The `/?sliders` fixture isolates Slider comparisons with 448, 200, 20 and 16 CSS-pixel
+rails, matching ranges and steps, light/dark themes, disabled states and 100/150%
+scales. Its explicit 16-pixel minimum matches the Rust intrinsic thumb footprint.

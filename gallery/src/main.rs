@@ -3,6 +3,7 @@
 mod buttons;
 mod checkboxes;
 mod interaction;
+mod sliders;
 mod text_inputs;
 
 use egui_prism::{egui, theme::Theme};
@@ -14,6 +15,7 @@ enum Case {
     Buttons,
     Inputs,
     Checkboxes,
+    Sliders,
     Interaction,
     Layout,
 }
@@ -26,6 +28,7 @@ struct Gallery {
     buttons: buttons::ButtonCase,
     inputs: text_inputs::InputCase,
     checkboxes: checkboxes::CheckboxCase,
+    sliders: sliders::SliderCase,
 }
 
 impl Gallery {
@@ -39,6 +42,7 @@ impl Gallery {
             buttons: buttons::ButtonCase::new(context),
             inputs: text_inputs::InputCase::default(),
             checkboxes: checkboxes::CheckboxCase::default(),
+            sliders: sliders::SliderCase::default(),
         };
         gallery.apply_theme(context);
         gallery
@@ -71,11 +75,13 @@ impl eframe::App for Gallery {
             .show(ui, |ui| {
                 ui.heading("egui-prism");
                 ui.label("Parity correction in progress: reference tokens and Geist fonts; components await individual acceptance.");
+
                 ui.horizontal_wrapped(|ui| {
                     ui.selectable_value(&mut self.case, Case::Theme, "Theme");
                     ui.selectable_value(&mut self.case, Case::Buttons, "Buttons");
                     ui.selectable_value(&mut self.case, Case::Inputs, "Inputs");
                     ui.selectable_value(&mut self.case, Case::Checkboxes, "Checkboxes");
+                    ui.selectable_value(&mut self.case, Case::Sliders, "Sliders");
                     ui.selectable_value(&mut self.case, Case::Interaction, "Interaction");
                     ui.selectable_value(&mut self.case, Case::Layout, "Layout");
                 });
@@ -108,6 +114,7 @@ impl eframe::App for Gallery {
                         Case::Buttons => self.buttons.show(ui, &theme),
                         Case::Inputs => self.inputs.show(ui, &theme),
                         Case::Checkboxes => self.checkboxes.show(ui, &theme),
+                        Case::Sliders => self.sliders.show(ui, &theme),
                         Case::Interaction | Case::Layout => {
                             ui.heading("Harness controls (egui)");
                             ui.label("Activate with the pointer or Tab and Enter. Counts change once per activation and remain still while idle.");
