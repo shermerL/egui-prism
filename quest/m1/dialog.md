@@ -15,7 +15,3 @@ in the same PR. Propose material API choices before implementing them.
 Follow [the strict shadcn contract](/docs/shadcn-parity.md), including actual
 reference comparison for every supported state. Earlier themed-egui candidates
 do not satisfy this requirement.
-
-## Required
-
-- [Shared reference, tokens and typography](/quest/m1/shadcn-parity/foundation.md)

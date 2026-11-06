@@ -1,0 +1,25 @@
+{
+  "name": "egui-prism-shadcn-reference",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node prepare.mjs && vite --host 127.0.0.1 --port 8084",
+    "build": "node prepare.mjs && vite build"
+  },
+  "dependencies": {
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "radix-ui": "1.4.3",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "tailwind-merge": "3.6.0",
+    "lucide-react": "1.21.0",
+    "geist": "1.9.2"
+  },
+  "devDependencies": {
+    "vite": "7.3.7",
+    "tailwindcss": "4.3.0",
+    "@tailwindcss/vite": "4.3.0",
+    "typescript": "5.9.2"
+  }
+}
