@@ -230,6 +230,9 @@ impl egui::Widget for Slider<'_, '_> {
                             pressed: false,
                             ..
                         } => capture.take().and_then(|state| {
+                            // A track release can clear egui's focus because the
+                            // track is not a tab stop. Keep focus on its thumb.
+                            response.request_focus();
                             (state.last_pointer != *pos).then(|| value_at(state.rail_global, *pos))
                         }),
                         egui::Event::PointerGone => {

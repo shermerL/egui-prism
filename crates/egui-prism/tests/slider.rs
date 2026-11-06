@@ -517,3 +517,15 @@ fn complete_thumb_drag_in_one_frame_is_not_discarded() {
     assert_eq!(h.values[0], 75.0);
     assert_eq!(h.changes[0], 1);
 }
+
+#[test]
+fn track_click_retains_thumb_focus_for_following_keys() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let r = h.frame(vec![]);
+    h.click(r[0].rect.right_center());
+    assert_eq!(h.values[0], 100.0);
+    assert!(h.frame(vec![])[0].has_focus());
+    h.key(egui::Key::ArrowLeft);
+    assert_eq!(h.values[0], 95.0);
+}
