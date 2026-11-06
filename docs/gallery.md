@@ -78,3 +78,6 @@ They do not establish native/browser input delivery, IME composition, screen-rea
 integration, touch, or another operating system's behavior. Actual GUI checks and
 the tested browser are reported in each PR. Other browsers, Windows/Linux GUI,
 CJK font coverage, IME, assistive technology, and a full DPI matrix remain open.
+
+The Switches case checks track/label activation, keyboard focus, explicit value
+changes, disabled state, independent instances, and wrapped-label layout.
