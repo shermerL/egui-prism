@@ -40,3 +40,5 @@ checks, and [toolchain.md](docs/toolchain.md) for provenance and platform limits
 The versioned [quest tree](quest/README.md) is the source of planned work.
 
 See [semantic themes](docs/themes.md) for the theme API, color pairs, spacing ownership, and validation limits.
+
+See [text input](docs/text-input.md) for editing, validation, IDs, and IME evidence.

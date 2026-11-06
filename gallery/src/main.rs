@@ -1,6 +1,7 @@
 //! Shared native and browser acceptance gallery for the component library.
 
 mod interaction;
+mod text_inputs;
 
 use egui_prism::{egui, theme::Theme};
 use interaction::InteractionCase;
@@ -8,6 +9,7 @@ use interaction::InteractionCase;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Case {
     Theme,
+    Inputs,
     Interaction,
     Layout,
 }
@@ -17,6 +19,7 @@ struct Gallery {
     case: Case,
     narrow: bool,
     interaction: InteractionCase,
+    inputs: text_inputs::InputCase,
 }
 
 impl Gallery {
@@ -26,6 +29,7 @@ impl Gallery {
             case: Case::Theme,
             narrow: false,
             interaction: InteractionCase::default(),
+            inputs: text_inputs::InputCase::default(),
         };
         gallery.apply_theme(context);
         gallery
@@ -60,6 +64,7 @@ impl eframe::App for Gallery {
                 ui.label("Available: semantic themes. Planned: Prism widgets.");
                 ui.horizontal_wrapped(|ui| {
                     ui.selectable_value(&mut self.case, Case::Theme, "Theme");
+                    ui.selectable_value(&mut self.case, Case::Inputs, "Inputs");
                     ui.selectable_value(&mut self.case, Case::Interaction, "Interaction");
                     ui.selectable_value(&mut self.case, Case::Layout, "Layout");
                 });
@@ -89,6 +94,7 @@ impl eframe::App for Gallery {
                             let _ = ui.selectable_label(true, "Selected foreground");
                             ui.label("Opaque disabled tokens are paired colors. Standard egui disabled controls use opacity.");
                         }
+                        Case::Inputs => self.inputs.show(ui, &theme),
                         Case::Interaction | Case::Layout => {
                             ui.heading("Harness controls (egui)");
                             ui.label("Activate with the pointer or Tab and Enter. Counts change once per activation and remain still while idle.");

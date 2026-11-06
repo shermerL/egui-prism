@@ -16,3 +16,5 @@
 pub use egui;
 
 pub mod theme;
+
+pub mod text_input;

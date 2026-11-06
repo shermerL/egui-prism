@@ -32,6 +32,7 @@ Theme and case changes preserve caller text, checkboxes, and action counts.
 | Case | What to inspect |
 |---|---|
 | Theme | Light/dark foreground/background pairs and selected foreground |
+| Inputs | Caller-owned text, editing, errors, disabled state, stable IDs, and IME diagnostics |
 | Interaction | Independent A/B values, pointer activation, Tab/Enter, disabled actions, and idle counts |
 | Layout | The same instances and IDs with long wrapping action labels |
 
