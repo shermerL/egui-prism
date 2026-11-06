@@ -116,7 +116,7 @@ impl Theme {
                 surface: pair(0xffffff, 0x18181b),
                 muted: pair(0xf4f4f5, 0x52525b),
                 primary: pair(0x18181b, 0xfafafa),
-                selection: pair(0x1d4ed8, 0xffffff),
+                selection: pair(0xbfdbfe, 0x172554),
                 destructive: pair(0xb91c1c, 0xffffff),
                 disabled: pair(0xf4f4f5, 0x6b6b75),
                 focus: pair(0xdbeafe, 0x1e40af),
@@ -136,7 +136,7 @@ impl Theme {
                 surface: pair(0x18181b, 0xfafafa),
                 muted: pair(0x27272a, 0xa1a1aa),
                 primary: pair(0xfafafa, 0x18181b),
-                selection: pair(0x93c5fd, 0x172554),
+                selection: pair(0x1d4ed8, 0xffffff),
                 destructive: pair(0xfca5a5, 0x450a0a),
                 disabled: pair(0x27272a, 0xa1a1aa),
                 focus: pair(0x172554, 0xbfdbfe),
@@ -181,6 +181,9 @@ impl Theme {
         visuals.selection.bg_fill = colors.selection.background;
         visuals.selection.stroke = Stroke::new(1.0, colors.selection.foreground);
         visuals.text_cursor.stroke = Stroke::new(1.5, colors.surface.foreground);
+        visuals.ime_composition.active_underline_stroke = Stroke::new(1.5, colors.focus.foreground);
+        visuals.ime_composition.inactive_underline_stroke =
+            Stroke::new(1.0, colors.muted.foreground);
         for (widget, pair, outline) in [
             (
                 &mut visuals.widgets.noninteractive,

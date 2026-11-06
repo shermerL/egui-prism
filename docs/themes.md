@@ -30,7 +30,10 @@ an accessibility certification.
 The egui adapter maps resting controls to surface, hovered/open controls to
 muted, pressed/focused controls to focus, and selection to its own pair. It clears
 `override_text_color`, because a global foreground would override selected text.
-Use per-widget text styling for deliberate exceptions. Page foregrounds and
+egui also uses the selected foreground for focused text-edit outlines, so it must
+contrast with the input surface as well. Composition underlines receive theme
+colors while the host's IME legacy-visuals setting is preserved. Use per-widget
+text styling for deliberate exceptions. Page foregrounds and
 surface foregrounds match in the built-in palettes; customized palettes should
 keep ordinary egui labels readable on both since egui has one ordinary text color.
 

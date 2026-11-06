@@ -95,3 +95,29 @@ fn selection_and_focus_keep_their_foregrounds_without_global_override() {
         assert_eq!(active.bg_stroke.color, theme.colors.focus.foreground);
     }
 }
+
+#[test]
+fn input_focus_and_composition_indicators_contrast_with_the_input_surface() {
+    for theme in [Theme::light(), Theme::dark()] {
+        for legacy_visuals in [false, true] {
+            let mut style = egui::Style::default();
+            style.visuals.ime_composition.legacy_visuals = legacy_visuals;
+            theme.apply(&mut style);
+            let background = style.visuals.text_edit_bg_color.unwrap();
+            // egui 0.37 TextEdit also uses selection.stroke for its focused outline.
+            for stroke in [
+                style.visuals.selection.stroke,
+                style.visuals.ime_composition.active_underline_stroke,
+                style.visuals.ime_composition.inactive_underline_stroke,
+            ] {
+                assert!(
+                    contrast(ColorPair {
+                        background,
+                        foreground: stroke.color
+                    }) >= 3.0
+                );
+            }
+            assert_eq!(style.visuals.ime_composition.legacy_visuals, legacy_visuals);
+        }
+    }
+}
