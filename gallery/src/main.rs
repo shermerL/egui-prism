@@ -33,6 +33,7 @@ struct Gallery {
 
 impl Gallery {
     fn new(context: &egui::Context) -> Self {
+        egui_prism::theme::install_fonts(context, egui::FontDefinitions::default());
         let gallery = Self {
             dark: false,
             case: Case::Theme,
@@ -73,7 +74,7 @@ impl eframe::App for Gallery {
             .frame(egui::Frame::central_panel(ui.style()).inner_margin(theme.metrics.page_margin))
             .show(ui, |ui| {
                 ui.heading("egui-prism");
-                ui.label("Available: themes, buttons, text inputs, checkboxes, and switches. Other widgets are planned.");
+                ui.label("Parity correction in progress: reference tokens and Geist fonts; components await individual acceptance.");
                 ui.horizontal_wrapped(|ui| {
                     ui.selectable_value(&mut self.case, Case::Theme, "Theme");
                     ui.selectable_value(&mut self.case, Case::Buttons, "Buttons");

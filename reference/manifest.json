@@ -1,0 +1,24 @@
+{
+  "shadcn_commit": "8a3536678a528cc012b9e62484290e79d0be410f",
+  "geist_package": "1.9.2",
+  "behavior_primitives": {
+    "@radix-ui/react-slider": "1.3.6",
+    "@radix-ui/react-checkbox": "1.3.3",
+    "@radix-ui/react-switch": "1.2.6"
+  },
+  "sha256": {
+    "reference/src/ui/button.tsx": "79dd6f75f8136394442202d6b8b922fb269eaad0a5dba579397c9d5b41f893bb",
+    "reference/src/ui/checkbox.tsx": "ba0ac64064e2d8fa7299d53e9e84b9a4772fef8dd4cf6170c56d3030a1d69941",
+    "reference/src/ui/dialog.tsx": "2ade6074e5fad0a4eb171ead44c43d3301a3c83d186d7236fb1fdbea80ee556b",
+    "reference/src/ui/input.tsx": "0c9457181f6ddc80969bcf854e92c362903a55b6e889fbef3fd85343ecc4af5b",
+    "reference/src/ui/select.tsx": "962830436bd0b7ee50e556f0747e277d6a86869ed27d167516346b15f26309d8",
+    "reference/src/ui/slider.tsx": "6a531f6182de6efec2c25d30a7626b66cbf11cf52d505e47f907124934f7188e",
+    "reference/src/ui/switch.tsx": "743676f33f823ffa8008bbd5eb94cb68e227599447d60e132a202291a395f8e4",
+    "reference/source/globals.css": "c5e271374236f23bcfd559ce64aaf6b8641ee7276156c0f803dd9cb24277af12",
+    "crates/egui-prism/fonts/Geist-Medium.ttf": "e9099e006d4934cae4a8c7d14a1ca2ea724ee2f69f9bdd5b2ffe715baf5524fc",
+    "crates/egui-prism/fonts/Geist-Regular.ttf": "2c460a7a71063e53491f343d44b382267bc0cf496e31db64865f962af3152e68",
+    "crates/egui-prism/fonts/Geist-SemiBold.ttf": "01923aa148e5202ae70a2e11b2ab4dc41b80bcc374aedccc913d47bb2f591c06",
+    "crates/egui-prism/fonts/OFL.txt": "930853ee1daa68554d9e35c8a9175affb74f699fad9a5da6ee5ebe76379d9137",
+    "crates/egui-prism/fonts/GeistMono-Regular.ttf": "686914333e77a620c85b35481064788deb33fc25f69901bdbf296c1bbc26a7fe"
+  }
+}

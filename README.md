@@ -1,15 +1,14 @@
 # egui-prism
 
-A shadcn-inspired component library for egui.
+A Rust component library implementing shadcn/ui designs with egui.
 
 [egui](https://github.com/emilk/egui) is an immediate-mode GUI library written in
 Rust for native and web applications. [shadcn/ui](https://ui.shadcn.com/docs)
-provides the design reference for composable components and carefully chosen
-default styles. egui-prism aims to bring reusable widgets, semantic themes, and
-consistent interactions to egui, with one Rust implementation shared by native
-and WebAssembly galleries.
+defines the component appearance, geometry, states, and interaction contract.
+egui-prism implements that contract in Rust, shared by native and WebAssembly
+galleries.
 
-The library workspace and native/WebAssembly engineering gallery are in development. Semantic light/dark themes, Button, IconButton, TextInput, Checkbox, and Switch are available. The gallery distinguishes Prism components from standard egui harness controls; other widgets are planned. There is no published crate or live component gallery yet.
+The library workspace and native/WebAssembly engineering gallery are in development. Semantic light/dark themes, Button, IconButton, TextInput, Checkbox, and Switch have initial implementations undergoing strict shadcn parity correction. The gallery distinguishes Prism components from standard egui harness controls; other widgets are planned. There is no published crate or live component gallery yet.
 
 The planned GitHub Pages site will display the actual components, their states, and Rust examples.
 
@@ -46,3 +45,11 @@ See [text input](docs/text-input.md) for editing, validation, IDs, and IME evide
 
 See [checkboxes](docs/checkboxes.md) for caller-owned boolean editing.
 See [switches](docs/switches.md) for controlled boolean changes and interaction.
+
+## shadcn parity
+
+Every component targets strict parity with the pinned shadcn source in appearance,
+geometry, state styling and interaction. egui is the rendering/input substrate.
+The current components are undergoing a full parity correction; existing test and
+CI results do not establish visual acceptance. See the [reference contract and
+component audit](docs/shadcn-parity.md) and [correction Quests](quest/m1/shadcn-parity/README.md).

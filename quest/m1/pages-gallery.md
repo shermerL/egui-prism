@@ -22,3 +22,10 @@ Present the exact artifact/commit and observed browser evidence for the separate
 first-deployment quest. Completion here is a reviewed, reproducibly built artifact
 and deployment workflow, not a live site. Keeping publication separate allows
 implementation and verification to finish before the publication decision.
+
+The visible Gallery and every presented component follow /docs/shadcn-parity.md.
+Do not publish approximate components as accepted shadcn implementations.
+
+## Required
+
+- [Strict shadcn parity for existing components](/quest/m1/shadcn-parity/README.md)
