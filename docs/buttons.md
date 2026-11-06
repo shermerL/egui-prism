@@ -61,7 +61,7 @@ Hover colors and focus rings transition over 150 ms with the reference easing.
 A pointer press preserves the hover appearance. Keyboard focus adds a three-point
 outer ring; pointer focus does not. `.invalid(true)` changes the Outline border
 and the focus-ring color and exposes invalid metadata. Use `ui.add_enabled(false,
-...)` or a disabled parent UI for half-opacity buttons that emit no clicks.
+...)` or a disabled parent UI for buttons that emit no clicks.
 Styles and opacity are restored for subsequent host widgets.
 
 Enter activates on keydown; Space activates once on keyup after a focused keydown.
@@ -89,3 +89,12 @@ regressions cover geometry, activation timing, cancellation, focus painting,
 opacity, identity, accessible names and explicit formatting. Native/browser
 observations and untested platforms are reported separately in the PR; metadata
 and screenshots do not establish assistive-technology acceptance.
+
+## Remaining parity work
+
+Disabled painting currently applies 50% opacity to each primitive. This differs
+from the reference's group opacity where text, images, fill and shadow overlap.
+The real native and browser comparisons exposed the difference; per-shape alpha
+tests do not establish final compositing parity. Integrating the shared host
+compositor and validating arbitrary parent backgrounds and translucent images
+remain required before this component is accepted as strictly matching shadcn.

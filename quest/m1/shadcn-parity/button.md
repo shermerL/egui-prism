@@ -13,3 +13,12 @@ The previous approximate implementation entered in PR #5. Correct it in this
 Quest, with public API migration notes where needed, reference/Rust state captures,
 meaningful behavior/geometry regressions, independent and GitHub review, and CI.
 Do not mark complete from passing compilation or the previous tests alone.
+
+The role/size implementation and input regressions are present, but the Quest is
+not complete. Real native and browser comparison found that disabled content
+fades each overlapping primitive separately instead of compositing the button
+once at 50% opacity. Integrate the shared host-compositing capability when it is
+available; keep the core renderer-independent and do not approximate the backdrop
+with a theme color. Validate final pixels on arbitrary parent backgrounds,
+translucent images and overlapping shadows, then repeat native/browser acceptance,
+independent review, latest-head GitHub reviews and CI before completing this Quest.

@@ -115,7 +115,20 @@ impl<'theme, 'a> Button<'theme, 'a> {
             font.size -= 2.0;
         }
         let galley = self.text.map(|text| {
-            text.into_galley(ui, Some(egui::TextWrapMode::Extend), f32::INFINITY, font)
+            let mut style = std::borrow::Cow::Borrowed(ui.style().as_ref());
+            if style.visuals.override_text_color.is_some() {
+                style.to_mut().visuals.override_text_color = None;
+            }
+            text.into_galley_impl(
+                ui.ctx(),
+                &style,
+                egui::text::TextWrapping::from_wrap_mode_and_width(
+                    egui::TextWrapMode::Extend,
+                    f32::INFINITY,
+                ),
+                font.into(),
+                ui.text_valign(),
+            )
         });
         let text_width = galley.as_ref().map_or(0.0, |text| text.size().x);
         let has_icon = self.image.is_some();
@@ -136,14 +149,60 @@ impl<'theme, 'a> Button<'theme, 'a> {
         } else {
             content_width + 2.0 * if has_icon { icon_padding } else { padding } + 2.0 * border_width
         };
-        let (rect, mut response) =
-            ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::click());
+        let size = egui::vec2(width, height);
+        let (id, allocated_rect) = ui.allocate_space(size);
+        let rect = ui.layout().align_size_within_rect(size, allocated_rect);
+        // egui applies its default navigation before widgets run, and cannot install
+        // a focus filter on the acquisition pass. Preserve a button's focus across
+        // that first Escape/arrow input, without taking focus from another widget.
+        let keep_focus = ui.input(|input| {
+            !input.pointer.any_pressed()
+                && input.events.iter().rev().find_map(|event| match event {
+                    egui::Event::Key {
+                        key,
+                        pressed: true,
+                        modifiers,
+                        ..
+                    } if !modifiers.any() || (*key == egui::Key::Tab && modifiers.shift_only()) => {
+                        match key {
+                            egui::Key::Tab => Some(false),
+                            egui::Key::Escape
+                            | egui::Key::ArrowUp
+                            | egui::Key::ArrowDown
+                            | egui::Key::ArrowLeft
+                            | egui::Key::ArrowRight => Some(true),
+                            _ => None,
+                        }
+                    }
+                    _ => None,
+                }) == Some(true)
+        });
+        if ui.is_enabled() && keep_focus {
+            ui.memory_mut(|memory| {
+                if memory.had_focus_last_frame(id)
+                    && memory.focused().is_none_or(|focused| focused == id)
+                    && memory.is_above_modal_layer(ui.layer_id())
+                {
+                    if !memory.has_focus(id) {
+                        memory.request_focus(id);
+                    }
+                    memory.move_focus(egui::FocusDirection::None);
+                }
+            });
+        }
+        let mut response = ui.interact(rect, id, egui::Sense::click());
+        response.set_intrinsic_size(size);
         let state_id = response.id.with("prism-button");
         let mut state = ui
             .data(|data| data.get_temp::<ButtonState>(state_id))
             .unwrap_or_default();
+        let frame = ui.ctx().cumulative_frame_nr();
+        if response.gained_focus() || state.last_frame.is_some_and(|last| frame > last + 1) {
+            state.space_armed = false;
+        }
+        state.last_frame = Some(frame);
         let pointer_down = response.is_pointer_button_down_on();
-        if pointer_down {
+        if pointer_down && !response.has_focus() {
             response.request_focus();
         }
         if response.has_focus() && response.enabled() {
@@ -477,6 +536,7 @@ impl ButtonPaint {
 
 #[derive(Clone, Default)]
 struct ButtonState {
+    last_frame: Option<u64>,
     space_armed: bool,
     focus_visible: bool,
     transition: Option<(ButtonPaint, ButtonPaint, f64)>,

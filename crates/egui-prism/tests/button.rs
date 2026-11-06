@@ -526,3 +526,117 @@ fn reference_padding_gap_and_icon_geometry_do_not_follow_source_texture_size() {
         ]
     );
 }
+
+#[test]
+fn justified_layout_does_not_expand_the_button_hit_target() {
+    let context = egui::Context::default();
+    let theme = Theme::light();
+    let mut clicked = false;
+    let mut button_rect = egui::Rect::NOTHING;
+    let mut painted_rect = egui::Rect::NOTHING;
+    for events in [
+        vec![],
+        vec![],
+        vec![egui::Event::PointerMoved(egui::pos2(380.0, 18.0))],
+        vec![egui::Event::PointerButton {
+            pos: egui::pos2(380.0, 18.0),
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        }],
+        vec![egui::Event::PointerButton {
+            pos: egui::pos2(380.0, 18.0),
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        }],
+    ] {
+        let output = context.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(400.0, 200.0),
+                )),
+                events,
+                ..Default::default()
+            },
+            |ui| {
+                ui.vertical_centered_justified(|ui| {
+                    let response = ui.add(Button::new(&theme, "Action"));
+                    button_rect = response.rect;
+                    clicked |= response.clicked();
+                });
+            },
+        );
+        painted_rect = rect_shapes(&output.shapes).first().unwrap().rect;
+        output.drop_without_applying_deltas();
+    }
+    assert_eq!(button_rect, painted_rect);
+    assert!(
+        !clicked,
+        "empty justified space must not activate the button"
+    );
+}
+
+#[test]
+fn restored_instance_cancels_an_old_space_press() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let r = h.frame(vec![]);
+    h.key(egui::Key::Tab);
+    h.frame(vec![key_event(egui::Key::Space, true, false)]);
+    h.context
+        .run_ui(egui::RawInput::default(), |_| {})
+        .drop_without_applying_deltas();
+    h.context.memory_mut(|memory| memory.request_focus(r[0].id));
+    h.frame(vec![key_event(egui::Key::Space, false, false)]);
+    assert_eq!(h.counts, [0, 0]);
+}
+
+#[test]
+fn inherited_text_color_does_not_replace_semantics_or_explicit_rich_text() {
+    let context = egui::Context::default();
+    let theme = Theme::light();
+    let output = context.run_ui(egui::RawInput::default(), |ui| {
+        ui.visuals_mut().override_text_color = Some(egui::Color32::BLACK);
+        ui.add(Button::new(&theme, "Semantic"));
+        ui.add(Button::new(
+            &theme,
+            egui::RichText::new("Explicit").color(egui::Color32::RED),
+        ));
+        assert_eq!(ui.visuals().override_text_color, Some(egui::Color32::BLACK));
+    });
+    let colors: Vec<_> = output
+        .shapes
+        .iter()
+        .filter_map(|s| match &s.shape {
+            egui::Shape::Text(t) => Some((t.galley.job.sections[0].format.color, t.fallback_color)),
+            _ => None,
+        })
+        .collect();
+    output.drop_without_applying_deltas();
+    assert_eq!(
+        colors[0],
+        (egui::Color32::PLACEHOLDER, theme.colors.primary.foreground)
+    );
+    assert_eq!(colors[1].0, egui::Color32::RED);
+}
+
+#[test]
+fn newly_focused_buttons_keep_focus_on_immediate_escape_or_arrow() {
+    for key in [egui::Key::Escape, egui::Key::ArrowDown] {
+        let mut h = Harness::new();
+        h.frame(vec![]);
+        let r = h.frame(vec![]);
+        h.frame(vec![key_event(egui::Key::Tab, true, false)]);
+        assert_eq!(h.context.memory(|m| m.focused()), Some(r[0].id));
+        h.frame(vec![key_event(key, true, false)]);
+        assert_eq!(h.context.memory(|m| m.focused()), Some(r[0].id));
+        h.frame(vec![
+            key_event(egui::Key::Tab, false, false),
+            key_event(key, false, false),
+        ]);
+        h.key(egui::Key::Tab);
+        assert_eq!(h.context.memory(|m| m.focused()), Some(r[1].id));
+    }
+}
