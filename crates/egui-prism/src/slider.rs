@@ -177,18 +177,6 @@ impl egui::Widget for Slider<'_, '_> {
                 let value_at = |rect: egui::Rect, pos: egui::Pos2| {
                     min + f64::from((pos.x - rect.left()) / rect.width()) * (max - min)
                 };
-                if response.has_focus() {
-                    ui.memory_mut(|memory| {
-                        memory.set_focus_lock_filter(
-                            id,
-                            egui::EventFilter {
-                                horizontal_arrows: true,
-                                vertical_arrows: true,
-                                ..Default::default()
-                            },
-                        )
-                    });
-                }
                 for event in &events {
                     let next = match event {
                         egui::Event::PointerButton {
@@ -285,6 +273,20 @@ impl egui::Widget for Slider<'_, '_> {
                     if let Some(next) = next {
                         *self.value = snap(next, min, max, self.step);
                     }
+                }
+                if response.has_focus() {
+                    // request_focus resets egui's filter, so install it after
+                    // pointer presses/releases have transferred thumb focus.
+                    ui.memory_mut(|memory| {
+                        memory.set_focus_lock_filter(
+                            id,
+                            egui::EventFilter {
+                                horizontal_arrows: true,
+                                vertical_arrows: true,
+                                ..Default::default()
+                            },
+                        )
+                    });
                 }
             }
             ui.data_mut(|data| {

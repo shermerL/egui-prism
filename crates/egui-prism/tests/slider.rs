@@ -20,6 +20,7 @@ struct Harness {
     shapes: Vec<egui::epaint::ClippedShape>,
     transform: egui::emath::TSTransform,
     modal: bool,
+    navigation_neighbor: bool,
 }
 
 impl Harness {
@@ -44,6 +45,7 @@ impl Harness {
             shapes: Vec::new(),
             transform: egui::emath::TSTransform::IDENTITY,
             modal: false,
+            navigation_neighbor: false,
         }
     }
 
@@ -72,6 +74,9 @@ impl Harness {
                     });
                 }
                 ui.spacing_mut().slider_width = self.rail_width;
+                if self.navigation_neighbor {
+                    let _ = ui.button("Neighbor");
+                }
                 responses = Some((if self.reversed { [1, 0] } else { [0, 1] }).map(|index| {
                     let id = ui.make_persistent_id(index);
                     ui.scope_builder(egui::UiBuilder::new().scope_id(id), |ui| {
@@ -521,11 +526,12 @@ fn complete_thumb_drag_in_one_frame_is_not_discarded() {
 #[test]
 fn track_click_retains_thumb_focus_for_following_keys() {
     let mut h = Harness::new();
+    h.navigation_neighbor = true;
     h.frame(vec![]);
     let r = h.frame(vec![]);
     h.click(r[0].rect.right_center());
     assert_eq!(h.values[0], 100.0);
-    assert!(h.frame(vec![])[0].has_focus());
     h.key(egui::Key::ArrowLeft);
     assert_eq!(h.values[0], 95.0);
+    assert!(h.frame(vec![])[0].has_focus());
 }
