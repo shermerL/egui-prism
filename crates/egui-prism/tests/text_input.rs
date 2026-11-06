@@ -120,12 +120,14 @@ fn disabled_fields_ignore_editing_and_keyboard_input() {
     h.focus_first();
     h.frame(vec![egui::Event::Text("retained".into())]);
     h.enabled = false;
-    h.frame(vec![]);
     let changes = h.changes;
-    h.frame(vec![
+    let disabled = h.frame(vec![
         egui::Event::Text("ignored".into()),
         egui::Event::Paste("ignored".into()),
     ]);
+    assert!(!disabled[0].changed());
+    assert_eq!(h.values, ["retained", ""]);
+    h.frame(vec![egui::Event::Paste("still ignored".into())]);
     h.key(egui::Key::Backspace, false);
     assert_eq!(h.values, ["retained", ""]);
     assert_eq!(h.changes, changes);

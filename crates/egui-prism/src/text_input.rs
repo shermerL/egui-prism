@@ -80,6 +80,7 @@ impl egui::Widget for TextInput<'_, '_> {
             let response = ui
                 .add(
                     egui::TextEdit::singleline(self.value)
+                        .interactive(ui.is_enabled())
                         .id(id)
                         .hint_text(self.hint)
                         .desired_width(ui.available_width()),
