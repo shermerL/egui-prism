@@ -86,12 +86,6 @@ fn pointer_activation_is_once_and_disabled_actions_are_inert() {
     harness.click(responses[1].rect.center());
     assert_eq!(harness.case.instances[0].activations, 1);
     assert_eq!(harness.case.instances[1].activations, 0);
-    harness.case.disabled = true;
-    harness.frame(vec![], false);
-    harness.key(egui::Key::Enter, true);
-    harness.key(egui::Key::Enter, false);
-    assert_eq!(harness.case.instances[0].activations, 1);
-    assert_eq!(harness.case.instances[1].activations, 0);
 }
 
 #[test]
@@ -113,6 +107,12 @@ fn keyboard_activation_and_tab_navigation_use_real_input_events() {
     for _ in 0..4 {
         harness.frame(vec![], false);
     }
+    assert_eq!(harness.case.instances[0].activations, 1);
+    assert_eq!(harness.case.instances[1].activations, 0);
+    harness.case.disabled = true;
+    harness.frame(vec![], false);
+    harness.key(egui::Key::Enter, true);
+    harness.key(egui::Key::Enter, false);
     assert_eq!(harness.case.instances[0].activations, 1);
     assert_eq!(harness.case.instances[1].activations, 0);
 }
