@@ -38,8 +38,14 @@ for comparisons. The widget restores the caller's style after drawing.
 
 Pointer release inside the control activates it, including long holds and a
 press/release delivered in one frame. Releasing outside or disabling during the
-press cancels it. Multiple completed clicks in one frame apply in sequence;
+press cancels it. Omitting the control for a frame cancels pending gestures.
+Multiple completed clicks on the same control in one frame apply in sequence;
 `Response::changed()` reports whether any activation occurred, not an event count.
+Batched clicks across different controls, or a completed click followed by movement
+outside within the same frame, still use egui's final-position hit eligibility and
+can lose an earlier activation. This remains an open input-routing review finding.
+A position-only replacement is insufficient because it bypasses same-layer widget
+occlusion; resolving it requires event routing that preserves the host's hit order.
 Enter activates on keydown
 (including repeated keydown); Space activates once on keyup, without repeating
 while held. Losing focus or becoming disabled cancels an armed Space press.

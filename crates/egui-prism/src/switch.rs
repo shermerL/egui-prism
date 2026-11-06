@@ -78,6 +78,7 @@ struct Interaction {
     keyboard: bool,
     space_armed: bool,
     pointer_armed: bool,
+    last_frame: u64,
 }
 
 impl egui::Widget for Switch<'_, '_> {
@@ -106,6 +107,7 @@ impl egui::Widget for Switch<'_, '_> {
             20.0_f32.max(galley.size().y),
         );
         let (rect, mut response) = ui.allocate_exact_size(size, egui::Sense::click());
+        let frame = ui.ctx().cumulative_frame_nr();
         let state_id = response.id.with("switch-interaction");
         let mut state = ui
             .data_mut(|data| data.get_temp::<Interaction>(state_id))
@@ -113,7 +115,13 @@ impl egui::Widget for Switch<'_, '_> {
                 keyboard: true,
                 space_armed: false,
                 pointer_armed: false,
+                last_frame: frame,
             });
+        if frame > state.last_frame + 1 {
+            state.pointer_armed = false;
+            state.space_armed = false;
+        }
+        state.last_frame = frame;
         // Track modality even before focus arrives; pointer movement does not
         // erase keyboard focus-visible, while a pointer press does.
         let events = ui.input(|input| input.events.clone());

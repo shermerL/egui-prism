@@ -25,6 +25,10 @@ review, latest-head GitHub reviews, and CI. Keep this Quest until those gates pa
 
 ## Waiting
 
+- Input routing: resolve batched pointer events using each event position while
+  preserving the host's widget hit order. Final-position response flags lose
+  earlier clicks, while rectangle/layer-only routing permits same-layer
+  click-through. Keep the draft open until a complete approach is reviewed.
 - Host compositing foundation: integrate complete-control opacity after the
   shared host capability lands. Per-shape opacity does not satisfy CSS group
   compositing. Then rerun actual native/browser comparisons on light, dark,

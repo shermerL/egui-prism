@@ -550,3 +550,88 @@ fn pointer_release_outside_or_after_disabling_cancels_activation() {
     assert_eq!(h.values, [false, false]);
     assert_eq!(h.changes, [0, 0]);
 }
+
+#[test]
+fn disappearing_during_a_pointer_press_cancels_the_gesture() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let r = h.frame(vec![]);
+    let pos = r[0].rect.center();
+    h.frame(vec![
+        egui::Event::PointerMoved(pos),
+        pointer_event(pos, true),
+    ]);
+    h.time += 1.0 / 60.0;
+    h.context
+        .run_ui(
+            egui::RawInput {
+                time: Some(h.time),
+                ..Default::default()
+            },
+            |_| {},
+        )
+        .drop_without_applying_deltas();
+    let restored = h.frame(vec![]);
+    assert_eq!(restored[0].id, r[0].id);
+    h.frame(vec![pointer_event(pos, false)]);
+    assert_eq!(h.values, [false, false]);
+    assert_eq!(h.changes, [0, 0]);
+}
+
+#[test]
+fn arrow_handling_does_not_reclaim_focus_released_by_the_host() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let r = h.frame(vec![]);
+    h.frame(vec![key_event(egui::Key::Tab, true, false)]);
+    assert_eq!(h.context.memory(|m| m.focused()), Some(r[0].id));
+    let id = r[0].id;
+    h.context.on_begin_pass(
+        "host releases Switch focus",
+        std::sync::Arc::new(move |ctx| {
+            ctx.memory_mut(|memory| memory.surrender_focus(id));
+        }),
+    );
+    h.frame(vec![key_event(egui::Key::ArrowDown, true, false)]);
+    assert_ne!(h.context.memory(|m| m.focused()), Some(id));
+    assert_eq!(h.changes, [0, 0]);
+}
+
+#[test]
+fn a_covering_widget_in_the_same_layer_blocks_pointer_activation() {
+    let context = egui::Context::default();
+    let theme = Theme::light();
+    let mut checked = false;
+    let mut changes = 0;
+    let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(180.0, 20.0));
+    let pos = egui::pos2(12.0, 10.0);
+    for events in [
+        vec![],
+        vec![],
+        vec![
+            egui::Event::PointerMoved(pos),
+            pointer_event(pos, true),
+            pointer_event(pos, false),
+        ],
+    ] {
+        context
+            .run_ui(
+                egui::RawInput {
+                    events,
+                    ..Default::default()
+                },
+                |ui| {
+                    if ui
+                        .put(rect, Switch::new(&theme, &mut checked, "Covered switch"))
+                        .changed()
+                    {
+                        changes += 1;
+                    }
+                    ui.put(rect, egui::Button::new("Covering host widget"));
+                },
+            )
+            .drop_without_applying_deltas();
+    }
+    assert!(!checked);
+    assert_eq!(changes, 0);
+}
