@@ -15,3 +15,10 @@ in the same PR. Propose material API choices before implementing them.
 Follow [the strict shadcn contract](/docs/shadcn-parity.md), including actual
 reference comparison for every supported state. Earlier themed-egui candidates
 do not satisfy this requirement.
+
+## Waiting
+
+- Implementation: complete CSS group-opacity parity for overlapping disabled rail,
+  thumb and shadow primitives, and verify the result on different host surfaces.
+- Validation: complete matching native/browser visual and input comparisons, then
+  obtain exact-head independent review, GitHub reviews and CI.

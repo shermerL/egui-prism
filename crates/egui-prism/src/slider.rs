@@ -1,4 +1,4 @@
-//! Labeled single-value sliders using egui interaction and geometry.
+//! Labeled single-value sliders following the pinned shadcn/Radix contract.
 
 use std::ops::RangeInclusive;
 
@@ -20,7 +20,7 @@ pub struct Slider<'theme, 'value> {
     value: &'value mut f64,
     label: egui::WidgetText,
     range: RangeInclusive<f64>,
-    step: Option<f64>,
+    step: f64,
 }
 
 impl<'theme, 'value> Slider<'theme, 'value> {
@@ -41,7 +41,7 @@ impl<'theme, 'value> Slider<'theme, 'value> {
             value,
             label,
             range: 0.0..=1.0,
-            step: None,
+            step: 1.0,
         }
     }
 
@@ -58,48 +58,289 @@ impl<'theme, 'value> Slider<'theme, 'value> {
         self
     }
 
-    /// Round edits to positive finite step multiples, using egui's range-start grid.
+    /// Snap edits to a positive finite step from the range start (default: 1).
     pub fn step_by(mut self, step: f64) -> Self {
         assert!(
             step.is_finite() && step > 0.0,
             "Slider requires a positive finite step"
         );
-        self.step = Some(step);
+        self.step = step;
         self
     }
 }
 
+// Radix maps pointer coordinates over the whole rail, but insets the painted
+// thumb by 8 * (1 - 2 * fraction). Keep these deliberately distinct.
+fn thumb_center(rect: egui::Rect, value: f64, min: f64, max: f64) -> egui::Pos2 {
+    let fraction = ((value.clamp(min, max) - min) / (max - min)) as f32;
+    egui::pos2(
+        rect.left() + 8.0 + (rect.width() - 16.0) * fraction,
+        rect.center().y,
+    )
+}
+
+fn snap(value: f64, min: f64, max: f64, step: f64) -> f64 {
+    let snapped = ((value - min) / step + 0.5).floor() * step + min;
+    // Decimal rounding removes binary drift in repeated fractional key steps.
+    let digits = step
+        .to_string()
+        .split_once('.')
+        .map_or(0, |(_, tail)| tail.len());
+    let scale = 10.0_f64.powi(digits.min(308) as i32);
+    let rounded = if (snapped * scale).is_finite() {
+        (snapped * scale + 0.5).floor() / scale
+    } else {
+        snapped
+    };
+    rounded.clamp(min, max)
+}
+
 impl egui::Widget for Slider<'_, '_> {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
-        let previous_style = ui.style().clone();
-        self.theme.apply(ui.style_mut());
-        let response = ui
-            .vertical(|ui| {
-                ui.spacing_mut().slider_width = ui.spacing().slider_width.min(ui.available_width());
-                let enabled = ui.is_enabled();
-                let (min, max) = (*self.range.start(), *self.range.end());
-                let label = ui.add(egui::Label::new(self.label).wrap());
-                let mut slider = egui::Slider::from_get_set(self.range, |next| {
-                    // Accessibility requests use the same write boundary as pointer/keyboard edits.
-                    if enabled
-                        && let Some(next) = next
-                        && next.is_finite()
-                    {
-                        // egui rounds after clamping, so a non-dividing step may overshoot.
-                        *self.value = next.clamp(min, max);
+        let (min, max) = (*self.range.start(), *self.range.end());
+        ui.vertical(|ui| {
+            let label = ui.add(egui::Label::new(self.label).wrap());
+            // A 16-point minimum is the thumb's intrinsic footprint. At smaller
+            // offered widths it may overflow, but its travel can never reverse.
+            let width = ui
+                .spacing()
+                .slider_width
+                .min(ui.available_width())
+                .max(16.0);
+            let (id, bounds) = ui.allocate_space(egui::vec2(width, 16.0));
+            let rail = egui::Rect::from_center_size(bounds.center(), egui::vec2(width, 6.0));
+            let center = thumb_center(rail, *self.value, min, max);
+            let thumb = egui::Rect::from_center_size(center, egui::Vec2::splat(16.0));
+            let track_response = ui.interact(
+                rail,
+                id.with("track"),
+                egui::Sense::CLICK | egui::Sense::DRAG,
+            );
+            let thumb_response = ui.interact(thumb, id, egui::Sense::click_and_drag());
+            let mut response = thumb_response
+                .clone()
+                .union(track_response.clone())
+                .labelled_by(label.id);
+            let enabled = ui.is_enabled();
+            let before = *self.value;
+            let events = ui.input(|input| input.events.clone());
+            let focus_id = id.with("focus-visible");
+            let mut focus_visible = ui.data(|data| data.get_temp::<bool>(focus_id).unwrap_or(true));
+            for event in &events {
+                match event {
+                    egui::Event::PointerButton { pressed: true, .. } => focus_visible = false,
+                    egui::Event::Key {
+                        pressed: true,
+                        modifiers,
+                        ..
+                    } if !modifiers.alt && !modifiers.ctrl && !modifiers.mac_cmd => {
+                        focus_visible = true
                     }
-                    *self.value
-                })
-                .clamping(egui::SliderClamping::Edits)
-                .show_value(false)
-                .trailing_fill(true);
-                if let Some(step) = self.step {
-                    slider = slider.step_by(step);
+                    _ => {}
                 }
-                ui.add(slider).labelled_by(label.id)
-            })
-            .inner;
-        ui.set_style(previous_style);
-        response
+            }
+            ui.data_mut(|data| data.insert_temp(focus_id, focus_visible));
+            let capture_id = id.with("capture");
+            let frame = ui.ctx().cumulative_frame_nr();
+            // Only a live gesture retains its initial rail. Disabling or skipping
+            // a frame cancels it, so a reused ID cannot revive an old drag.
+            let mut capture = ui
+                .data(|data| data.get_temp::<(egui::Rect, u64)>(capture_id))
+                .filter(|(_, seen)| *seen == frame || seen.checked_add(1) == Some(frame));
+            let primary_down = ui.input(|input| input.pointer.primary_down());
+            let pressed = ui.input(|input| input.pointer.primary_pressed());
+            let gone = events
+                .iter()
+                .any(|event| matches!(event, egui::Event::PointerGone));
+            if !enabled || gone {
+                capture = None;
+            }
+            if enabled {
+                let track_down = track_response.is_pointer_button_down_on() && primary_down;
+                let thumb_down = thumb_response.is_pointer_button_down_on() && primary_down;
+                let track_click = track_response.clicked_by(egui::PointerButton::Primary);
+                let thumb_click = thumb_response.clicked_by(egui::PointerButton::Primary);
+                if pressed && (track_down || thumb_down) {
+                    capture = Some((rail, frame));
+                }
+                if (thumb_down && pressed) || thumb_click {
+                    response.request_focus();
+                }
+                let press_position = events.iter().find_map(|event| match event {
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed: true,
+                        ..
+                    } => Some(*pos),
+                    _ => None,
+                });
+                let pos = ui.input(|input| input.pointer.interact_pos());
+                let moved = ui.input(|input| input.pointer.delta() != egui::Vec2::ZERO)
+                    && (!pressed || press_position != pos);
+                if ((track_down && pressed) || track_click || (capture.is_some() && moved))
+                    && let Some(pos) = pos
+                {
+                    let mapping = capture.map_or(rail, |(rect, _)| rect);
+                    *self.value = snap(
+                        min + f64::from((pos.x - mapping.left()) / mapping.width()) * (max - min),
+                        min,
+                        max,
+                        self.step,
+                    );
+                    response.request_focus();
+                }
+                if response.has_focus() {
+                    ui.memory_mut(|memory| {
+                        memory.set_focus_lock_filter(
+                            id,
+                            egui::EventFilter {
+                                horizontal_arrows: true,
+                                vertical_arrows: true,
+                                ..Default::default()
+                            },
+                        )
+                    });
+                }
+                for event in &events {
+                    let next = match event {
+                        egui::Event::Key {
+                            key,
+                            pressed: true,
+                            modifiers,
+                            ..
+                        } if response.has_focus() => {
+                            use egui::Key;
+                            let multiplier =
+                                if modifiers.shift || matches!(key, Key::PageUp | Key::PageDown) {
+                                    10.0
+                                } else {
+                                    1.0
+                                };
+                            match key {
+                                Key::Home => Some(min),
+                                Key::End => Some(max),
+                                Key::ArrowRight | Key::ArrowUp | Key::PageUp => {
+                                    Some(*self.value + self.step * multiplier)
+                                }
+                                Key::ArrowLeft | Key::ArrowDown | Key::PageDown => {
+                                    Some(*self.value - self.step * multiplier)
+                                }
+                                _ => None,
+                            }
+                        }
+                        egui::Event::AccessKitActionRequest(request)
+                            if request.target_node == id.accesskit_id() =>
+                        {
+                            use egui::accesskit::{Action, ActionData};
+                            match (&request.action, &request.data) {
+                                (Action::SetValue, Some(ActionData::NumericValue(value)))
+                                    if value.is_finite() =>
+                                {
+                                    Some(*value)
+                                }
+                                (Action::Increment, _) => Some(*self.value + self.step),
+                                (Action::Decrement, _) => Some(*self.value - self.step),
+                                _ => None,
+                            }
+                        }
+                        _ => None,
+                    };
+                    if let Some(next) = next {
+                        *self.value = snap(next, min, max, self.step);
+                    }
+                }
+            }
+            ui.data_mut(|data| {
+                if primary_down && let Some((rect, _)) = capture {
+                    data.insert_temp(capture_id, (rect, frame));
+                } else {
+                    data.remove::<(egui::Rect, u64)>(capture_id);
+                }
+            });
+            if *self.value != before {
+                response.mark_changed();
+            }
+            response.widget_info(|| egui::WidgetInfo::slider(enabled, *self.value, ""));
+            ui.ctx().accesskit_node_builder(id, |node| {
+                use egui::accesskit::Action;
+                node.set_min_numeric_value(min);
+                node.set_max_numeric_value(max);
+                node.set_numeric_value_step(self.step);
+                if enabled {
+                    node.add_action(Action::SetValue);
+                    if *self.value < max {
+                        node.add_action(Action::Increment);
+                    }
+                    if *self.value > min {
+                        node.add_action(Action::Decrement);
+                    }
+                }
+            });
+            if ui.is_rect_visible(bounds) {
+                let center = thumb_center(rail, *self.value, min, max);
+                let thumb = egui::Rect::from_center_size(center, egui::Vec2::splat(16.0));
+                let hovered = enabled && ui.rect_contains_pointer(thumb);
+                let ring = ui.ctx().animate_bool_with_time(
+                    id.with("ring"),
+                    hovered || (enabled && response.has_focus() && focus_visible),
+                    0.15,
+                );
+                let mut painter = ui.painter().clone();
+                // Replace egui's disabled alpha with shadcn's root opacity.
+                if !enabled {
+                    painter.set_opacity(if ui.visuals().disabled_alpha() > 0.0 {
+                        ui.painter().opacity() / ui.visuals().disabled_alpha() * 0.5
+                    } else {
+                        0.0
+                    });
+                }
+                let palette = &self.theme.colors;
+                let fraction = ((*self.value).clamp(min, max) - min) / (max - min);
+                let split = rail.left() + width * fraction as f32;
+                let fill = egui::Rect::from_min_max(rail.min, egui::pos2(split, rail.bottom()));
+                let remainder = egui::Rect::from_min_max(egui::pos2(split, rail.top()), rail.max);
+                let mut shapes = vec![
+                    egui::epaint::ClippedShape::new(
+                        remainder.intersect(painter.clip_rect()),
+                        egui::Shape::rect_filled(rail, 3, palette.muted.background),
+                    ),
+                    egui::epaint::ClippedShape::new(
+                        fill.intersect(painter.clip_rect()),
+                        egui::Shape::rect_filled(rail, 3, palette.primary.background),
+                    ),
+                ];
+                for (blur, inset) in [(3, 0.0), (2, 1.0)] {
+                    let shadow = egui::epaint::Shadow {
+                        offset: [0, 1],
+                        blur,
+                        spread: 0,
+                        color: egui::Color32::from_black_alpha(26),
+                    };
+                    shapes.push(egui::epaint::ClippedShape::new(
+                        painter.clip_rect(),
+                        shadow.as_shape(thumb.shrink(inset), (8.0 - inset) as u8),
+                    ));
+                }
+                for shape in shapes {
+                    painter.with_clip_rect(shape.clip_rect).add(shape.shape);
+                }
+                if ring > 0.0 {
+                    painter.circle_stroke(
+                        center,
+                        8.0 + 2.0 * ring,
+                        egui::Stroke::new(4.0 * ring, palette.ring.gamma_multiply(0.5)),
+                    );
+                }
+                painter.circle(
+                    center,
+                    7.5,
+                    egui::Color32::WHITE,
+                    egui::Stroke::new(1.0, palette.primary.background),
+                );
+            }
+            response
+        })
+        .inner
     }
 }

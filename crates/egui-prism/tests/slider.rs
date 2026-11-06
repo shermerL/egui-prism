@@ -17,6 +17,7 @@ struct Harness {
     time: f64,
     handles: Vec<egui::Pos2>,
     tree: Option<egui::accesskit::TreeUpdate>,
+    shapes: Vec<egui::epaint::ClippedShape>,
 }
 
 impl Harness {
@@ -38,6 +39,7 @@ impl Harness {
             time: 0.0,
             handles: Vec::new(),
             tree: None,
+            shapes: Vec::new(),
         }
     }
 
@@ -83,15 +85,11 @@ impl Harness {
             .shapes
             .iter()
             .filter_map(|s| match &s.shape {
-                egui::Shape::Circle(c) => Some(c.center),
-                egui::Shape::Rect(r)
-                    if r.rect.height() > self.theme.metrics.control_height * 0.5 =>
-                {
-                    Some(r.rect.center())
-                }
+                egui::Shape::Circle(c) if c.radius == 7.5 => Some(c.center),
                 _ => None,
             })
             .collect();
+        self.shapes = output.shapes.clone();
         self.tree = output.platform_output.accesskit_update.take();
         output.drop_without_applying_deltas();
         responses.unwrap()
@@ -113,13 +111,16 @@ impl Harness {
         self.pointer(pos, false);
     }
     fn key(&mut self, key: egui::Key) {
+        self.modified_key(key, egui::Modifiers::NONE);
+    }
+    fn modified_key(&mut self, key: egui::Key, modifiers: egui::Modifiers) {
         for pressed in [true, false] {
             self.frame(vec![egui::Event::Key {
                 key,
                 physical_key: None,
                 pressed,
                 repeat: false,
-                modifiers: egui::Modifiers::NONE,
+                modifiers,
             }]);
         }
     }
@@ -136,31 +137,33 @@ impl Harness {
 }
 
 #[test]
-fn rail_clicks_and_drag_match_painted_positions_at_sizes_and_scales() {
-    for (width, zoom) in [(120.0, 1.0), (240.0, 1.0), (180.0, 1.5)] {
+fn pointer_uses_full_rail_while_thumb_uses_inset_travel() {
+    for (width, zoom) in [(120.0, 1.0), (240.0, 1.0), (180.0, 1.5), (20.0, 1.0)] {
         let mut h = Harness::new();
         h.rail_width = width;
         h.zoom = zoom;
+        h.step = 1.0;
         h.frame(vec![]);
         let r = h.frame(vec![]);
+        let rail = r[0].rect;
         assert_eq!(h.handles.len(), 2);
-        let left = h.handles[0];
+        assert!((h.handles[0].x - (rail.left() + 8.0)).abs() < 0.01);
         h.values[0] = 100.0;
         h.frame(vec![]);
-        let right = h.handles[0];
-        assert!(right.x > left.x);
-        assert!(r[0].rect.contains(left) && r[0].rect.contains(right));
-        h.click(left);
+        assert!((h.handles[0].x - (rail.right() - 8.0)).abs() < 0.01);
+        h.click(rail.left_center());
         assert_eq!(h.values[0], 0.0);
-        h.click(right);
+        h.click(rail.right_center());
         assert_eq!(h.values[0], 100.0);
-        h.click(left.lerp(right, 0.5));
-        assert_eq!(h.values[0], 50.0);
-        assert!((h.handles[0].x - left.lerp(right, 0.5).x).abs() < 0.5);
-        h.pointer(left.lerp(right, 0.5), true);
-        h.frame(vec![egui::Event::PointerMoved(left.lerp(right, 0.75))]);
-        h.pointer(left.lerp(right, 0.75), false);
-        assert_eq!(h.values, [75.0, 0.0]);
+        // Thumb presses focus without jumping; subsequent motion uses rail mapping.
+        let thumb = h.handles[0];
+        h.pointer(thumb, true);
+        assert_eq!(h.values[0], 100.0);
+        let quarter = egui::pos2(rail.left() + rail.width() * 0.25, rail.center().y);
+        h.frame(vec![egui::Event::PointerMoved(quarter)]);
+        h.pointer(quarter, false);
+        assert_eq!(h.values, [25.0, 0.0]);
+        assert!((h.handles[0].x - (rail.left() + 8.0 + (rail.width() - 16.0) * 0.25)).abs() < 0.01);
         let changes = h.changes;
         for _ in 0..3 {
             h.frame(vec![]);
@@ -275,4 +278,154 @@ fn invalid_configuration_is_rejected() {
             .is_err()
         );
     }
+}
+
+#[test]
+fn thumb_travel_never_reverses_on_narrow_rails() {
+    for width in [0.0, 8.0, 16.0, 20.0, 25.0, 32.0] {
+        let mut h = Harness::new();
+        h.rail_width = width;
+        h.frame(vec![]);
+        h.frame(vec![]);
+        let left = h.handles[0];
+        h.values[0] = 100.0;
+        h.frame(vec![]);
+        let right = h.handles[0];
+        assert!(right.x >= left.x, "width {width}: {left:?} -> {right:?}");
+    }
+}
+
+#[test]
+fn radix_keyboard_endpoints_and_modifiers_share_the_step_grid() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let r = h.frame(vec![]);
+    r[0].request_focus();
+    h.key(egui::Key::End);
+    assert_eq!(h.values[0], 100.0);
+    h.key(egui::Key::PageDown);
+    assert_eq!(h.values[0], 50.0);
+    h.modified_key(egui::Key::ArrowLeft, egui::Modifiers::SHIFT);
+    assert_eq!(h.values[0], 0.0);
+    h.modified_key(egui::Key::ArrowUp, egui::Modifiers::CTRL);
+    assert_eq!(h.values[0], 5.0);
+    h.modified_key(egui::Key::ArrowUp, egui::Modifiers::ALT);
+    assert_eq!(h.values[0], 10.0);
+    h.key(egui::Key::PageUp);
+    assert_eq!(h.values[0], 60.0);
+    h.key(egui::Key::ArrowDown);
+    assert_eq!(h.values[0], 55.0);
+    h.key(egui::Key::Home);
+    assert_eq!(h.values[0], 0.0);
+    h.range = 0.0..=1.0;
+    h.step = 0.3;
+    h.key(egui::Key::End);
+    assert_eq!(
+        h.values[0], 0.9,
+        "Radix snaps End to its step grid before clamping"
+    );
+    h.key(egui::Key::ArrowUp);
+    assert_eq!(h.values[0], 1.0);
+}
+
+#[test]
+fn disable_during_drag_and_release_outside_do_not_leak_edits() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let r = h.frame(vec![]);
+    h.pointer(r[0].rect.center(), true);
+    assert_eq!(h.values[0], 50.0);
+    h.enabled = false;
+    h.frame(vec![egui::Event::PointerMoved(r[0].rect.right_center())]);
+    h.pointer(r[0].rect.right_center(), false);
+    h.enabled = true;
+    h.frame(vec![]);
+    assert_eq!(h.values[0], 50.0);
+    h.pointer(h.handles[0], true);
+    let outside = r[0].rect.right_center() + egui::vec2(100.0, 100.0);
+    h.frame(vec![egui::Event::PointerMoved(outside)]);
+    h.pointer(outside, false);
+    assert_eq!(h.values[0], 100.0);
+    let changes = h.changes;
+    h.frame(vec![egui::Event::PointerMoved(r[0].rect.center())]);
+    assert_eq!(h.changes, changes);
+}
+
+#[test]
+fn painted_geometry_and_roles_do_not_depend_on_egui_control_height() {
+    for theme in [Theme::light(), Theme::dark()] {
+        let mut h = Harness::new();
+        h.theme = theme;
+        h.context
+            .all_styles_mut(|style| style.spacing.interact_size.y = 64.0);
+        h.frame(vec![]);
+        h.frame(vec![]);
+        let thumb = h
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Circle(circle) if circle.fill == egui::Color32::WHITE => Some(circle),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(thumb.radius * 2.0 + thumb.stroke.width, 16.0);
+        assert_eq!(
+            thumb.stroke,
+            egui::Stroke::new(1.0, h.theme.colors.primary.background)
+        );
+        let rail = h
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Rect(rect) if rect.fill == h.theme.colors.muted.background => {
+                    Some(rect)
+                }
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(rail.rect.height(), 6.0);
+        assert_eq!(rail.corner_radius, egui::CornerRadius::same(3));
+        assert!(h.shapes.iter().any(
+            |shape| matches!(&shape.shape, egui::Shape::Rect(rect) if rect.blur_width == 3.0)
+        ));
+    }
+}
+
+#[test]
+fn disabling_cancels_capture_even_if_reenabled_before_release() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let r = h.frame(vec![]);
+    h.pointer(r[0].rect.center(), true);
+    h.enabled = false;
+    h.frame(vec![]);
+    h.enabled = true;
+    h.frame(vec![egui::Event::PointerMoved(r[0].rect.right_center())]);
+    assert_eq!(h.values[0], 50.0);
+    h.pointer(r[0].rect.right_center(), false);
+}
+
+#[test]
+fn fast_track_click_in_one_input_frame_updates_once() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let r = h.frame(vec![]);
+    let pos = r[0].rect.center();
+    h.frame(vec![
+        egui::Event::PointerMoved(pos),
+        egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        },
+        egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        },
+    ]);
+    assert_eq!(h.values[0], 50.0);
+    assert_eq!(h.changes[0], 1);
 }
