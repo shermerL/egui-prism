@@ -18,6 +18,8 @@ struct Harness {
     handles: Vec<egui::Pos2>,
     tree: Option<egui::accesskit::TreeUpdate>,
     shapes: Vec<egui::epaint::ClippedShape>,
+    transform: egui::emath::TSTransform,
+    modal: bool,
 }
 
 impl Harness {
@@ -40,6 +42,8 @@ impl Harness {
             handles: Vec::new(),
             tree: None,
             shapes: Vec::new(),
+            transform: egui::emath::TSTransform::IDENTITY,
+            modal: false,
         }
     }
 
@@ -58,6 +62,15 @@ impl Harness {
                 ..Default::default()
             },
             |ui| {
+                ui.ctx().set_transform_layer(ui.layer_id(), self.transform);
+                if self.modal {
+                    ui.memory_mut(|memory| {
+                        memory.set_modal_layer(egui::LayerId::new(
+                            egui::Order::Foreground,
+                            egui::Id::unique("slider-test-modal"),
+                        ))
+                    });
+                }
                 ui.spacing_mut().slider_width = self.rail_width;
                 responses = Some((if self.reversed { [1, 0] } else { [0, 1] }).map(|index| {
                     let id = ui.make_persistent_id(index);
@@ -427,5 +440,80 @@ fn fast_track_click_in_one_input_frame_updates_once() {
         },
     ]);
     assert_eq!(h.values[0], 50.0);
+    assert_eq!(h.changes[0], 1);
+}
+
+#[test]
+fn modal_layer_cancels_capture_and_blocks_accessibility_writes() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let r = h.frame(vec![]);
+    h.pointer(r[0].rect.center(), true);
+    h.modal = true;
+    h.frame(vec![]);
+    h.frame(vec![egui::Event::PointerMoved(r[0].rect.right_center())]);
+    assert_eq!(h.values[0], 50.0);
+    h.set_accessible(r[0].id, 100.0);
+    assert_eq!(h.values[0], 50.0);
+    h.modal = false;
+    h.frame(vec![]);
+    h.frame(vec![egui::Event::PointerMoved(r[0].rect.left_center())]);
+    assert_eq!(h.values[0], 50.0);
+    h.pointer(r[0].rect.left_center(), false);
+}
+
+#[test]
+fn transformed_layer_pointer_mapping_uses_local_coordinates() {
+    for scale in [1.0, 1.5] {
+        let mut h = Harness::new();
+        h.width = 800.0;
+        h.transform = egui::emath::TSTransform {
+            scaling: scale,
+            translation: egui::vec2(100.0, 20.0),
+        };
+        h.frame(vec![]);
+        let r = h.frame(vec![]);
+        let middle = h.transform * r[0].rect.center();
+        h.click(middle);
+        assert_eq!(h.values[0], 50.0);
+        let three_quarters = h.transform
+            * egui::pos2(
+                r[0].rect.left() + 0.75 * r[0].rect.width(),
+                r[0].rect.center().y,
+            );
+        h.pointer(middle, true);
+        h.frame(vec![egui::Event::PointerMoved(three_quarters)]);
+        h.pointer(three_quarters, false);
+        assert_eq!(h.values[0], 75.0);
+    }
+}
+
+#[test]
+fn complete_thumb_drag_in_one_frame_is_not_discarded() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let r = h.frame(vec![]);
+    let from = h.handles[0];
+    let to = egui::pos2(
+        r[0].rect.left() + 0.75 * r[0].rect.width(),
+        r[0].rect.center().y,
+    );
+    h.frame(vec![
+        egui::Event::PointerMoved(from),
+        egui::Event::PointerButton {
+            pos: from,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        },
+        egui::Event::PointerMoved(to),
+        egui::Event::PointerButton {
+            pos: to,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        },
+    ]);
+    assert_eq!(h.values[0], 75.0);
     assert_eq!(h.changes[0], 1);
 }

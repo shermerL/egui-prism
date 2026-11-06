@@ -95,6 +95,13 @@ fn snap(value: f64, min: f64, max: f64, step: f64) -> f64 {
     rounded.clamp(min, max)
 }
 
+#[derive(Clone, Copy)]
+struct Capture {
+    rail_global: egui::Rect,
+    last_pointer: egui::Pos2,
+    frame: u64,
+}
+
 impl egui::Widget for Slider<'_, '_> {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
         let (min, max) = (*self.range.start(), *self.range.end());
@@ -142,54 +149,34 @@ impl egui::Widget for Slider<'_, '_> {
             ui.data_mut(|data| data.insert_temp(focus_id, focus_visible));
             let capture_id = id.with("capture");
             let frame = ui.ctx().cumulative_frame_nr();
-            // Only a live gesture retains its initial rail. Disabling or skipping
-            // a frame cancels it, so a reused ID cannot revive an old drag.
+            // Keep the initial rail in the same global space as pointer events.
+            // This also preserves Radix's cached bounds if layout changes mid-drag.
             let mut capture = ui
-                .data(|data| data.get_temp::<(egui::Rect, u64)>(capture_id))
-                .filter(|(_, seen)| *seen == frame || seen.checked_add(1) == Some(frame));
+                .data(|data| data.get_temp::<Capture>(capture_id))
+                .filter(|state| state.frame == frame || state.frame.checked_add(1) == Some(frame));
+            let interactive =
+                enabled && ui.memory(|memory| memory.allows_interaction(ui.layer_id()));
             let primary_down = ui.input(|input| input.pointer.primary_down());
-            let pressed = ui.input(|input| input.pointer.primary_pressed());
-            let gone = events
-                .iter()
-                .any(|event| matches!(event, egui::Event::PointerGone));
-            if !enabled || gone {
+            if !interactive {
                 capture = None;
             }
-            if enabled {
-                let track_down = track_response.is_pointer_button_down_on() && primary_down;
-                let thumb_down = thumb_response.is_pointer_button_down_on() && primary_down;
-                let track_click = track_response.clicked_by(egui::PointerButton::Primary);
-                let thumb_click = thumb_response.clicked_by(egui::PointerButton::Primary);
-                if pressed && (track_down || thumb_down) {
-                    capture = Some((rail, frame));
-                }
-                if (thumb_down && pressed) || thumb_click {
-                    response.request_focus();
-                }
-                let press_position = events.iter().find_map(|event| match event {
-                    egui::Event::PointerButton {
-                        pos,
-                        button: egui::PointerButton::Primary,
-                        pressed: true,
-                        ..
-                    } => Some(*pos),
-                    _ => None,
+            if interactive {
+                let to_global = ui
+                    .ctx()
+                    .layer_transform_to_global(ui.layer_id())
+                    .unwrap_or(egui::emath::TSTransform::IDENTITY);
+                let rail_global = to_global * rail;
+                let thumb_global = to_global * thumb;
+                let clip_global = to_global * ui.clip_rect();
+                let occupied = ui.ctx().interaction_snapshot(|snapshot| {
+                    snapshot
+                        .clicked
+                        .or(snapshot.dragged)
+                        .is_some_and(|owner| owner != id && owner != track_response.id)
                 });
-                let pos = ui.input(|input| input.pointer.interact_pos());
-                let moved = ui.input(|input| input.pointer.delta() != egui::Vec2::ZERO)
-                    && (!pressed || press_position != pos);
-                if ((track_down && pressed) || track_click || (capture.is_some() && moved))
-                    && let Some(pos) = pos
-                {
-                    let mapping = capture.map_or(rail, |(rect, _)| rect);
-                    *self.value = snap(
-                        min + f64::from((pos.x - mapping.left()) / mapping.width()) * (max - min),
-                        min,
-                        max,
-                        self.step,
-                    );
-                    response.request_focus();
-                }
+                let value_at = |rect: egui::Rect, pos: egui::Pos2| {
+                    min + f64::from((pos.x - rect.left()) / rect.width()) * (max - min)
+                };
                 if response.has_focus() {
                     ui.memory_mut(|memory| {
                         memory.set_focus_lock_filter(
@@ -204,6 +191,52 @@ impl egui::Widget for Slider<'_, '_> {
                 }
                 for event in &events {
                     let next = match event {
+                        egui::Event::PointerButton {
+                            pos,
+                            button: egui::PointerButton::Primary,
+                            pressed: true,
+                            ..
+                        } => {
+                            // egui has no drag response for a gesture completed in
+                            // one frame. Hit-test that press before replaying its
+                            // ordered movement/release, while respecting layers,
+                            // clipping and any known competing widget owner.
+                            let hit = !occupied
+                                && (!primary_down || response.is_pointer_button_down_on())
+                                && ui.ctx().layer_id_at(*pos) == Some(ui.layer_id())
+                                && clip_global.contains(*pos)
+                                && (rail_global.contains(*pos) || thumb_global.contains(*pos));
+                            capture = hit.then_some(Capture {
+                                rail_global,
+                                last_pointer: *pos,
+                                frame,
+                            });
+                            if hit {
+                                response.request_focus();
+                            }
+                            (hit && !thumb_global.contains(*pos))
+                                .then(|| value_at(rail_global, *pos))
+                        }
+                        egui::Event::PointerMoved(pos) => capture.as_mut().and_then(|state| {
+                            if state.last_pointer == *pos {
+                                return None;
+                            }
+                            state.last_pointer = *pos;
+                            Some(value_at(state.rail_global, *pos))
+                        }),
+                        egui::Event::PointerButton {
+                            pos,
+                            button: egui::PointerButton::Primary,
+                            pressed: false,
+                            ..
+                        } => capture.take().and_then(|state| {
+                            (state.last_pointer != *pos).then(|| value_at(state.rail_global, *pos))
+                        }),
+                        egui::Event::PointerGone => {
+                            capture = None;
+                            None
+                        }
+
                         egui::Event::Key {
                             key,
                             pressed: true,
@@ -252,10 +285,11 @@ impl egui::Widget for Slider<'_, '_> {
                 }
             }
             ui.data_mut(|data| {
-                if primary_down && let Some((rect, _)) = capture {
-                    data.insert_temp(capture_id, (rect, frame));
+                if primary_down && let Some(mut state) = capture {
+                    state.frame = frame;
+                    data.insert_temp(capture_id, state);
                 } else {
-                    data.remove::<(egui::Rect, u64)>(capture_id);
+                    data.remove::<Capture>(capture_id);
                 }
             });
             if *self.value != before {
