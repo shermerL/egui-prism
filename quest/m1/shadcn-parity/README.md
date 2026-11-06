@@ -16,7 +16,6 @@ this epic owns the shared foundation and corrections to completed components.
 
 ## Required
 
-- [Shared reference, tokens and typography](/quest/m1/shadcn-parity/foundation.md)
 - [Button and IconButton parity](/quest/m1/shadcn-parity/button.md)
 - [TextInput parity](/quest/m1/shadcn-parity/text-input.md)
 - [Checkbox parity](/quest/m1/shadcn-parity/checkbox.md)
