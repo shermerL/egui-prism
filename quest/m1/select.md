@@ -11,7 +11,3 @@ M1 owns core components. Reuse egui popup behavior before considering an abstrac
 Include the public API, compiling minimal Rust example, light/dark gallery cases,
 behavior regressions, actual visual evidence, and explicit platform limitations
 in the same PR. Propose material API choices before implementing them.
-
-## Required
-
-- [Gallery harness](/quest/m0/gallery-harness.md)

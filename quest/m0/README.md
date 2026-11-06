@@ -4,7 +4,3 @@
 
 Provide a reproducible library workspace, semantic themes, and a shared native
 and browser harness before shipping custom components.
-
-## Required
-
-- [Gallery harness](/quest/m0/gallery-harness.md)
