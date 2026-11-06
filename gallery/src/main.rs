@@ -1,19 +1,31 @@
-//! Minimal native and browser host for the component library.
+//! Shared native and browser acceptance gallery for the component library.
+
+mod interaction;
 
 use egui_prism::{egui, theme::Theme};
+use interaction::InteractionCase;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Case {
+    Theme,
+    Interaction,
+    Layout,
+}
 
 struct Gallery {
     dark: bool,
-    sample_enabled: bool,
-    sample_text: String,
+    case: Case,
+    narrow: bool,
+    interaction: InteractionCase,
 }
 
 impl Gallery {
     fn new(context: &egui::Context) -> Self {
         let gallery = Self {
             dark: false,
-            sample_enabled: true,
-            sample_text: "Select this text, then switch themes.".into(),
+            case: Case::Theme,
+            narrow: false,
+            interaction: InteractionCase::default(),
         };
         gallery.apply_theme(context);
         gallery
@@ -44,73 +56,119 @@ impl eframe::App for Gallery {
         egui::CentralPanel::default()
             .frame(egui::Frame::central_panel(ui.style()).inner_margin(theme.metrics.page_margin))
             .show(ui, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    ui.heading("egui-prism");
-                    ui.label("Semantic themes · Engineering preview");
-                    let old_dark = self.dark;
-                    ui.horizontal(|ui| {
-                        ui.selectable_value(&mut self.dark, false, "Light");
-                        ui.selectable_value(&mut self.dark, true, "Dark");
-                    });
-                    if old_dark != self.dark {
-                        self.apply_theme(ui.ctx());
-                        ui.ctx().request_repaint();
+                ui.heading("egui-prism");
+                ui.label("Available: semantic themes. Planned: Prism widgets.");
+                ui.horizontal_wrapped(|ui| {
+                    ui.selectable_value(&mut self.case, Case::Theme, "Theme");
+                    ui.selectable_value(&mut self.case, Case::Interaction, "Interaction");
+                    ui.selectable_value(&mut self.case, Case::Layout, "Layout");
+                });
+                let old_dark = self.dark;
+                ui.horizontal_wrapped(|ui| {
+                    ui.selectable_value(&mut self.dark, false, "Light");
+                    ui.selectable_value(&mut self.dark, true, "Dark");
+                    ui.checkbox(&mut self.narrow, "320pt content");
+                    ui.label("Scale:");
+                    for (factor, label) in [(1.0, "100%"), (1.5, "150%")] {
+                        if ui.selectable_label(ui.ctx().zoom_factor() == factor, label).clicked() {
+                            ui.ctx().set_zoom_factor(factor);
+                        }
                     }
-                    ui.separator();
-                    ui.label("Paired surfaces and foregrounds");
-                    let pairs = [
-                            ("Page", theme.colors.background),
-                            ("Surface", theme.colors.surface),
-                            ("Muted", theme.colors.muted),
-                            ("Primary", theme.colors.primary),
-                            ("Selected", theme.colors.selection),
-                            ("Destructive", theme.colors.destructive),
-                            ("Disabled token", theme.colors.disabled),
-                            ("Focus / pressed", theme.colors.focus),
-                    ];
-                    let font = egui::TextStyle::Body.resolve(ui.style());
-                    let card_width = pairs.iter().map(|(name, pair)| {
-                        ui.painter().layout_no_wrap((*name).into(), font.clone(), pair.foreground).size().x
-                    }).fold(0.0_f32, f32::max)
-                        + theme.metrics.container_margin.sum().x + 2.0;
-                    let gap = theme.metrics.item_spacing.x;
-                    let columns = (((ui.available_width() + gap) / (card_width + gap)) as usize).clamp(1, 4);
-                    egui::Grid::new("semantic-palette").num_columns(columns).show(ui, |ui| {
-                        for (index, (name, pair)) in pairs.into_iter().enumerate() {
-                            egui::Frame::new()
-                                .fill(pair.background)
-                                .stroke(egui::Stroke::new(1.0, theme.colors.border))
-                                .corner_radius(theme.metrics.corner_radius)
-                                .inner_margin(theme.metrics.container_margin)
-                                .show(ui, |ui| {
-                                    ui.add(
-                                        egui::Label::new(egui::RichText::new(name).color(pair.foreground))
-                                            .wrap_mode(egui::TextWrapMode::Extend),
-                                    );
-                                });
-                            if (index + 1) % columns == 0 {
-                                ui.end_row();
+                });
+                if self.dark != old_dark {
+                    self.apply_theme(ui.ctx());
+                    ui.ctx().request_repaint();
+                }
+                ui.separator();
+                egui::ScrollArea::vertical().id_salt("gallery-content").show(ui, |ui| {
+                    if self.narrow { ui.set_max_width(ui.available_width().min(320.0)); }
+                    match self.case {
+                        Case::Theme => {
+                            ui.heading("Semantic palette");
+                            show_palette(ui, &theme);
+                            let _ = ui.selectable_label(true, "Selected foreground");
+                            ui.label("Opaque disabled tokens are paired colors. Standard egui disabled controls use opacity.");
+                        }
+                        Case::Interaction | Case::Layout => {
+                            ui.heading("Harness controls (egui)");
+                            ui.label("Activate with the pointer or Tab and Enter. Counts change once per activation and remain still while idle.");
+                            ui.horizontal_wrapped(|ui| {
+                                ui.checkbox(&mut self.interaction.disabled, "Disable actions");
+                                ui.checkbox(&mut self.interaction.reversed, "Reverse instances");
+                            });
+                            if self.case == Case::Layout {
+                                ui.label("Long labels use the same values and stable IDs as the interaction case. Try narrow content and 150% scale, then scroll to the second instance.");
+                            }
+                            let responses = self.interaction.show(ui, self.case == Case::Layout);
+                            if responses.iter().any(egui::Response::has_focus) {
+                                ui.small("An action has keyboard focus.");
                             }
                         }
-                    });
+                    }
                     ui.separator();
-                    ui.heading("Harness controls (egui)");
-                    ui.label("Theme switching preserves the values below. Prism widgets are planned.");
-                    ui.checkbox(&mut self.sample_enabled, "Sample state");
-                    let label = ui.label("Sample text");
-                    ui.add(egui::TextEdit::singleline(&mut self.sample_text).desired_width(f32::INFINITY))
-                        .labelled_by(label.id);
-                    ui.horizontal(|ui| {
-                        let _ = ui.selectable_label(true, "Selected foreground");
-                        let _ = ui.add_enabled(false, egui::Button::new("egui disabled opacity"));
+                    ui.small(format!("Development v{} · {} · {}", env!("CARGO_PKG_VERSION"),
+                        if cfg!(target_arch = "wasm32") { "WebGL 2" } else { "native OpenGL" },
+                        if cfg!(debug_assertions) { "debug" } else { "release" }));
+                    ui.small(format!("Build: {}", option_env!("EGUI_PRISM_BUILD_ID").unwrap_or("local development")));
+                    ui.horizontal_wrapped(|ui| {
+                        ui.hyperlink_to("Source", "https://github.com/shermerL/egui-prism");
+                        ui.hyperlink_to("MIT license", if cfg!(target_arch = "wasm32") {
+                            "/egui-prism/LICENSE"
+                        } else { "https://github.com/shermerL/egui-prism/blob/main/LICENSE" });
+                        ui.hyperlink_to("Third-party notices", if cfg!(target_arch = "wasm32") {
+                            "/egui-prism/THIRD_PARTY_NOTICES.md"
+                        } else { "https://github.com/shermerL/egui-prism/blob/main/THIRD_PARTY_NOTICES.md" });
                     });
-                    ui.small("Disabled token swatches are opaque pairs. Standard egui disabled controls use opacity.");
-                    ui.separator();
-                    ui.small("Renderer: glow / OpenGL on native, WebGL 2 on the web");
-                    ui.hyperlink_to("Source", "https://github.com/shermerL/egui-prism");
                 });
             });
     }
+}
+
+fn show_palette(ui: &mut egui::Ui, theme: &Theme) {
+    let pairs = [
+        ("Page", theme.colors.background),
+        ("Surface", theme.colors.surface),
+        ("Muted", theme.colors.muted),
+        ("Primary", theme.colors.primary),
+        ("Selected", theme.colors.selection),
+        ("Destructive", theme.colors.destructive),
+        ("Disabled token", theme.colors.disabled),
+        ("Focus / pressed", theme.colors.focus),
+    ];
+    let font = egui::TextStyle::Body.resolve(ui.style());
+    let card_width = pairs
+        .iter()
+        .map(|(name, pair)| {
+            ui.painter()
+                .layout_no_wrap((*name).into(), font.clone(), pair.foreground)
+                .size()
+                .x
+        })
+        .fold(0.0_f32, f32::max)
+        + theme.metrics.container_margin.sum().x
+        + 2.0;
+    let gap = theme.metrics.item_spacing.x;
+    let columns = (((ui.available_width() + gap) / (card_width + gap)) as usize).clamp(1, 4);
+    egui::Grid::new("semantic-palette")
+        .num_columns(columns)
+        .show(ui, |ui| {
+            for (index, (name, pair)) in pairs.into_iter().enumerate() {
+                egui::Frame::new()
+                    .fill(pair.background)
+                    .stroke(egui::Stroke::new(1.0, theme.colors.border))
+                    .corner_radius(theme.metrics.corner_radius)
+                    .inner_margin(theme.metrics.container_margin)
+                    .show(ui, |ui| {
+                        ui.add(
+                            egui::Label::new(egui::RichText::new(name).color(pair.foreground))
+                                .wrap_mode(egui::TextWrapMode::Extend),
+                        );
+                    });
+                if (index + 1) % columns == 0 {
+                    ui.end_row();
+                }
+            }
+        });
 }
 
 #[cfg(not(target_arch = "wasm32"))]

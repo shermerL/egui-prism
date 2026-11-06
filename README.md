@@ -28,6 +28,8 @@ nix develop --command cargo run --locked -p egui-prism-gallery
 ```
 
 For the browser build and complete checks, see [CONTRIBUTING.md](CONTRIBUTING.md).
+The [acceptance gallery](docs/gallery.md) documents the interaction, layout, scale,
+and screenshot cases.
 The core library depends on egui; the gallery owns the eframe window and rendering
 backend. Applications can use the library with their own host.
 
