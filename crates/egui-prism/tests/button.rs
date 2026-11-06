@@ -623,20 +623,45 @@ fn inherited_text_color_does_not_replace_semantics_or_explicit_rich_text() {
 }
 
 #[test]
-fn newly_focused_buttons_keep_focus_on_immediate_escape_or_arrow() {
-    for key in [egui::Key::Escape, egui::Key::ArrowDown] {
+fn tab_traversal_survives_a_later_filtered_key_in_the_same_frame() {
+    for key in [egui::Key::ArrowDown, egui::Key::Escape] {
         let mut h = Harness::new();
         h.frame(vec![]);
         let r = h.frame(vec![]);
-        h.frame(vec![key_event(egui::Key::Tab, true, false)]);
-        assert_eq!(h.context.memory(|m| m.focused()), Some(r[0].id));
-        h.frame(vec![key_event(key, true, false)]);
-        assert_eq!(h.context.memory(|m| m.focused()), Some(r[0].id));
-        h.frame(vec![
-            key_event(egui::Key::Tab, false, false),
-            key_event(key, false, false),
-        ]);
         h.key(egui::Key::Tab);
-        assert_eq!(h.context.memory(|m| m.focused()), Some(r[1].id));
+        h.frame(vec![
+            key_event(egui::Key::Tab, true, false),
+            key_event(key, true, false),
+        ]);
+        assert_eq!(h.context.memory(|memory| memory.focused()), Some(r[1].id));
     }
+}
+
+#[test]
+fn caller_can_release_button_focus_while_handling_escape() {
+    let context = egui::Context::default();
+    let theme = Theme::light();
+    let mut id = None;
+    for events in [
+        vec![],
+        vec![key_event(egui::Key::Tab, true, false)],
+        vec![key_event(egui::Key::Tab, false, false)],
+        vec![key_event(egui::Key::Escape, true, false)],
+    ] {
+        context
+            .run_ui(
+                egui::RawInput {
+                    events,
+                    ..Default::default()
+                },
+                |ui| {
+                    if ui.input(|input| input.key_pressed(egui::Key::Escape)) {
+                        ui.memory_mut(|memory| memory.surrender_focus(id.unwrap()));
+                    }
+                    id = Some(ui.add(Button::new(&theme, "Action")).id);
+                },
+            )
+            .drop_without_applying_deltas();
+    }
+    assert_eq!(context.memory(|memory| memory.focused()), None);
 }

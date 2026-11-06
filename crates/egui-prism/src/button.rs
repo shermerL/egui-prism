@@ -152,44 +152,6 @@ impl<'theme, 'a> Button<'theme, 'a> {
         let size = egui::vec2(width, height);
         let (id, allocated_rect) = ui.allocate_space(size);
         let rect = ui.layout().align_size_within_rect(size, allocated_rect);
-        // egui applies its default navigation before widgets run, and cannot install
-        // a focus filter on the acquisition pass. Preserve a button's focus across
-        // that first Escape/arrow input, without taking focus from another widget.
-        let keep_focus = ui.input(|input| {
-            !input.pointer.any_pressed()
-                && input.events.iter().rev().find_map(|event| match event {
-                    egui::Event::Key {
-                        key,
-                        pressed: true,
-                        modifiers,
-                        ..
-                    } if !modifiers.any() || (*key == egui::Key::Tab && modifiers.shift_only()) => {
-                        match key {
-                            egui::Key::Tab => Some(false),
-                            egui::Key::Escape
-                            | egui::Key::ArrowUp
-                            | egui::Key::ArrowDown
-                            | egui::Key::ArrowLeft
-                            | egui::Key::ArrowRight => Some(true),
-                            _ => None,
-                        }
-                    }
-                    _ => None,
-                }) == Some(true)
-        });
-        if ui.is_enabled() && keep_focus {
-            ui.memory_mut(|memory| {
-                if memory.had_focus_last_frame(id)
-                    && memory.focused().is_none_or(|focused| focused == id)
-                    && memory.is_above_modal_layer(ui.layer_id())
-                {
-                    if !memory.has_focus(id) {
-                        memory.request_focus(id);
-                    }
-                    memory.move_focus(egui::FocusDirection::None);
-                }
-            });
-        }
         let mut response = ui.interact(rect, id, egui::Sense::click());
         response.set_intrinsic_size(size);
         let state_id = response.id.with("prism-button");

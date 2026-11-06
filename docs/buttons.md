@@ -66,7 +66,8 @@ Styles and opacity are restored for subsequent host widgets.
 
 Enter activates on keydown; Space activates once on keyup after a focused keydown.
 Losing focus or disabling the button cancels the pending Space activation.
-Tab traverses controls; arrow keys and Escape keep button focus. Pointer release
+Tab traverses controls. Once the focus filter is installed, arrow keys and Escape
+keep button focus; the acquisition-frame gap is recorded below. Pointer release
 inside the button activates through the ordinary `Response::clicked()` contract.
 Give reorderable instances stable caller-owned UI scopes. Consume the response
 in the current frame; do not retain it as application state. The component stores
@@ -98,3 +99,11 @@ The real native and browser comparisons exposed the difference; per-shape alpha
 tests do not establish final compositing parity. Integrating the shared host
 compositor and validating arbitrary parent backgrounds and translucent images
 remain required before this component is accepted as strictly matching shadcn.
+
+The pinned egui focus API cannot install a focus filter on the pass that first
+acquires focus. If Escape or an arrow arrives in the immediately following frame,
+before another pass installs the filter, default egui navigation can move focus.
+Restoring focus from inside the widget also overrides deliberate caller focus
+release, so that workaround is not used. Closing this acquisition-frame gap at
+the input/framework boundary remains required; ordinary Tab traversal and caller
+focus ownership must remain intact.
