@@ -1,6 +1,10 @@
 //! Public switch interaction, identity, layout, and host-style boundaries.
 
-use egui_prism::{egui, switch::Switch, theme::Theme};
+use egui_prism::{
+    egui,
+    switch::{Switch, SwitchSize},
+    theme::Theme,
+};
 
 struct Harness {
     context: egui::Context,
@@ -13,6 +17,10 @@ struct Harness {
     width: f32,
     time: f64,
     circles: Vec<egui::epaint::CircleShape>,
+    tracks: Vec<egui::epaint::RectShape>,
+    outlines: Vec<egui::epaint::RectShape>,
+    size: SwitchSize,
+    invalid: bool,
     tree: Option<egui::accesskit::TreeUpdate>,
 }
 
@@ -31,6 +39,10 @@ impl Harness {
             width: 320.0,
             time: 0.0,
             circles: Vec::new(),
+            tracks: Vec::new(),
+            outlines: Vec::new(),
+            size: SwitchSize::Default,
+            invalid: false,
             tree: None,
         }
     }
@@ -46,7 +58,7 @@ impl Harness {
                 let id = ui.make_persistent_id(index);
                 ui.scope_builder(egui::UiBuilder::new().scope_id(id), |ui| {
                     let label = if self.long { "A deliberately long switch label with enough words to wrap on multiple lines in a narrow host" } else { "Enable this option" };
-                    let response = ui.add_enabled(self.enabled, Switch::new(&self.theme, &mut self.values[index], label));
+                    let response = ui.add_enabled(self.enabled, Switch::new(&self.theme, &mut self.values[index], label).size(self.size).invalid(self.invalid));
                     if response.changed() { self.changes[index] += 1; }
                     response
                 }).inner
@@ -56,8 +68,31 @@ impl Harness {
             .shapes
             .iter()
             .filter_map(|s| {
-                if let egui::Shape::Circle(c) = &s.shape {
-                    Some(*c)
+                if let egui::Shape::Circle(circle) = &s.shape {
+                    Some(*circle)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        self.tracks = output
+            .shapes
+            .iter()
+            .filter_map(|s| {
+                if let egui::Shape::Rect(rect) = &s.shape {
+                    (rect.blur_width == 0.0 && rect.fill != egui::Color32::TRANSPARENT)
+                        .then(|| rect.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        self.outlines = output
+            .shapes
+            .iter()
+            .filter_map(|s| {
+                if let egui::Shape::Rect(rect) = &s.shape {
+                    Some(rect.clone())
                 } else {
                     None
                 }
@@ -196,19 +231,28 @@ fn empty_label_is_rejected() {
 
 #[test]
 fn painted_thumb_and_accessibility_follow_the_value_at_different_sizes() {
-    for height in [24.0, 32.0, 48.0] {
+    for (size, width, height, radius) in [
+        (SwitchSize::Default, 32.0, 18.4, 8.0),
+        (SwitchSize::Small, 24.0, 14.0, 6.0),
+    ] {
         let mut h = Harness::new();
-        h.theme.metrics.control_height = height;
+        h.size = size;
+        h.theme.metrics.control_height = 72.0;
         h.frame(vec![]);
         let r = h.frame(vec![]);
         assert_eq!(h.circles.len(), 2);
-        let off = h.circles[0];
+        let off = h.circles[0].center;
+        let bounds = h.tracks[0].rect;
+        assert!((bounds.width() - width).abs() < 0.05);
+        assert!((bounds.height() - height).abs() < 0.05);
+        assert!((off.x - r[0].rect.left() - 1.0 - radius).abs() < 0.01);
+        assert_eq!(r[0].rect.height(), 20.0);
         h.click(r[0].rect.center());
-        let on = h.circles[0];
-        assert!(on.center.x > off.center.x);
-        assert_eq!(on.radius, off.radius);
-        assert!(r[0].rect.contains(on.center + egui::vec2(on.radius, 0.0)));
-        assert!(r[0].rect.contains(off.center - egui::vec2(off.radius, 0.0)));
+        for _ in 0..12 {
+            h.frame(vec![]);
+        }
+        let on = h.circles[0].center;
+        assert!((on.x - off.x - (radius * 2.0 - 2.0)).abs() < 0.01);
         let node = &h
             .tree
             .as_ref()
@@ -252,12 +296,160 @@ fn aligned_labels_stay_beside_the_track_and_inside_the_hit_target() {
         }
         let response = response.unwrap();
         let text = text_bounds.unwrap();
-        let label_left = response.rect.left()
-            + theme.metrics.control_height * 0.625 * 1.8
-            + theme.metrics.item_spacing.x;
+        let label_left = response.rect.left() + 32.0 + 8.0;
         assert!(text.left() >= label_left - 0.1, "{align:?}: {text:?}");
         assert!(text.right() <= response.rect.right() + 0.1);
         assert!(text.top() >= response.rect.top() - 0.1);
         assert!(text.bottom() <= response.rect.bottom() + 0.1);
     }
+}
+
+fn key_event(key: egui::Key, pressed: bool, repeat: bool) -> egui::Event {
+    egui::Event::Key {
+        key,
+        physical_key: None,
+        pressed,
+        repeat,
+        modifiers: egui::Modifiers::NONE,
+    }
+}
+
+#[test]
+fn space_waits_for_release_and_cancels_on_blur_or_disabling() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let r = h.frame(vec![]);
+    r[0].request_focus();
+    h.frame(vec![key_event(egui::Key::Space, true, false)]);
+    h.frame(vec![key_event(egui::Key::Space, true, true)]);
+    assert_eq!(h.changes, [0, 0]);
+    h.frame(vec![key_event(egui::Key::Space, false, false)]);
+    assert_eq!(h.changes, [1, 0]);
+    h.frame(vec![key_event(egui::Key::Space, true, false)]);
+    r[1].request_focus();
+    h.frame(vec![key_event(egui::Key::Space, false, false)]);
+    assert_eq!(h.changes, [1, 0]);
+    h.frame(vec![key_event(egui::Key::Space, true, false)]);
+    h.enabled = false;
+    h.frame(vec![key_event(egui::Key::Space, false, false)]);
+    h.enabled = true;
+    h.frame(vec![key_event(egui::Key::Space, false, false)]);
+    assert_eq!(h.changes, [1, 0]);
+}
+
+#[test]
+fn pointer_focus_has_no_ring_keyboard_focus_has_reference_ring() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let r = h.frame(vec![]);
+    h.click(r[0].rect.center());
+    assert!(h.frame(vec![])[0].has_focus());
+    assert!(!h.outlines.iter().any(|r| r.stroke.width > 0.0));
+    h.key(egui::Key::ArrowRight);
+    for _ in 0..12 {
+        h.frame(vec![]);
+    }
+    assert!(h.frame(vec![])[0].has_focus());
+    assert!(h.outlines.iter().any(
+        |r| r.stroke.width == 3.0 && r.stroke.color == h.theme.colors.ring.gamma_multiply(0.5)
+    ));
+    h.enabled = false;
+    for _ in 0..12 {
+        h.frame(vec![]);
+    }
+    assert!(!h.outlines.iter().any(|r| r.stroke.width > 0.0));
+}
+
+#[test]
+fn hover_and_invalid_do_not_invent_reference_styles() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let r = h.frame(vec![]);
+    let before = h.circles[0];
+    h.invalid = true;
+    h.frame(vec![egui::Event::PointerMoved(r[0].rect.center())]);
+    assert_eq!(before, h.circles[0]);
+    assert!(!h.outlines.iter().any(|r| r.stroke.width > 0.0));
+    let node = &h
+        .tree
+        .as_ref()
+        .unwrap()
+        .nodes
+        .iter()
+        .find(|(id, _)| *id == r[0].id.accesskit_id())
+        .unwrap()
+        .1;
+    assert_eq!(node.invalid(), Some(egui::accesskit::Invalid::True));
+}
+
+#[test]
+fn animation_moves_through_intermediate_frames_and_reverses_from_current_position() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let r = h.frame(vec![]);
+    let off = h.circles[0].center.x;
+    h.values[0] = true;
+    h.frame(vec![]);
+    assert_eq!(h.changes, [0, 0]);
+    assert!((h.circles[0].center.x - off).abs() < 0.01);
+    h.frame(vec![]);
+    let moving = h.circles[0].center.x;
+    assert!(moving > off && moving < off + 14.0);
+    h.values[0] = false;
+    h.frame(vec![]);
+    let reversed = h.circles[0].center.x;
+    assert!(reversed >= moving && reversed < off + 14.0);
+    for _ in 0..12 {
+        h.frame(vec![]);
+    }
+    assert!((h.circles[0].center.x - off).abs() < 0.01);
+    assert_eq!(h.changes, [0, 0]);
+    assert_eq!(h.frame(vec![])[0].id, r[0].id);
+}
+
+#[test]
+fn dark_thumb_changes_immediately_and_disabled_shapes_reach_half_opacity() {
+    let mut h = Harness::new();
+    h.theme = Theme::dark();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert_eq!(h.circles[0].fill, h.theme.colors.background.foreground);
+    h.values[0] = true;
+    h.frame(vec![]);
+    assert_eq!(h.circles[0].fill, h.theme.colors.primary.foreground);
+    h.enabled = false;
+    for _ in 0..12 {
+        h.frame(vec![]);
+    }
+    assert_eq!(
+        h.circles[0].fill,
+        h.theme.colors.primary.foreground.gamma_multiply(0.5)
+    );
+    assert_eq!(h.changes, [0, 0]);
+}
+
+#[test]
+fn background_uses_css_oklab_midpoint_and_theme_changes_transition() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    h.values[0] = true;
+    h.frame(vec![]);
+    h.time += 0.075 - 1.0 / 60.0;
+    h.frame(vec![]);
+    // Reference: L=.922*(1-ease(.5)), ease(.5)=.77556, sRGB about 23.
+    let halfway = h.tracks[0].fill;
+    assert!((22..=25).contains(&halfway.r()), "{halfway:?}");
+    assert_eq!(halfway.r(), halfway.g());
+    for _ in 0..12 {
+        h.frame(vec![]);
+    }
+    assert_eq!(h.tracks[0].fill, egui::Color32::BLACK);
+    h.theme = Theme::dark();
+    h.frame(vec![]);
+    assert_eq!(h.tracks[0].fill, egui::Color32::BLACK);
+    for _ in 0..12 {
+        h.frame(vec![]);
+    }
+    assert_eq!(h.tracks[0].fill, h.theme.colors.primary.background);
 }
