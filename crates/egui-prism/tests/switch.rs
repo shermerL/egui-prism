@@ -453,3 +453,100 @@ fn background_uses_css_oklab_midpoint_and_theme_changes_transition() {
     }
     assert_eq!(h.tracks[0].fill, h.theme.colors.primary.background);
 }
+
+fn pointer_event(pos: egui::Pos2, pressed: bool) -> egui::Event {
+    egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    }
+}
+
+#[test]
+fn completed_pointer_click_in_one_frame_acquires_keyboard_focus() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let r = h.frame(vec![]);
+    let pos = r[0].rect.center();
+    h.frame(vec![
+        egui::Event::PointerMoved(pos),
+        pointer_event(pos, true),
+        pointer_event(pos, false),
+    ]);
+    assert_eq!(h.context.memory(|m| m.focused()), Some(r[0].id));
+    h.key(egui::Key::Space);
+    assert_eq!(h.values, [false, false]);
+    assert_eq!(h.changes, [2, 0]);
+}
+
+#[test]
+fn held_pointer_still_activates_after_egui_click_duration_expires() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let r = h.frame(vec![]);
+    let pos = r[0].rect.center();
+    h.frame(vec![
+        egui::Event::PointerMoved(pos),
+        pointer_event(pos, true),
+    ]);
+    h.time += 1.0;
+    h.frame(vec![pointer_event(pos, false)]);
+    assert_eq!(h.values, [true, false]);
+    assert_eq!(h.changes, [1, 0]);
+}
+
+#[test]
+fn two_complete_pointer_clicks_in_one_frame_restore_the_value() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let r = h.frame(vec![]);
+    let pos = r[0].rect.center();
+    h.frame(vec![
+        egui::Event::PointerMoved(pos),
+        pointer_event(pos, true),
+        pointer_event(pos, false),
+        pointer_event(pos, true),
+        pointer_event(pos, false),
+    ]);
+    assert_eq!(h.values, [false, false]);
+    assert_eq!(h.changes, [1, 0]);
+}
+
+#[test]
+fn arrow_immediately_after_tab_keeps_focus_without_an_idle_frame() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let r = h.frame(vec![]);
+    h.frame(vec![key_event(egui::Key::Tab, true, false)]);
+    h.frame(vec![key_event(egui::Key::ArrowDown, true, false)]);
+    assert_eq!(h.context.memory(|m| m.focused()), Some(r[0].id));
+    assert_eq!(h.changes, [0, 0]);
+}
+
+#[test]
+fn pointer_release_outside_or_after_disabling_cancels_activation() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let r = h.frame(vec![]);
+    let pos = r[0].rect.center();
+    h.frame(vec![
+        egui::Event::PointerMoved(pos),
+        pointer_event(pos, true),
+    ]);
+    let outside = egui::pos2(300.0, 700.0);
+    h.frame(vec![
+        egui::Event::PointerMoved(outside),
+        pointer_event(outside, false),
+    ]);
+    h.frame(vec![
+        egui::Event::PointerMoved(pos),
+        pointer_event(pos, true),
+    ]);
+    h.enabled = false;
+    h.frame(vec![]);
+    h.enabled = true;
+    h.frame(vec![pointer_event(pos, false)]);
+    assert_eq!(h.values, [false, false]);
+    assert_eq!(h.changes, [0, 0]);
+}

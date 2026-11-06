@@ -77,6 +77,7 @@ impl<'theme, 'value> Switch<'theme, 'value> {
 struct Interaction {
     keyboard: bool,
     space_armed: bool,
+    pointer_armed: bool,
 }
 
 impl egui::Widget for Switch<'_, '_> {
@@ -111,6 +112,7 @@ impl egui::Widget for Switch<'_, '_> {
             .unwrap_or(Interaction {
                 keyboard: true,
                 space_armed: false,
+                pointer_armed: false,
             });
         // Track modality even before focus arrives; pointer movement does not
         // erase keyboard focus-visible, while a pointer press does.
@@ -122,8 +124,39 @@ impl egui::Widget for Switch<'_, '_> {
                 _ => {}
             }
         }
-        if response.is_pointer_button_down_on() && ui.is_enabled() {
-            response.request_focus();
+        let mut activations = 0;
+        if !ui.is_enabled() || !ui.input(|input| input.focused) {
+            state.pointer_armed = false;
+        } else {
+            let eligible = response.hovered()
+                || response.is_pointer_button_down_on()
+                || response.clicked_by(egui::PointerButton::Primary);
+            let from_global = ui
+                .ctx()
+                .layer_transform_from_global(response.layer_id)
+                .unwrap_or_default();
+            for event in &events {
+                if let egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    ..
+                } = event
+                {
+                    let inside = response.interact_rect.contains(from_global * *pos);
+                    if *pressed {
+                        state.pointer_armed = eligible && inside;
+                        if state.pointer_armed {
+                            response.request_focus();
+                        }
+                    } else {
+                        if state.pointer_armed && eligible && inside {
+                            activations += 1;
+                        }
+                        state.pointer_armed = false;
+                    }
+                }
+            }
         }
         let focused = response.has_focus() && ui.is_enabled();
         if !focused {
@@ -139,10 +172,38 @@ impl egui::Widget for Switch<'_, '_> {
                         escape: true,
                         ..Default::default()
                     },
-                )
+                );
+                // egui cannot install a filter on the frame focus first arrives.
+                // Cancel an already scheduled arrow move on the following frame.
+                if events
+                    .iter()
+                    .rev()
+                    .find_map(|event| match event {
+                        egui::Event::Key {
+                            key,
+                            pressed: true,
+                            modifiers,
+                            ..
+                        } if !modifiers.any()
+                            && matches!(
+                                key,
+                                egui::Key::ArrowUp
+                                    | egui::Key::ArrowDown
+                                    | egui::Key::ArrowLeft
+                                    | egui::Key::ArrowRight
+                                    | egui::Key::Tab
+                            ) =>
+                        {
+                            Some(*key)
+                        }
+                        _ => None,
+                    })
+                    .is_some_and(|key| key != egui::Key::Tab)
+                {
+                    memory.move_focus(egui::FocusDirection::None);
+                }
             });
         }
-        let mut activations = usize::from(response.clicked_by(egui::PointerButton::Primary));
         if focused {
             for event in events {
                 match event {

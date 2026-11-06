@@ -36,7 +36,11 @@ for comparisons. The widget restores the caller's style after drawing.
 | Disabled | No action or focus; track/thumb use 50% opacity, label stays independent |
 | Invalid | `.invalid(true)` exposes invalid accessibility semantics; the pinned Switch has no invalid visual rules |
 
-Pointer release inside the control activates it. Enter activates on keydown
+Pointer release inside the control activates it, including long holds and a
+press/release delivered in one frame. Releasing outside or disabling during the
+press cancels it. Multiple completed clicks in one frame apply in sequence;
+`Response::changed()` reports whether any activation occurred, not an event count.
+Enter activates on keydown
 (including repeated keydown); Space activates once on keyup, without repeating
 while held. Losing focus or becoming disabled cancels an armed Space press.
 Arrow keys retain focus without changing the value. Tab and Shift+Tab navigate.
