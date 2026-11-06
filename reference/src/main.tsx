@@ -5,6 +5,8 @@ import { Input } from "./ui/input";
 import { Checkbox } from "./ui/checkbox";
 import { Switch } from "./ui/switch";
 import { Slider } from "./ui/slider";
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "./ui/select";
 import "./reference.css";
 function App() {
  const [dark,setDark]=React.useState(false); const [amount,setAmount]=React.useState([50]);
@@ -15,6 +17,7 @@ function App() {
  <section className="grid grid-cols-2 gap-6"><div className="space-y-2"><label htmlFor="input" className="text-sm font-medium">Input</label><Input id="input" placeholder="Enter a value" /></div><div className="space-y-2"><label htmlFor="invalid" className="text-sm font-medium">Invalid</label><Input id="invalid" aria-invalid="true" defaultValue="Invalid value" /></div></section>
  <section className="flex flex-wrap items-center gap-8"><label className="flex items-center gap-2 text-sm"><Checkbox /> Checkbox</label><label className="flex items-center gap-2 text-sm"><Checkbox defaultChecked /> Checked</label><label className="flex items-center gap-2 text-sm"><Switch /> Switch</label><label className="flex items-center gap-2 text-sm"><Switch defaultChecked /> On</label></section>
  <section className="max-w-md space-y-5"><div className="flex justify-between text-sm font-medium"><label htmlFor="amount">Amount</label><output>{amount[0]}</output></div><Slider id="amount" aria-label="Amount" min={0} max={100} step={5} value={amount} onValueChange={setAmount} /><Slider aria-label="Disabled amount" defaultValue={[35]} max={100} disabled /></section>
+ <section className="flex gap-4"><Select><SelectTrigger className="w-48"><SelectValue placeholder="Choose an option" /></SelectTrigger><SelectContent><SelectItem value="one">Option one</SelectItem><SelectItem value="two">Option two</SelectItem></SelectContent></Select><Dialog><DialogTrigger asChild><Button variant="outline">Open dialog</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Reference dialog</DialogTitle><DialogDescription>Compare popup geometry, focus and animation.</DialogDescription></DialogHeader></DialogContent></Dialog></section>
  </div></main>;
 }
 createRoot(document.getElementById("root")!).render(<App/>);

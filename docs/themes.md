@@ -27,9 +27,10 @@ and input colors retain CSS alpha. Destructive action content is white, matching
 the Button source rather than the separate CSS destructive-foreground variable.
 
 The compatibility adapter maps ordinary egui controls onto these roles. Prism
-components own their reference states and geometry. Selected text uses primary
-colors; TextInput draws its focus outline independently so selected text color
-does not determine the outline. IME underline colors and the host's IME legacy
+components own their reference states and geometry. Prism TextInput uses primary selection
+colors and draws its focus outline independently. Ordinary egui editors share
+selection foreground with their focus border, so the compatibility adapter uses
+the neutral focus pair for both to keep them visible. IME underline colors and the host's IME legacy
 setting remain independent. Applying a theme clears the global text-color override.
 
 Reference tokens are preserved even where a particular combination does not meet
@@ -69,9 +70,10 @@ retain their alpha and must be composited by the component on its actual surface
 Do not change a reference token to satisfy a contrast assertion intended for a
 different role; component states require their own reference comparison.
 
-Call `egui_prism::theme::install_fonts(&context)` once during host setup to install
-the bundled Geist Regular, Medium, SemiBold, and Geist Mono Regular fonts. Existing font data and
-custom named styles remain in the context. Default proportional text uses Geist;
+Call `egui_prism::theme::install_fonts(&context, fonts)` once during host setup to install
+the bundled Geist Regular, Medium, SemiBold, and Geist Mono Regular fonts. Pass the host's complete `egui::FontDefinitions` (or `FontDefinitions::default()`
+for a new host); setup transfers those definitions to the context. The supplied
+font data, fallback chains and custom named families are preserved. Default proportional text uses Geist;
 default button and heading styles use Medium and SemiBold. The host owns setup
 and may intentionally supply another font, but that is not the reference preset.
 

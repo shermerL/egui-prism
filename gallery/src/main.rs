@@ -30,7 +30,7 @@ struct Gallery {
 
 impl Gallery {
     fn new(context: &egui::Context) -> Self {
-        egui_prism::theme::install_fonts(context);
+        egui_prism::theme::install_fonts(context, egui::FontDefinitions::default());
         let gallery = Self {
             dark: false,
             case: Case::Theme,

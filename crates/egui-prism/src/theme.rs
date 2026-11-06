@@ -115,8 +115,8 @@ const fn pair(background: u32, foreground: u32) -> ColorPair {
     }
 }
 
-/// Install the reference Geist fonts once during host setup, preserving custom families.
-pub fn install_fonts(context: &egui::Context) {
+/// Install Geist into the host's complete font definitions and transfer them to the context.
+pub fn install_fonts(context: &egui::Context, mut fonts: egui::FontDefinitions) {
     for (name, bytes, family) in [
         (
             "prism-geist-mono",
@@ -139,15 +139,27 @@ pub fn install_fonts(context: &egui::Context) {
             egui::FontFamily::Name("prism-geist-semibold".into()),
         ),
     ] {
-        context.add_font(egui::FontInsert::new(
-            name,
-            egui::FontData::from_static(bytes),
-            vec![egui::InsertFontFamily {
-                family,
-                priority: egui::FontPriority::Highest,
-            }],
-        ));
+        fonts
+            .font_data
+            .insert(name.into(), egui::FontData::from_static(bytes).into());
+        let chain = fonts.families.entry(family).or_default();
+        chain.retain(|entry| entry != name);
+        chain.insert(0, name.into());
     }
+    // Weight-specific faces must retain the host's script and symbol fallbacks.
+    let fallbacks = fonts.families[&egui::FontFamily::Proportional].clone();
+    for name in ["prism-geist-medium", "prism-geist-semibold"] {
+        let chain = fonts
+            .families
+            .get_mut(&egui::FontFamily::Name(name.into()))
+            .unwrap();
+        for fallback in &fallbacks {
+            if !chain.contains(fallback) {
+                chain.push(fallback.clone());
+            }
+        }
+    }
+    context.set_fonts(fonts);
     context.all_styles_mut(|style| {
         for (text_style, family) in [
             (TextStyle::Button, "prism-geist-medium"),
@@ -241,8 +253,10 @@ impl Theme {
         visuals.code_bg_color = colors.muted.background;
         visuals.hyperlink_color = colors.focus.foreground;
         visuals.error_fg_color = colors.destructive.background;
-        visuals.selection.bg_fill = colors.selection.background;
-        visuals.selection.stroke = Stroke::new(1.0, colors.selection.foreground);
+        // Ordinary egui editors share selection foreground with their focus border.
+        // Prism TextInput overrides the selection pair and paints its own border.
+        visuals.selection.bg_fill = colors.focus.background;
+        visuals.selection.stroke = Stroke::new(1.0, colors.focus.foreground);
         visuals.text_cursor.stroke = Stroke::new(1.5, colors.surface.foreground);
         visuals.ime_composition.active_underline_stroke = Stroke::new(1.5, colors.focus.foreground);
         visuals.ime_composition.inactive_underline_stroke =

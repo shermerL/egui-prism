@@ -10,6 +10,7 @@ function block(selector) {
   throw new Error(`Unclosed ${selector}`);
 }
 writeFileSync("src/reference.css", `@import "tailwindcss";
+@import "tw-animate-css";
 @custom-variant dark (&:is(.dark *));
 ${["@theme inline", ":root {", ".dark {", "@layer base"].map(block).join("\n")}
 body { margin:0; font-family:Geist,sans-serif; background:var(--background); color:var(--foreground); }

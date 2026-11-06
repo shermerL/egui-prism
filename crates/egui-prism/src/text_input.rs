@@ -70,6 +70,8 @@ impl egui::Widget for TextInput<'_, '_> {
             .unwrap_or_else(|| ui.next_auto_id().with("text-input"));
         ui.vertical(|ui| {
             self.theme.apply(ui.style_mut());
+            ui.visuals_mut().selection.bg_fill = self.theme.colors.selection.background;
+            ui.visuals_mut().selection.stroke.color = self.theme.colors.selection.foreground;
             if self.error.is_some() {
                 // Keep selection's paired foreground and focus outline intact.
                 let error_color = self.theme.colors.destructive.background;
