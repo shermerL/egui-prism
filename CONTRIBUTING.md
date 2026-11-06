@@ -1,7 +1,8 @@
 # Contributing
 
 This repository is being bootstrapped. There is no Rust crate or gallery yet.
-The initial baseline installs Quest; M0 will add the workspace and its checks.
+The initial baseline installs Quest; the [M0 quests](quest/m0/README.md) will add
+the workspace and its checks. The [quest tree](quest/README.md) is the task source.
 
 ## Development tools
 

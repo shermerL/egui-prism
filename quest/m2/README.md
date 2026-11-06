@@ -1,0 +1,22 @@
+# M2: Complex components and platform completeness
+
+## Goal
+
+Extend the library with evidence-driven complex components and improve native,
+browser, input, accessibility, and release readiness across supported platforms.
+
+## Plan
+
+This milestone is a scope basket, not an approved implementation task. Plan
+independently useful quests when concrete requirements are available: bounded
+ScrollArea/List behavior, Tabs, Popover, Tooltip, composition layouts, and package
+publication readiness. Do not invent a full Web widget catalog or general overlay
+framework in advance. Quantify virtualization requirements before choosing one.
+
+Record macOS, Windows, Linux, browser, IME, DPI, and assistive technology evidence
+separately. Publishing a crate requires package contents, dependency/license
+checks, usage examples, and a compatibility/migration policy.
+
+## Waiting
+
+- Maintainer: choose concrete M2 outcomes and API scope after the core gallery provides evidence; recommend planning from observed gaps rather than implementing the whole basket. The tradeoff requires product judgment, so automation can collect evidence but cannot select the scope.
