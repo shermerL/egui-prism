@@ -79,3 +79,38 @@ Pages deployment are separate decisions.
 PR CI has read-only permissions, skips drafts, and uploads native/wasm artifacts.
 It contains no deployment job. Keep private notes and raw review logs out of
 public changes.
+
+## PR descriptions
+
+Use the [PR template](.github/PULL_REQUEST_TEMPLATE.md). Keep the description
+short, in English, and organized around the final change. Scale the detail to
+the change; a small correction does not need a work log or a file inventory.
+Update the title and body when the scope changes.
+
+- **Problem:** state the observable problem and why it needs fixing.
+- **Approach:** explain the resulting behavior and the important implementation choice.
+- **Impact:** list public API and behavior changes, with migration steps for breaking
+  changes. Mark a breaking title with `!`. Include renderer or platform requirements
+  when they change; omit unrelated protocol or wire-format boilerplate.
+- **Alternatives:** explain a meaningful tradeoff, or state that none was needed.
+- **Validation:** give the relevant check results and distinguish actual native/browser
+  observations from automated tests. Identify the tested revision when it differs
+  from the current head, and state the remaining acceptance gaps.
+- **Review:** summarize the latest independent review and its reviewed head, plus the
+  GitHub code and security review status. Link to the reviews where available and
+  state unresolved findings. Keep reviewer names short; do not include model variants,
+  effort settings, scores, internal session identifiers, or raw review transcripts.
+- **Follow-ups:** link concrete remaining work, or state that none is needed.
+
+Add **Decisions** only for consequential choices that help the maintainer assess the
+change. Describe the selected choice and its reason without copying a conversation.
+Keep **Waiting** when a draft has unresolved work or an external dependency; name
+the actor, condition and verification. Use `Maintainer:` only for a decision or
+action that an agent cannot take, not for routine implementation or verification.
+
+Preserve required Quest relationships and current review evidence when shortening
+tool-generated text. Do not add `Models`, `Size` or `Implementer` blocks. Attribution
+must follow the applicable contribution authorization; the template does not grant it.
+Request GitHub code and security reviews for the candidate head and address their
+feedback alongside the independent review. Concise descriptions do not relax these
+checks or turn an earlier revision's review into acceptance of a later one.
