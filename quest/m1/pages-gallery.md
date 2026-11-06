@@ -22,7 +22,3 @@ Present the exact artifact/commit and observed browser evidence for the separate
 first-deployment quest. Completion here is a reviewed, reproducibly built artifact
 and deployment workflow, not a live site. Keeping publication separate allows
 implementation and verification to finish before the publication decision.
-
-## Required
-
-- [Text input](/quest/m1/text-input.md)

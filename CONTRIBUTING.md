@@ -1,7 +1,7 @@
 # Contributing
 
 The workspace contains the egui-only library in `crates/egui-prism` and the
-native/WebAssembly host in `gallery`. The host displays semantic themes, Prism buttons, and labeled egui harness
+native/WebAssembly host in `gallery`. The host displays semantic themes, Prism buttons and text inputs, and labeled egui harness
 controls. Other components are subsequent quests.
 The [quest tree](quest/README.md) is the task source.
 
@@ -41,7 +41,7 @@ To check only the native path while iterating:
 nix develop --command quest gate python3 scripts/check.py --native-only
 ```
 
-The library has compiling documentation examples and public button behavior tests.
+The library has compiling documentation examples and public component behavior tests.
 Add meaningful regressions with each component quest. A green
 build is not evidence of real input, IME, accessibility, or another platform's GUI.
 
