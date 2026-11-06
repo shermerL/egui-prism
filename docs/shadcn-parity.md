@@ -46,13 +46,14 @@ capability is planned, not yet implemented or accepted.
 
 ## Shared input boundary
 
-The planned [input compatibility capability](/quest/m1/shadcn-parity/input-compatibility.md)
-uses a controlled, fixed-version egui patch set for focus policy, ordered events
-and authoritative hit/capture behavior. It must preserve host focus ownership,
-exact geometry, modal isolation, text composition and event visibility. Document
-the upstream source, licenses, patch inventory and necessary API migrations.
-Consumers select one egui source from their application root Cargo configuration.
-This is planned work, not a claim that current interaction gaps are resolved.
+The opt-in [input compatibility capability](/docs/input-compatibility.md) uses a
+controlled egui 0.37.0 patch for current-pass focus policy, ordered events and
+authoritative hit/capture ownership inside egui. Consumers select one egui source
+from their application root Cargo configuration and migrate to host-owned
+registration, event handling and painting. Source reconstruction, boundary tests
+and an independent consumer verify the shared implementation. Component Quests
+still own adoption, strict interaction/visual parity and actual platform input/IME
+acceptance; the patch does not establish OS-level pointer capture.
 
 ## Platform scope
 

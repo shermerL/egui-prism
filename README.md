@@ -52,3 +52,7 @@ geometry, state styling and interaction. egui is the rendering/input substrate.
 The current components are undergoing a full parity correction; existing test and
 CI results do not establish visual acceptance. See the [reference contract and
 component audit](docs/shadcn-parity.md) and [correction Quests](quest/m1/shadcn-parity/README.md).
+
+The opt-in [ordered input integration](docs/input-compatibility.md) requires an
+application-root Cargo patch. Its [source inventory](vendor/README.md) and
+standalone consumer checks keep the official platform/renderer types unified.
