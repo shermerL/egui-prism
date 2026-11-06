@@ -10,7 +10,12 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from ".
 import "./reference.css";
 function App() {
  const [dark,setDark]=React.useState(false); const [amount,setAmount]=React.useState([50]);
- return <main className={dark?"dark":""} style={{background:"var(--background)",color:"var(--foreground)",minHeight:"100vh",padding:32}}>
+ React.useLayoutEffect(() => {
+   // Radix popups portal to body, so the root must own the theme class.
+   document.documentElement.classList.toggle("dark", dark);
+   return () => document.documentElement.classList.remove("dark");
+ }, [dark]);
+ return <main style={{background:"var(--background)",color:"var(--foreground)",minHeight:"100vh",padding:32}}>
  <div className="mx-auto max-w-3xl space-y-8">
  <header className="flex items-center justify-between"><div><h1 className="text-xl font-semibold">shadcn reference</h1><p className="text-sm text-muted-foreground">Pinned source · new-york-v4 · 8a35366</p></div><Button variant="outline" onClick={()=>setDark(!dark)}>{dark?"Light":"Dark"}</Button></header>
  <section className="space-y-4"><h2 className="text-sm font-medium">Buttons</h2><div className="flex flex-wrap gap-3"><Button>Primary</Button><Button variant="secondary">Secondary</Button><Button variant="outline">Outline</Button><Button variant="ghost">Ghost</Button><Button variant="destructive">Destructive</Button><Button disabled>Disabled</Button></div></section>
