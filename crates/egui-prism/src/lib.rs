@@ -1,6 +1,6 @@
 //! Shared foundation for egui-prism components.
 //!
-//! Semantic themes are available in [`theme`]; components are planned. Applications
+//! Themes are in [`theme`], buttons in [`button`], and editors in [`text_input`]. Applications
 //! own their window, renderer, values, and resource lifecycles.
 //!
 //! The re-export keeps applications and the gallery on the same egui types:
@@ -17,4 +17,5 @@ pub use egui;
 
 pub mod theme;
 
+pub mod button;
 pub mod text_input;

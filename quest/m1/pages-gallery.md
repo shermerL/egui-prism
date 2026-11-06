@@ -25,5 +25,4 @@ implementation and verification to finish before the publication decision.
 
 ## Required
 
-- [Button and IconButton](/quest/m1/button.md)
 - [Text input](/quest/m1/text-input.md)

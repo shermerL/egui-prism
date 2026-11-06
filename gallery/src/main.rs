@@ -1,5 +1,6 @@
 //! Shared native and browser acceptance gallery for the component library.
 
+mod buttons;
 mod interaction;
 mod text_inputs;
 
@@ -9,6 +10,7 @@ use interaction::InteractionCase;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Case {
     Theme,
+    Buttons,
     Inputs,
     Interaction,
     Layout,
@@ -19,6 +21,7 @@ struct Gallery {
     case: Case,
     narrow: bool,
     interaction: InteractionCase,
+    buttons: buttons::ButtonCase,
     inputs: text_inputs::InputCase,
 }
 
@@ -29,6 +32,7 @@ impl Gallery {
             case: Case::Theme,
             narrow: false,
             interaction: InteractionCase::default(),
+            buttons: buttons::ButtonCase::new(context),
             inputs: text_inputs::InputCase::default(),
         };
         gallery.apply_theme(context);
@@ -61,9 +65,10 @@ impl eframe::App for Gallery {
             .frame(egui::Frame::central_panel(ui.style()).inner_margin(theme.metrics.page_margin))
             .show(ui, |ui| {
                 ui.heading("egui-prism");
-                ui.label("Available: semantic themes. Planned: Prism widgets.");
+                ui.label("Available: themes, buttons, and text inputs. Other widgets are planned.");
                 ui.horizontal_wrapped(|ui| {
                     ui.selectable_value(&mut self.case, Case::Theme, "Theme");
+                    ui.selectable_value(&mut self.case, Case::Buttons, "Buttons");
                     ui.selectable_value(&mut self.case, Case::Inputs, "Inputs");
                     ui.selectable_value(&mut self.case, Case::Interaction, "Interaction");
                     ui.selectable_value(&mut self.case, Case::Layout, "Layout");
@@ -94,6 +99,7 @@ impl eframe::App for Gallery {
                             let _ = ui.selectable_label(true, "Selected foreground");
                             ui.label("Opaque disabled tokens are paired colors. Standard egui disabled controls use opacity.");
                         }
+                        Case::Buttons => self.buttons.show(ui, &theme),
                         Case::Inputs => self.inputs.show(ui, &theme),
                         Case::Interaction | Case::Layout => {
                             ui.heading("Harness controls (egui)");
