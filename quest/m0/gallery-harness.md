@@ -22,7 +22,3 @@ hosting below /egui-prism/, refreshing, resources, and console errors in one rea
 browser. Explicitly select WebGL rather than silently selecting another backend.
 Add a source/build version label and license links. Do not deploy Pages here.
 Document untested browsers, IME, DPI combinations, and assistive technology.
-
-## Required
-
-- [Theme tokens](/quest/m0/theme-tokens.md)

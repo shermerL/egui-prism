@@ -24,8 +24,8 @@ so hosts use compatible types; no custom widget API is introduced yet. Only the
 gallery depends on eframe, enabling bundled default fonts, glow, native clipboard
 and link handling, Wayland and X11.
 Native uses OpenGL; the browser explicitly requires WebGL 2, with no WebGPU
-fallback. Initialization failures leave a visible message. Themes, systematic
-input testing, and accessibility integration belong to later quests.
+fallback. Initialization failures leave a visible message. Semantic themes are documented in [themes.md](themes.md). Systematic input testing
+and accessibility integration belong to later quests.
 
 The shell exposes Apple Silicon macOS, x86_64 Linux, and ARM64 Linux. Native
 Windows and Intel macOS development-tool setup are not verified. This is distinct
