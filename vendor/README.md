@@ -2,14 +2,19 @@
 
 `egui/` is the complete official **egui 0.37.0** crate distribution with the
 reviewable changes in `egui.patch`. It is not a renderer fork or a published
-package. Both upstream license files and upstream authorship are retained.
+package. Upstream authorship is retained; the license files omitted from the
+crate archive are added from the official `0.37.0` tag.
 
 - Distribution: <https://static.crates.io/crates/egui/egui-0.37.0.crate>
 - Registry record: <https://index.crates.io/eg/ui/egui> (version `0.37.0`)
 - Archive SHA-256: `bec9144f49b7a28b5f395d3147e325b4fe3e77ba686eac11d1bdf0a7da3f375f`
-- Licensing: upstream MIT OR Apache-2.0, retained in `egui/LICENSE-MIT` and
-  `egui/LICENSE-APACHE`. Binary distributions also retain the egui notice in
+- Licensing: upstream MIT OR Apache-2.0, copied unchanged from
+  [LICENSE-MIT](https://github.com/emilk/egui/blob/0.37.0/LICENSE-MIT) and
+  [LICENSE-APACHE](https://github.com/emilk/egui/blob/0.37.0/LICENSE-APACHE) into
+  `egui/`. Binary distributions also retain the egui notice in
   the repository's `THIRD_PARTY_NOTICES.md`.
+- License SHA-256: MIT `95ca92f5f8ea5231f1580b3a2a799e8260af3114b900e1def5355a7f44bcf60c`;
+  Apache `8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90`.
 
 The registry checksum and all 137 original archive files were checked before
 patching. The archive's VCS metadata is retained as supplied, but is not used as
@@ -21,6 +26,7 @@ source pin.
 | Boundary | Files | Purpose |
 | --- | --- | --- |
 | Distribution metadata | `Cargo.toml` | Independent workspace and `publish = false`; version and official dependency requirements unchanged |
+| License texts | `LICENSE-MIT`, `LICENSE-APACHE` | Add the unchanged official license files omitted from the crate archive |
 | Input lifecycle and public entry points | `src/context.rs`, `src/context/input_dispatch.rs`, `src/lib.rs` | Opt-in registration/event/paint phases, current widget-tree routing, egui capture, pass-local part/rounding metadata, event and composition ownership |
 | Focus state | `src/memory/mod.rs`, `src/memory/focus_policy_tests.rs` | Current-pass policy registration, ordered focus changes, interruption generations, current layer ordering and closed-viewport focus pruning |
 | Authoritative geometry | `src/hit_test.rs`, `src/widget_rect.rs` | Shape predicates before native hit selection and removal of closed layer geometry |

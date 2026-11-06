@@ -12,6 +12,10 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[1]
 SHA256 = "bec9144f49b7a28b5f395d3147e325b4fe3e77ba686eac11d1bdf0a7da3f375f"
 URL = "https://static.crates.io/crates/egui/egui-0.37.0.crate"
+LICENSES = {
+    "LICENSE-MIT": "95ca92f5f8ea5231f1580b3a2a799e8260af3114b900e1def5355a7f44bcf60c",
+    "LICENSE-APACHE": "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90",
+}
 
 
 def source_archive(explicit=None):
@@ -65,6 +69,9 @@ def main():
         subprocess.run(["git", "apply", str(ROOT / "vendor/egui.patch")], cwd=reconstructed, env=patch_env, check=True)
         expected = {str(p.relative_to(reconstructed)): p.read_bytes() for p in reconstructed.rglob("*") if p.is_file()}
         actual = {str(p.relative_to(ROOT / "vendor/egui")): p.read_bytes() for p in (ROOT / "vendor/egui").rglob("*") if p.is_file()}
+        for name, checksum in LICENSES.items():
+            if hashlib.sha256(actual.get(name, b"")).hexdigest() != checksum:
+                raise ValueError(f"official egui license missing or changed: {name}")
         if expected != actual:
             differences = sorted(name for name in expected.keys() | actual.keys() if expected.get(name) != actual.get(name))
             raise ValueError(f"vendored egui differs from upstream plus patch: {differences}")
