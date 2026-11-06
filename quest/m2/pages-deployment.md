@@ -7,8 +7,9 @@ Pages path, with its source identity, resources, and core interactions verified.
 
 ## Plan
 
-M1 includes the first public gallery. Deployment is separate from building it so
-publication waits for review of a concrete artifact without blocking preparation.
+This existing publication task is deferred from M1 with browser delivery.
+Deployment is separate from building it so publication waits for review of a
+concrete artifact without blocking authorized preparation.
 Use the reviewed workflow and approved exact commit, serving below /egui-prism/.
 Do not change the user root site, add a custom domain, or publish a crate.
 
@@ -25,4 +26,4 @@ report the failure and fix the relevant configuration before claiming completion
 
 ## Required
 
-- [Build and validate the Pages gallery](/quest/m1/pages-gallery.md)
+- [Build and validate the browser gallery](/quest/m2/browser-gallery.md)
