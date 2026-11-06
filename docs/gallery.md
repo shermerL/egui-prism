@@ -82,3 +82,6 @@ CJK font coverage, IME, assistive technology, and a full DPI matrix remain open.
 The Checkboxes case tests box/label clicks, keyboard toggles, disabled editing,
 independent values after reordering, and long-label layout. Change counters must
 advance once per activation and stay unchanged while idle or disabled.
+
+The Sliders case checks two ranges and step sizes, pointer/keyboard edits,
+disabled values, reordering, and wrapped labels above constrained rails.
