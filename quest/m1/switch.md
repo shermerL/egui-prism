@@ -11,3 +11,7 @@ M1 owns core components. Verify pointer and keyboard activation, no disabled eve
 Include the public API, compiling minimal Rust example, light/dark gallery cases,
 behavior regressions, actual visual evidence, and explicit platform limitations
 in the same PR. Propose material API choices before implementing them.
+
+Follow [the strict shadcn contract](/docs/shadcn-parity.md), including actual
+reference comparison for every supported state. Earlier themed-egui candidates
+do not satisfy this requirement.

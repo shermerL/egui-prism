@@ -7,6 +7,7 @@
 | Quest | `19a2438cd80cf968dddfbf664570a2c8b9a254bf` | `flake.nix` and `flake.lock` |
 | Rust | 1.96.0, rustfmt, Clippy, wasm32-unknown-unknown | `rust-toolchain.toml` |
 | egui / eframe | 0.37.0 | Workspace `Cargo.toml` and `Cargo.lock` |
+| Node.js | 24.x from the locked Nix input; reference npm dependencies in `reference/package-lock.json` | `flake.nix` |
 | Trunk | 0.21.14 | Locked Nix input and `Trunk.toml` version requirement |
 | wasm-bindgen | 0.2.129 | Locked Nix CLI and matching Cargo dependency |
 | wasm-bindgen-futures / web-sys | 0.4.79 / 0.3.106 | `gallery/Cargo.toml` and `Cargo.lock` |
@@ -20,7 +21,7 @@ Trunk child process because this version expects a boolean. The parent environme
 is unchanged, and the requested no-color behavior is preserved.
 
 The core depends only on egui, without its default features. It re-exports egui
-so hosts use compatible types; no custom widget API is introduced yet. Only the
+so hosts use compatible types. Only the
 gallery depends on eframe, enabling bundled default fonts, glow, native clipboard
 and link handling, Wayland and X11.
 Native uses OpenGL; the browser explicitly requires WebGL 2, with no WebGPU
@@ -52,7 +53,8 @@ still targets eframe 0.36; this host uses the 0.37 `App::ui` API and is compiled
 against the actual 0.37 source. It carries no template icons, service worker,
 or persistence layer.
 
-The gallery's embedded font assets come from epaint_default_fonts 0.37.0: Hack,
+The reference preset embeds Geist Regular, Medium, SemiBold and Geist Mono Regular
+from Geist 1.9.2. The gallery retains epaint_default_fonts 0.37.0 as fallbacks: Hack,
 Ubuntu Light, and egui's icon subset. Their notices and upstream MIT notices are
 retained in `THIRD_PARTY_NOTICES.md`, copied alongside both CI artifacts. The
 project adds no separate CJK font or image bundle.

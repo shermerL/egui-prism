@@ -2,6 +2,27 @@
 
 use egui_prism::{egui, text_input::TextInput, theme::Theme};
 
+#[test]
+fn focused_input_uses_ring_token_independently_of_selected_text() {
+    for theme in [Theme::light(), Theme::dark()] {
+        let context = egui::Context::default();
+        let id = egui::Id::unique("focus-ring");
+        let mut value = String::from("Selected text");
+        context.memory_mut(|memory| memory.request_focus(id));
+        let output = context.run_ui(Default::default(), |ui| {
+            let response = ui.add(TextInput::new(&theme, &mut value, "Value").id(id));
+            assert!(response.has_focus());
+        });
+        assert!(output.shapes.iter().any(|shape| {
+            matches!(&shape.shape, egui::epaint::Shape::Rect(rect)
+                if rect.stroke.width == 3.0
+                    && rect.stroke.color == theme.colors.ring.gamma_multiply(0.5)
+                    && rect.stroke_kind == egui::StrokeKind::Outside)
+        }));
+        output.drop_without_applying_deltas();
+    }
+}
+
 struct Harness {
     context: egui::Context,
     theme: Theme,

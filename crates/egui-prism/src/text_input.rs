@@ -70,6 +70,8 @@ impl egui::Widget for TextInput<'_, '_> {
             .unwrap_or_else(|| ui.next_auto_id().with("text-input"));
         ui.vertical(|ui| {
             self.theme.apply(ui.style_mut());
+            ui.visuals_mut().selection.bg_fill = self.theme.colors.selection.background;
+            ui.visuals_mut().selection.stroke.color = self.theme.colors.selection.foreground;
             if self.error.is_some() {
                 // Keep selection's paired foreground and focus outline intact.
                 let error_color = self.theme.colors.destructive.background;
@@ -86,6 +88,27 @@ impl egui::Widget for TextInput<'_, '_> {
                         .desired_width(ui.available_width()),
                 )
                 .labelled_by(label.id);
+            // Selection foreground and focus outlines are separate shadcn tokens.
+            // egui's default editor uses selection.stroke for both.
+            if response.has_focus() && ui.is_enabled() {
+                let color = if self.error.is_some() {
+                    self.theme.colors.destructive.background
+                } else {
+                    self.theme.colors.ring
+                };
+                ui.painter().rect_stroke(
+                    response.rect,
+                    self.theme.metrics.corner_radius,
+                    egui::Stroke::new(3.0, color.gamma_multiply(0.5)),
+                    egui::StrokeKind::Outside,
+                );
+                ui.painter().rect_stroke(
+                    response.rect,
+                    self.theme.metrics.corner_radius,
+                    egui::Stroke::new(1.0, color),
+                    egui::StrokeKind::Inside,
+                );
+            }
             if let Some(error) = self.error {
                 ui.label(
                     egui::RichText::new(&error)

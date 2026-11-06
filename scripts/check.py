@@ -37,6 +37,9 @@ def main():
             trunk_env["NO_COLOR"] = "true" if trunk_env["NO_COLOR"] else "false"
         run("trunk", "build", "--release", env=trunk_env)
         run("python3", "scripts/check_web.py")
+        run("python3", "scripts/check_reference.py")
+        run("npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund", "--prefix", "reference")
+        run("npm", "run", "build", "--prefix", "reference")
 
 
 if __name__ == "__main__":
