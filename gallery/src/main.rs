@@ -1,5 +1,6 @@
 //! Shared native and browser acceptance gallery for the component library.
 
+mod buttons;
 mod interaction;
 
 use egui_prism::{egui, theme::Theme};
@@ -8,6 +9,7 @@ use interaction::InteractionCase;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Case {
     Theme,
+    Buttons,
     Interaction,
     Layout,
 }
@@ -17,6 +19,7 @@ struct Gallery {
     case: Case,
     narrow: bool,
     interaction: InteractionCase,
+    buttons: buttons::ButtonCase,
 }
 
 impl Gallery {
@@ -26,6 +29,7 @@ impl Gallery {
             case: Case::Theme,
             narrow: false,
             interaction: InteractionCase::default(),
+            buttons: buttons::ButtonCase::new(context),
         };
         gallery.apply_theme(context);
         gallery
@@ -57,9 +61,10 @@ impl eframe::App for Gallery {
             .frame(egui::Frame::central_panel(ui.style()).inner_margin(theme.metrics.page_margin))
             .show(ui, |ui| {
                 ui.heading("egui-prism");
-                ui.label("Available: semantic themes. Planned: Prism widgets.");
+                ui.label("Available: themes and Prism buttons. Other widgets are planned.");
                 ui.horizontal_wrapped(|ui| {
                     ui.selectable_value(&mut self.case, Case::Theme, "Theme");
+                    ui.selectable_value(&mut self.case, Case::Buttons, "Buttons");
                     ui.selectable_value(&mut self.case, Case::Interaction, "Interaction");
                     ui.selectable_value(&mut self.case, Case::Layout, "Layout");
                 });
@@ -89,6 +94,7 @@ impl eframe::App for Gallery {
                             let _ = ui.selectable_label(true, "Selected foreground");
                             ui.label("Opaque disabled tokens are paired colors. Standard egui disabled controls use opacity.");
                         }
+                        Case::Buttons => self.buttons.show(ui, &theme),
                         Case::Interaction | Case::Layout => {
                             ui.heading("Harness controls (egui)");
                             ui.label("Activate with the pointer or Tab and Enter. Counts change once per activation and remain still while idle.");
