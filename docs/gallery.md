@@ -1,7 +1,7 @@
 # Acceptance gallery
 
 The native and WebGL 2 builds use the same Rust gallery and library. The gallery
-demonstrates the theme API, Prism buttons, and standard egui harness controls.
+demonstrates the theme API, Prism buttons and text inputs, and standard egui harness controls.
 Other Prism widgets are planned. A harness check is not a component acceptance result.
 
 ## Run and identify a build
@@ -33,6 +33,7 @@ Theme and case changes preserve caller text, checkboxes, and action counts.
 |---|---|
 | Theme | Light/dark foreground/background pairs and selected foreground |
 | Buttons | Prism roles, sizes, icon names, disabled actions, wrapping, and independent counts |
+| Inputs | Caller-owned text, editing, errors, disabled state, stable IDs, and IME diagnostics |
 | Interaction | Independent A/B values, pointer activation, Tab/Enter, disabled actions, and idle counts |
 | Layout | The same instances and IDs with long wrapping action labels |
 

@@ -9,7 +9,7 @@ default styles. egui-prism aims to bring reusable widgets, semantic themes, and
 consistent interactions to egui, with one Rust implementation shared by native
 and WebAssembly galleries.
 
-The library workspace and native/WebAssembly engineering gallery are in development. Semantic light/dark themes, Button, IconButton, and Checkbox are available. The gallery distinguishes Prism components from standard egui harness controls; other widgets are planned. There is no published crate or live component gallery yet.
+The library workspace and native/WebAssembly engineering gallery are in development. Semantic light/dark themes, Button, IconButton, TextInput, and Checkbox are available. The gallery distinguishes Prism components from standard egui harness controls; other widgets are planned. There is no published crate or live component gallery yet.
 
 The planned GitHub Pages site will display the actual components, their states, and Rust examples.
 
@@ -42,5 +42,6 @@ The versioned [quest tree](quest/README.md) is the source of planned work.
 See [semantic themes](docs/themes.md) for the theme API, color pairs, spacing ownership, and validation limits.
 
 See [buttons](docs/buttons.md) for roles, sizes, icons, and caller-owned actions.
+See [text input](docs/text-input.md) for editing, validation, IDs, and IME evidence.
 
-The labeled [Checkbox](docs/checkboxes.md) edits caller-owned boolean values.
+See [checkboxes](docs/checkboxes.md) for caller-owned boolean editing.
