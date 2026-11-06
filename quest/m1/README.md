@@ -8,7 +8,6 @@ component. All implementations use the same library on native and wasm.
 
 ## Required
 
-- [Checkbox](/quest/m1/checkbox.md)
 - [Switch](/quest/m1/switch.md)
 - [Slider](/quest/m1/slider.md)
 - [Select](/quest/m1/select.md)

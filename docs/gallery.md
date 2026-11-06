@@ -78,3 +78,7 @@ They do not establish native/browser input delivery, IME composition, screen-rea
 integration, touch, or another operating system's behavior. Actual GUI checks and
 the tested browser are reported in each PR. Other browsers, Windows/Linux GUI,
 CJK font coverage, IME, assistive technology, and a full DPI matrix remain open.
+
+The Checkboxes case tests box/label clicks, keyboard toggles, disabled editing,
+independent values after reordering, and long-label layout. Change counters must
+advance once per activation and stay unchanged while idle or disabled.
