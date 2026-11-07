@@ -317,6 +317,7 @@ fn current_frame_producers_cleanup_and_revocation() {
             }
         }
     }
+    actual_button_pixels(&context, &mut host, &mut renderer, &device, &queue);
     context.set_pixels_per_point(1.0);
     // A malformed binding fails and automatically releases temporary registrations.
     let (missing, delta) = jobs(&context, egui::TextureId::User(u64::MAX));
@@ -403,4 +404,132 @@ fn read_frame(mut frame: Frame<'_>, queue: &wgpu::Queue) -> Arc<egui::ColorImage
         })
         .unwrap();
     rx.recv_timeout(std::time::Duration::from_secs(1)).unwrap()
+}
+
+// Compare the real disabled Button against ordinary opaque rendering of its
+// unfaded primitives, then one framebuffer blend. This catches per-primitive
+// opacity where the half-transparent image and glyphs overlap the button fill.
+fn actual_button_pixels(
+    context: &egui::Context,
+    host: &mut Host,
+    renderer: &mut egui_wgpu::Renderer,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+) {
+    use egui_prism::{
+        button::{Button, ButtonRole},
+        theme::Theme,
+    };
+    let texture = context.load_texture(
+        "button half-alpha image",
+        egui::ColorImage::filled([8, 8], egui::Color32::from_white_alpha(128)),
+        egui::TextureOptions::NEAREST,
+    );
+    let mut time = 10.0;
+    for (theme, background) in [
+        (Theme::light(), egui::Color32::from_rgb(214, 228, 242)),
+        (Theme::dark(), egui::Color32::from_rgb(35, 17, 49)),
+    ] {
+        for role in [
+            ButtonRole::Primary,
+            ButtonRole::Outline,
+            ButtonRole::Destructive,
+        ] {
+            for ppp in [1.0, 1.5] {
+                context.set_pixels_per_point(ppp);
+                for parent_opacity in [1.0, 0.6] {
+                    let mut images = Vec::new();
+                    for isolated in [false, true] {
+                        // Allow the real component's 150 ms transition to settle.
+                        for settle in 0..2 {
+                            time += 1.0;
+                            let output = context.run_ui(
+                                egui::RawInput {
+                                    screen_rect: Some(Rect::from_min_size(
+                                        egui::Pos2::ZERO,
+                                        egui::vec2(160.0, 80.0),
+                                    )),
+                                    time: Some(time),
+                                    ..Default::default()
+                                },
+                                |ui| {
+                                    ui.painter().rect_filled(ui.max_rect(), 0, background);
+                                    let mut painter = ui.painter().clone();
+                                    painter.set_opacity(parent_opacity);
+                                    ui.visuals_mut().disabled_alpha = 0.0;
+                                    ui.disable();
+                                    // Keep a visible crop through both the image and label.
+                                    let clip = Rect::from_min_max(
+                                        egui::pos2(12.0, 12.0),
+                                        egui::pos2(104.0, 54.0),
+                                    );
+                                    ui.set_clip_rect(clip);
+                                    ui.scope_builder(
+                                        egui::UiBuilder::new().max_rect(Rect::from_min_size(
+                                            egui::pos2(16.0, 16.0),
+                                            egui::vec2(130.0, 50.0),
+                                        )),
+                                        |ui| {
+                                            let output = Button::new(&theme, "Overlap")
+                                                .role(role)
+                                                .icon((texture.id(), egui::vec2(8.0, 8.0)))
+                                                .show(ui);
+                                            if isolated {
+                                                output.paint(&painter).unwrap();
+                                            } else {
+                                                let group = output.drawing.unwrap();
+                                                if settle == 1 {
+                                                    assert_eq!(group.opacity(), 0.5);
+                                                }
+                                                for item in group.items() {
+                                                    let Item::Shape(shape) = item else { panic!() };
+                                                    ui.ctx()
+                                                        .layer_painter(ui.layer_id())
+                                                        .with_clip_rect(shape.clip_rect)
+                                                        .add(shape.shape.clone());
+                                                }
+                                            }
+                                        },
+                                    );
+                                },
+                            );
+                            upload(renderer, device, queue, output.textures_delta);
+                            let frame = host
+                                .prepare_frame(
+                                    renderer,
+                                    output.shapes,
+                                    ScreenDescriptor {
+                                        size_in_pixels: [(160.0 * ppp) as u32, (80.0 * ppp) as u32],
+                                        pixels_per_point: ppp,
+                                    },
+                                )
+                                .unwrap();
+                            let image = read_frame(frame, queue);
+                            if settle == 1 {
+                                images.push(image);
+                            }
+                        }
+                    }
+                    assert!(images[0].pixels.iter().any(|pixel| *pixel != background));
+                    let alpha = 0.5 * parent_opacity;
+                    for (index, (plain, actual)) in
+                        images[0].pixels.iter().zip(&images[1].pixels).enumerate()
+                    {
+                        for channel in 0..3 {
+                            let expected = (f32::from(plain[channel]) * alpha
+                                + f32::from(background[channel]) * (1.0 - alpha))
+                                .round() as u8;
+                            assert!(
+                                actual[channel].abs_diff(expected) <= 3,
+                                "Button {role:?} ppp={ppp} parent={parent_opacity} pixel={index} channel={channel}: actual={actual:?} expected={expected} plain={plain:?}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+    println!(
+        "Actual Button pixels passed: light/dark backgrounds, three roles, image/text overlap, clipping, parent opacity, 1x/1.5x scale"
+    );
 }

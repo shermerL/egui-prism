@@ -1,7 +1,11 @@
-//! Stateless themed buttons that leave actions and resources with the caller.
+//! Reference-shaped buttons that leave actions and resources with the caller.
 
-use crate::{egui, theme::Theme};
-use egui::{Image, Response, Stroke, Ui, Vec2, Widget, WidgetText};
+use crate::{
+    compositing::{self, Error, Group, Item},
+    egui,
+    theme::Theme,
+};
+use egui::{Color32, Image, Response, Stroke, Ui, WidgetText};
 
 /// The visual importance of an action, chosen by its caller.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -17,40 +21,48 @@ pub enum ButtonRole {
     Ghost,
     /// An action that destroys or removes caller-owned data.
     Destructive,
+    /// A text action with an underline on hover.
+    Link,
 }
 
-/// Control density relative to the theme's baseline metrics.
+/// The fixed sizes defined by the pinned shadcn Button source.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ButtonSize {
-    /// Compact padding and a lower minimum height.
+    /// A 24-point control with 12-point reference text and icons.
+    ExtraSmall,
+    /// A 32-point control.
     Small,
-    /// The theme's baseline padding and minimum height.
+    /// A 36-point control.
     #[default]
     Medium,
-    /// More padding and a higher minimum height.
+    /// A 40-point control.
     Large,
 }
 
 /// A text action with an optional leading image and a caller-owned theme.
 ///
-/// Use `ui.add_enabled(false, button)` to disable activation. Give reorderable
+/// Use a disabled UI scope to disable activation, retaining its parent painter before
+/// disabling. Give reorderable
 /// instances stable UI scopes, and handle `Response::clicked()` in the caller.
 ///
 /// ```
 /// use egui_prism::{button::{Button, ButtonRole}, egui, theme::Theme};
 /// let theme = Theme::light();
 /// egui::__run_test_ui(|ui| {
-///     let response = ui.add(Button::new(&theme, "Save").role(ButtonRole::Primary));
+///     let output = Button::new(&theme, "Save").role(ButtonRole::Primary).show(ui);
+///     let response = output.response;
+///     // Submit output.drawing through the installed compositor in a real host.
 ///     if response.clicked() { /* application action */ }
 /// });
 /// ```
-#[must_use = "Add the button to a Ui with ui.add(button)"]
+#[must_use = "call show and submit the returned drawing"]
 pub struct Button<'theme, 'a> {
     theme: &'theme Theme,
     text: Option<WidgetText>,
     image: Option<Image<'a>>,
     role: ButtonRole,
     size: ButtonSize,
+    invalid: bool,
 }
 
 impl<'theme, 'a> Button<'theme, 'a> {
@@ -62,6 +74,7 @@ impl<'theme, 'a> Button<'theme, 'a> {
             image: None,
             role: ButtonRole::Primary,
             size: ButtonSize::Medium,
+            invalid: false,
         }
     }
 
@@ -71,9 +84,15 @@ impl<'theme, 'a> Button<'theme, 'a> {
         self
     }
 
-    /// Choose padding and minimum height relative to the theme.
+    /// Choose the reference height, horizontal padding and icon size.
     pub fn size(mut self, size: ButtonSize) -> Self {
         self.size = size;
+        self
+    }
+
+    /// Mark the action invalid using the reference border and focus-ring state.
+    pub fn invalid(mut self, invalid: bool) -> Self {
+        self.invalid = invalid;
         self
     }
 
@@ -83,93 +102,392 @@ impl<'theme, 'a> Button<'theme, 'a> {
         self
     }
 
-    fn show(self, ui: &mut Ui, square: bool) -> Response {
-        // Borrow the host layout and IDs directly; a nested Ui would alter both.
-        let previous_style = ui.style().clone();
-        let style = ui.style_mut();
-        let colors = self.theme.colors;
-        let metrics = self.theme.metrics;
-        let scale = match self.size {
-            ButtonSize::Small => 0.875,
-            ButtonSize::Medium => 1.0,
-            ButtonSize::Large => 1.25,
+    fn draw(self, ui: &mut Ui, icon_name: Option<&str>) -> ButtonOutput {
+        let (height, padding, icon_padding, gap, icon_size) = match self.size {
+            ButtonSize::ExtraSmall => (24.0, 8.0, 6.0, 4.0, 12.0),
+            ButtonSize::Small => (32.0, 12.0, 10.0, 6.0, 16.0),
+            ButtonSize::Medium => (36.0, 16.0, 12.0, 8.0, 16.0),
+            ButtonSize::Large => (40.0, 24.0, 16.0, 8.0, 16.0),
         };
-        let height = metrics.control_height * scale;
-        style.spacing.button_padding = if square {
-            Vec2::splat(metrics.control_padding.y * scale)
-        } else {
-            metrics.control_padding * scale
-        };
-        style.spacing.interact_size.y = height;
-        style.visuals.override_text_color = None;
-        let resting = match self.role {
-            ButtonRole::Primary => colors.primary,
-            ButtonRole::Secondary => colors.muted,
-            ButtonRole::Outline | ButtonRole::Ghost => colors.surface,
-            ButtonRole::Destructive => colors.destructive,
-        };
-        for (visuals, pair, outline) in [
-            (&mut style.visuals.widgets.inactive, resting, colors.border),
-            (
-                &mut style.visuals.widgets.hovered,
-                resting,
-                resting.foreground,
-            ),
-            (
-                &mut style.visuals.widgets.active,
-                colors.focus,
-                colors.focus.foreground,
-            ),
-            (
-                &mut style.visuals.widgets.noninteractive,
-                colors.disabled,
-                colors.border,
-            ),
-        ] {
-            visuals.bg_fill = pair.background;
-            visuals.weak_bg_fill = pair.background;
-            visuals.fg_stroke = Stroke::new(1.0, pair.foreground);
-            visuals.bg_stroke = Stroke::new(1.0, outline);
-            visuals.corner_radius = metrics.corner_radius;
-            visuals.expansion = 0.0;
-        }
-        if matches!(
-            self.role,
-            ButtonRole::Primary | ButtonRole::Secondary | ButtonRole::Destructive
-        ) {
-            style.visuals.widgets.inactive.bg_stroke = Stroke::NONE;
-        }
-        if self.role == ButtonRole::Ghost {
-            style.visuals.widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
-            style.visuals.widgets.inactive.weak_bg_fill = egui::Color32::TRANSPARENT;
-            style.visuals.widgets.inactive.bg_stroke = Stroke::NONE;
-            style.visuals.widgets.hovered.bg_fill = colors.muted.background;
-            style.visuals.widgets.hovered.weak_bg_fill = colors.muted.background;
-            style.visuals.widgets.hovered.fg_stroke.color = colors.muted.foreground;
-        }
-        let tint_follows_text = self
-            .image
-            .as_ref()
-            .is_some_and(|image| image.image_options().tint == egui::Color32::WHITE);
-        let text_style = style
+        let label = icon_name
+            .unwrap_or_else(|| self.text.as_ref().map_or("", WidgetText::text))
+            .to_owned();
+        let text_style = ui
+            .style()
             .override_text_style
             .clone()
             .unwrap_or(egui::TextStyle::Button);
-        let text = self.text.map(|text| text.fallback_text_style(text_style));
-        let button = egui::Button::opt_image_and_text(self.image, text)
-            .image_tint_follows_text_color(tint_follows_text)
-            .wrap()
-            .frame(true)
-            .min_size(egui::vec2(if square { height } else { 0.0 }, height));
-        let response = ui.add(button);
-        ui.set_style(previous_style);
-        response
+        let mut font = text_style.resolve(ui.style());
+        if self.size == ButtonSize::ExtraSmall {
+            font.size -= 2.0;
+        }
+        let galley = self.text.map(|text| {
+            let mut style = std::borrow::Cow::Borrowed(ui.style().as_ref());
+            if style.visuals.override_text_color.is_some() {
+                style.to_mut().visuals.override_text_color = None;
+            }
+            text.into_galley_impl(
+                ui.ctx(),
+                &style,
+                egui::text::TextWrapping::from_wrap_mode_and_width(
+                    egui::TextWrapMode::Extend,
+                    f32::INFINITY,
+                ),
+                font.into(),
+                ui.text_valign(),
+            )
+        });
+        let text_width = galley.as_ref().map_or(0.0, |text| text.size().x);
+        let has_icon = self.image.is_some();
+        let content_width = text_width
+            + if has_icon { icon_size } else { 0.0 }
+            + if has_icon && galley.is_some() {
+                gap
+            } else {
+                0.0
+            };
+        let border_width = if self.role == ButtonRole::Outline {
+            1.0
+        } else {
+            0.0
+        };
+        let width = if icon_name.is_some() {
+            height
+        } else {
+            content_width + 2.0 * if has_icon { icon_padding } else { padding } + 2.0 * border_width
+        };
+        let size = egui::vec2(width, height);
+        let (id, allocated_rect) = ui.allocate_space(size);
+        let rect = ui.layout().align_size_within_rect(size, allocated_rect);
+        let mut response = ui.interact(rect, id, egui::Sense::click());
+        response.set_intrinsic_size(size);
+        let state_id = response.id.with("prism-button");
+        let mut state = ui
+            .data(|data| data.get_temp::<ButtonState>(state_id))
+            .unwrap_or_default();
+        let frame = ui.ctx().cumulative_frame_nr();
+        if response.gained_focus() || state.last_frame.is_some_and(|last| frame > last + 1) {
+            state.space_armed = false;
+        }
+        state.last_frame = Some(frame);
+        let pointer_down = response.is_pointer_button_down_on();
+        if pointer_down && !response.has_focus() {
+            response.request_focus();
+        }
+        if response.has_focus() && response.enabled() {
+            ui.memory_mut(|memory| {
+                memory.set_focus_lock_filter(
+                    response.id,
+                    egui::EventFilter {
+                        horizontal_arrows: true,
+                        vertical_arrows: true,
+                        escape: true,
+                        ..Default::default()
+                    },
+                )
+            });
+            let (clicked, any_key) = ui.input(|input| {
+                let mut clicked =
+                    input.has_accesskit_action_request(response.id, egui::accesskit::Action::Click);
+                let mut any_key = false;
+                for event in &input.events {
+                    if let egui::Event::Key {
+                        key,
+                        pressed,
+                        repeat,
+                        ..
+                    } = event
+                    {
+                        any_key |= *pressed;
+                        match key {
+                            egui::Key::Space if *pressed && !repeat => state.space_armed = true,
+                            egui::Key::Space if !pressed => {
+                                clicked |= state.space_armed;
+                                state.space_armed = false;
+                            }
+                            egui::Key::Enter if *pressed => clicked = true,
+                            _ => {}
+                        }
+                    }
+                }
+                (clicked, any_key)
+            });
+            // egui activates Space on keydown; a native HTML button activates on keyup.
+            response
+                .flags
+                .set(egui::response::Flags::FAKE_PRIMARY_CLICKED, clicked);
+            if response.gained_focus() || any_key {
+                state.focus_visible = true;
+            }
+            if pointer_down {
+                state.focus_visible = false;
+            }
+        } else {
+            state.space_armed = false;
+            state.focus_visible = false;
+        }
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::Role::Button, response.enabled(), &label)
+        });
+        if self.invalid {
+            ui.ctx().accesskit_node_builder(response.id, |node| {
+                node.set_invalid(egui::accesskit::Invalid::True)
+            });
+        }
+        let hovered = response.hovered() && response.enabled();
+        let colors = self.theme.colors;
+        let dark = self.theme.dark;
+        let (fill, foreground) = match self.role {
+            ButtonRole::Primary => (
+                colors
+                    .primary
+                    .background
+                    .gamma_multiply(if hovered { 0.9 } else { 1.0 }),
+                colors.primary.foreground,
+            ),
+            ButtonRole::Secondary => (
+                colors
+                    .secondary
+                    .background
+                    .gamma_multiply(if hovered { 0.8 } else { 1.0 }),
+                colors.secondary.foreground,
+            ),
+            ButtonRole::Outline if dark => (
+                colors.input.gamma_multiply(if hovered { 0.5 } else { 0.3 }),
+                colors.background.foreground,
+            ),
+            ButtonRole::Outline => (
+                if hovered {
+                    colors.accent.background
+                } else {
+                    colors.background.background
+                },
+                if hovered {
+                    colors.accent.foreground
+                } else {
+                    colors.background.foreground
+                },
+            ),
+            ButtonRole::Ghost => (
+                if hovered {
+                    colors
+                        .accent
+                        .background
+                        .gamma_multiply(if dark { 0.5 } else { 1.0 })
+                } else {
+                    Color32::TRANSPARENT
+                },
+                if hovered {
+                    colors.accent.foreground
+                } else {
+                    colors.background.foreground
+                },
+            ),
+            ButtonRole::Destructive => (
+                colors.destructive.background.gamma_multiply(if dark {
+                    0.6
+                } else if hovered {
+                    0.9
+                } else {
+                    1.0
+                }),
+                Color32::WHITE,
+            ),
+            ButtonRole::Link => (Color32::TRANSPARENT, colors.primary.background),
+        };
+        let border = if self.invalid {
+            colors.destructive.background
+        } else if state.focus_visible {
+            colors.ring
+        } else if dark {
+            colors.input
+        } else {
+            colors.border
+        };
+        let ring = if self.invalid || self.role == ButtonRole::Destructive {
+            colors
+                .destructive
+                .background
+                .gamma_multiply(if dark { 0.4 } else { 0.2 })
+        } else {
+            colors.ring.gamma_multiply(0.5)
+        };
+        let target = ButtonPaint {
+            fill,
+            foreground,
+            border,
+            ring,
+            ring_width: if state.focus_visible { 3.0 } else { 0.0 },
+            opacity: if response.enabled() { 1.0 } else { 0.5 },
+        };
+        let now = ui.input(|input| input.time);
+        let paint = state.animate(target, now);
+        if paint != target {
+            ui.ctx().request_repaint();
+        }
+        ui.data_mut(|data| data.insert_temp(state_id, state));
+        let drawing = if ui.is_rect_visible(rect.expand(4.0)) {
+            let radius = self.theme.metrics.corner_radius;
+            let mut shapes = Vec::new();
+            if self.role == ButtonRole::Outline {
+                shapes.push(egui::Shape::from(
+                    egui::Shadow {
+                        offset: [0, 1],
+                        blur: 2,
+                        spread: 0,
+                        color: Color32::from_black_alpha(13),
+                    }
+                    .as_shape(rect, radius),
+                ));
+            }
+            if paint.ring_width > 0.0 {
+                shapes.push(egui::Shape::rect_stroke(
+                    rect,
+                    radius,
+                    Stroke::new(paint.ring_width, paint.ring),
+                    egui::StrokeKind::Outside,
+                ));
+            }
+            shapes.push(egui::Shape::from(egui::epaint::RectShape::new(
+                rect,
+                radius,
+                paint.fill,
+                Stroke::new(border_width, paint.border),
+                egui::StrokeKind::Inside,
+            )));
+            let mut x = rect.center().x - content_width / 2.0;
+            if let Some(mut image) = self.image {
+                if image.image_options().tint == Color32::WHITE {
+                    image = image.tint(paint.foreground);
+                }
+                let image_rect = egui::Rect::from_min_size(
+                    egui::pos2(x, rect.center().y - icon_size / 2.0),
+                    egui::Vec2::splat(icon_size),
+                );
+                shapes.extend(image_shapes(ui, &image, image_rect));
+                x += icon_size + gap;
+            }
+            if let Some(galley) = galley {
+                let position = egui::pos2(x, rect.center().y - galley.size().y / 2.0)
+                    - galley.rect.min.to_vec2();
+                shapes.push(egui::Shape::galley(
+                    position,
+                    galley.clone(),
+                    paint.foreground,
+                ));
+                if self.role == ButtonRole::Link && hovered {
+                    for row in &galley.rows {
+                        if let Some(glyph) = row.glyphs.first() {
+                            let y = position.y + row.pos.y + glyph.pos.y + 4.0;
+                            shapes.push(egui::Shape::line_segment(
+                                [egui::pos2(x, y), egui::pos2(x + row.size.x, y)],
+                                Stroke::new(1.0, paint.foreground),
+                            ));
+                        }
+                    }
+                }
+            }
+            let bounds = shapes.iter().fold(rect, |bounds, shape| {
+                bounds.union(shape.visual_bounding_rect())
+            });
+            let items = shapes
+                .into_iter()
+                .map(|shape| Item::Shape(egui::epaint::ClippedShape::new(ui.clip_rect(), shape)))
+                .collect();
+            Some(Group::new(bounds, paint.opacity, items).expect("valid button drawing"))
+        } else {
+            None
+        };
+        ButtonOutput { response, drawing }
+    }
+
+    /// Lay out the button and return its response and unfaded drawing for this frame.
+    pub fn show(self, ui: &mut Ui) -> ButtonOutput {
+        self.draw(ui, None)
     }
 }
 
-impl Widget for Button<'_, '_> {
-    fn ui(self, ui: &mut Ui) -> Response {
-        self.show(ui, false)
+/// A button response and drawing submitted by the caller in the current frame.
+#[must_use = "submit the drawing with paint or include it in a parent Group"]
+pub struct ButtonOutput {
+    /// The interaction response, consumed by the caller's action logic.
+    pub response: Response,
+    /// The unfaded group, absent when the button is not visible.
+    pub drawing: Option<Group>,
+}
+impl ButtonOutput {
+    /// Submit with a same-layer painter captured before entering a disabled scope.
+    ///
+    /// The painter supplies actual parent opacity; egui's disabled fade must not
+    /// already be included. Keep referenced textures alive through host submission.
+    /// For overlapping siblings, put their drawings in a parent `Group` instead.
+    pub fn paint(self, painter: &egui::Painter) -> Result<Response, Error> {
+        assert_eq!(
+            &self.response.ctx,
+            painter.ctx(),
+            "button painter must use the same context"
+        );
+        assert_eq!(
+            self.response.layer_id,
+            painter.layer_id(),
+            "button painter must use the same layer"
+        );
+        if let Some(group) = self.drawing {
+            compositing::paint(painter, group)?;
+        }
+        Ok(self.response)
+    }
+}
+
+// Build image primitives without passing through a painter that may already be faded.
+fn image_shapes(ui: &Ui, image: &Image<'_>, rect: egui::Rect) -> Vec<egui::Shape> {
+    use egui::emath::GuiRounding as _;
+    let rect = rect.round_to_pixels(ui.pixels_per_point());
+    match image.load_for_size(ui.ctx(), rect.size()) {
+        Ok(egui::load::TexturePoll::Ready { texture }) => {
+            let options = image.image_options();
+            let mut shapes = Vec::new();
+            if options.bg_fill != Color32::TRANSPARENT {
+                shapes.push(egui::Shape::rect_filled(
+                    rect,
+                    options.corner_radius,
+                    options.bg_fill,
+                ));
+            }
+            if let Some((rotation, origin)) = options.rotation {
+                assert_eq!(
+                    options.corner_radius,
+                    egui::CornerRadius::ZERO,
+                    "rotated button images cannot also have rounded corners"
+                );
+                let mut mesh = egui::Mesh::with_texture(texture.id);
+                mesh.add_rect_with_uv(rect, options.uv, options.tint);
+                mesh.rotate(rotation, rect.min + origin * rect.size());
+                shapes.push(egui::Shape::mesh(mesh));
+            } else {
+                shapes.push(egui::Shape::from(
+                    egui::epaint::RectShape::filled(rect, options.corner_radius, options.tint)
+                        .with_texture(texture.id, options.uv),
+                ));
+            }
+            shapes
+        }
+        Ok(egui::load::TexturePoll::Pending { .. }) => {
+            // The host owns asynchronous loaders and requests repaint when an image arrives.
+            Vec::new()
+        }
+        Err(_) => {
+            let galley = ui.painter().layout_no_wrap(
+                "⚠".into(),
+                egui::TextStyle::Body.resolve(ui.style()),
+                ui.visuals().error_fg_color,
+            );
+            vec![egui::Shape::galley(
+                rect.center() - galley.size() * 0.5,
+                galley,
+                ui.visuals().error_fg_color,
+            )]
+        }
     }
 }
 
@@ -184,10 +502,10 @@ impl Widget for Button<'_, '_> {
 /// egui::__run_test_ui(|ui| {
 ///     // The application supplies and retains the real texture in production.
 ///     let image = (egui::TextureId::User(1), egui::vec2(16.0, 16.0));
-///     let _response = ui.add(IconButton::new(&theme, image, "Add item"));
+///     let _output = IconButton::new(&theme, image, "Add item").show(ui);
 /// });
 /// ```
-#[must_use = "Add the icon button to a Ui with ui.add(button)"]
+#[must_use = "call show and submit the returned drawing"]
 pub struct IconButton<'theme, 'a> {
     button: Button<'theme, 'a>,
     name: String,
@@ -208,6 +526,7 @@ impl<'theme, 'a> IconButton<'theme, 'a> {
                 image: Some(image.into().alt_text(name.clone())),
                 role: ButtonRole::Primary,
                 size: ButtonSize::Medium,
+                invalid: false,
             },
             name,
         }
@@ -219,15 +538,99 @@ impl<'theme, 'a> IconButton<'theme, 'a> {
         self
     }
 
-    /// Choose the minimum square hit area relative to the theme.
+    /// Mark the icon action invalid using the reference border and focus-ring state.
+    pub fn invalid(mut self, invalid: bool) -> Self {
+        self.button.invalid = invalid;
+        self
+    }
+
+    /// Choose the fixed reference square size.
     pub fn size(mut self, size: ButtonSize) -> Self {
         self.button.size = size;
         self
     }
 }
 
-impl Widget for IconButton<'_, '_> {
-    fn ui(self, ui: &mut Ui) -> Response {
-        self.button.show(ui, true).on_hover_text(self.name)
+impl IconButton<'_, '_> {
+    /// Lay out the icon action and return its response and drawing for this frame.
+    pub fn show(self, ui: &mut Ui) -> ButtonOutput {
+        let mut output = self.button.draw(ui, Some(&self.name));
+        output.response = output.response.on_hover_text(self.name);
+        output
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct ButtonPaint {
+    fill: Color32,
+    foreground: Color32,
+    border: Color32,
+    ring: Color32,
+    ring_width: f32,
+    opacity: f32,
+}
+
+impl ButtonPaint {
+    fn mix(self, other: Self, t: f32) -> Self {
+        let color = |a: Color32, b: Color32| {
+            let a = a.to_array();
+            let b = b.to_array();
+            let c: [u8; 4] = std::array::from_fn(|i| {
+                egui::lerp(f32::from(a[i])..=f32::from(b[i]), t).round() as u8
+            });
+            Color32::from_rgba_premultiplied(c[0], c[1], c[2], c[3])
+        };
+        Self {
+            fill: color(self.fill, other.fill),
+            foreground: color(self.foreground, other.foreground),
+            border: color(self.border, other.border),
+            ring: color(self.ring, other.ring),
+            ring_width: egui::lerp(self.ring_width..=other.ring_width, t),
+            opacity: egui::lerp(self.opacity..=other.opacity, t),
+        }
+    }
+}
+
+#[derive(Clone, Default)]
+struct ButtonState {
+    last_frame: Option<u64>,
+    space_armed: bool,
+    focus_visible: bool,
+    transition: Option<(ButtonPaint, ButtonPaint, f64)>,
+}
+
+impl ButtonState {
+    fn animate(&mut self, target: ButtonPaint, now: f64) -> ButtonPaint {
+        let Some((from, to, start)) = self.transition else {
+            self.transition = Some((target, target, now));
+            return target;
+        };
+        let elapsed = ((now - start) / 0.15).clamp(0.0, 1.0) as f32;
+        let current = if elapsed >= 1.0 {
+            to
+        } else {
+            from.mix(to, css_ease(elapsed))
+        };
+        if to != target {
+            self.transition = Some((current, target, now));
+        }
+        current
+    }
+}
+
+// Tailwind's default timing function: cubic-bezier(0.4, 0, 0.2, 1).
+fn css_ease(x: f32) -> f32 {
+    let mut low = 0.0;
+    let mut high = 1.0;
+    for _ in 0..16 {
+        let t = (low + high) / 2.0;
+        let bx = 1.2 * (1.0 - t) * (1.0 - t) * t + 0.6 * (1.0 - t) * t * t + t * t * t;
+        if bx < x {
+            low = t;
+        } else {
+            high = t;
+        }
+    }
+    let t = (low + high) / 2.0;
+    3.0 * (1.0 - t) * t * t + t * t * t
 }
