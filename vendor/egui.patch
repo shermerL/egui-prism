@@ -383,10 +383,11 @@ diff --git a/src/context.rs b/src/context.rs
              // Areas that are not interactable are click-through: skip them in the hit-test.
              let mut layers: Vec<LayerId> = viewport
                  .prev_pass
-@@ -779,6 +786,11 @@
+@@ -779,6 +786,12 @@
  #[derive(Clone)]
  pub struct Context(Arc<RwLock<ContextImpl>>);
  
++#[derive(Clone, Copy)]
 +enum WidgetRegistration {
 +    Replace,
 +    Update,
@@ -395,7 +396,7 @@ diff --git a/src/context.rs b/src/context.rs
  impl core::fmt::Debug for Context {
      fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
          f.debug_struct("Context").finish_non_exhaustive()
-@@ -1504,13 +1516,13 @@
+@@ -1504,13 +1517,13 @@
  
      // ---------------------------------------------------------------------
  
@@ -413,7 +414,7 @@ diff --git a/src/context.rs b/src/context.rs
      ///
      /// `allow_focus` should usually be true, unless you call this function multiple times with the
      /// same widget, then `allow_focus` should only be true once (like in [`Ui::new`] (true) and [`Ui::remember_min_rect`] (false)).
-@@ -1520,6 +1532,30 @@
+@@ -1520,6 +1533,30 @@
          allow_focus: bool,
          options: crate::InteractOptions,
      ) -> Response {
@@ -444,7 +445,7 @@ diff --git a/src/context.rs b/src/context.rs
          debug_assert!(!w.rect.any_nan(), "widget rect is NaN: {:?}", w.rect);
  
          let interested_in_focus = w.enabled
-@@ -1528,12 +1564,30 @@
+@@ -1528,12 +1565,30 @@
  
          // Remember this widget
          self.write(|ctx| {
@@ -475,7 +476,7 @@ diff --git a/src/context.rs b/src/context.rs
  
              if allow_focus && interested_in_focus {
                  ctx.memory.interested_in_focus(w.id, w.layer_id);
-@@ -1541,8 +1595,15 @@
+@@ -1541,8 +1596,15 @@
          });
  
          if allow_focus && !interested_in_focus {
@@ -493,7 +494,7 @@ diff --git a/src/context.rs b/src/context.rs
          }
  
          if w.sense.interactive() || w.sense.is_focusable() {
-@@ -1744,12 +1805,41 @@
+@@ -1744,12 +1806,41 @@
          res.flags.set(Flags::VISIBLE, visible);
          res.flags.set(Flags::HIGHLIGHTED, highlighted);
  
@@ -536,7 +537,7 @@ diff --git a/src/context.rs b/src/context.rs
              );
  
              let input = &viewport.input;
-@@ -1771,7 +1861,9 @@
+@@ -1771,7 +1862,9 @@
                  res.flags.set(Flags::FAKE_PRIMARY_CLICKED, true);
              }
  
@@ -547,7 +548,7 @@ diff --git a/src/context.rs b/src/context.rs
              {
                  res.flags.set(Flags::LONG_TOUCHED, true);
              }
-@@ -1780,30 +1872,30 @@
+@@ -1780,30 +1873,30 @@
  
              res.flags.set(
                  Flags::IS_POINTER_BUTTON_DOWN_ON,
@@ -585,7 +586,7 @@ diff --git a/src/context.rs b/src/context.rs
              let mut any_press = false;
  
              for pointer_event in &input.pointer.pointer_events {
-@@ -1848,7 +1940,7 @@
+@@ -1848,7 +1941,7 @@
              };
  
              let pointer_clicked_elsewhere = should_surrender_focus && !res.hovered();
@@ -594,7 +595,7 @@ diff --git a/src/context.rs b/src/context.rs
                  memory.surrender_focus(id);
              }
          });
-@@ -2928,6 +3020,16 @@
+@@ -2928,6 +3021,16 @@
  
          self.finish_root_ui();
  
@@ -611,7 +612,7 @@ diff --git a/src/context.rs b/src/context.rs
          if self.options(|o| o.zoom_with_keyboard) {
              crate::gui_zoom::zoom_with_keyboard(self);
          }
-@@ -2938,12 +3040,18 @@
+@@ -2938,12 +3041,18 @@
              }
          }
  
@@ -630,7 +631,7 @@ diff --git a/src/context.rs b/src/context.rs
  
          let plugins = self.read(|ctx| ctx.plugins.ordered_plugins());
          plugins.on_output(self, &mut output);
-@@ -3150,6 +3258,12 @@
+@@ -3150,6 +3259,12 @@
          let ended_viewport_id = self.viewport_id();
          let viewport = self.viewports.entry(ended_viewport_id).or_default();
          let pixels_per_point = viewport.input.pixels_per_point;

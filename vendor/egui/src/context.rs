@@ -786,6 +786,7 @@ impl ContextImpl {
 #[derive(Clone)]
 pub struct Context(Arc<RwLock<ContextImpl>>);
 
+#[derive(Clone, Copy)]
 enum WidgetRegistration {
     Replace,
     Update,
