@@ -400,7 +400,25 @@ diff --git a/src/context.rs b/src/context.rs
  
              if allow_focus && interested_in_focus {
                  ctx.memory.interested_in_focus(w.id, w.layer_id);
-@@ -1744,12 +1755,41 @@
+@@ -1541,8 +1552,15 @@
+         });
+ 
+         if allow_focus && !interested_in_focus {
+-            // Not interested or allowed input:
+-            self.memory_mut(|mem| mem.ignore_focus(w.id));
++            self.memory_mut(|mem| {
++                if mem.options.ordered_input && w.enabled && w.sense.is_focusable() {
++                    // A modal may close during this pass. Keep the live widget's
++                    // registered policy, but never retain its blocked focus.
++                    mem.surrender_focus(w.id);
++                } else {
++                    mem.ignore_focus(w.id);
++                }
++            });
+         }
+ 
+         if w.sense.interactive() || w.sense.is_focusable() {
+@@ -1744,12 +1762,41 @@
          res.flags.set(Flags::VISIBLE, visible);
          res.flags.set(Flags::HIGHLIGHTED, highlighted);
  
@@ -443,7 +461,7 @@ diff --git a/src/context.rs b/src/context.rs
              );
  
              let input = &viewport.input;
-@@ -1771,7 +1811,9 @@
+@@ -1771,7 +1818,9 @@
                  res.flags.set(Flags::FAKE_PRIMARY_CLICKED, true);
              }
  
@@ -454,7 +472,7 @@ diff --git a/src/context.rs b/src/context.rs
              {
                  res.flags.set(Flags::LONG_TOUCHED, true);
              }
-@@ -1780,30 +1822,30 @@
+@@ -1780,30 +1829,30 @@
  
              res.flags.set(
                  Flags::IS_POINTER_BUTTON_DOWN_ON,
@@ -492,7 +510,7 @@ diff --git a/src/context.rs b/src/context.rs
              let mut any_press = false;
  
              for pointer_event in &input.pointer.pointer_events {
-@@ -1848,7 +1890,7 @@
+@@ -1848,7 +1897,7 @@
              };
  
              let pointer_clicked_elsewhere = should_surrender_focus && !res.hovered();
@@ -501,7 +519,7 @@ diff --git a/src/context.rs b/src/context.rs
                  memory.surrender_focus(id);
              }
          });
-@@ -3150,6 +3192,12 @@
+@@ -3150,6 +3199,12 @@
          let ended_viewport_id = self.viewport_id();
          let viewport = self.viewports.entry(ended_viewport_id).or_default();
          let pixels_per_point = viewport.input.pixels_per_point;
@@ -518,7 +536,7 @@ diff --git a/src/context/input_dispatch.rs b/src/context/input_dispatch.rs
 new file mode 100644
 --- /dev/null
 +++ b/src/context/input_dispatch.rs
-@@ -0,0 +1,745 @@
+@@ -0,0 +1,748 @@
 +use super::*;
 +use crate::{Event, InputState, Key, RawInput};
 +
@@ -1108,7 +1126,10 @@ new file mode 100644
 +                        if let Some(id) = ctx.memory.focused() {
 +                            ctx.memory.surrender_focus(id);
 +                        }
-+                        target = None;
++                        // Navigation still surrenders focus, but the drag owner
++                        // must finish its session before another event replaces
++                        // this one-shot interaction transition.
++                        target = viewport.interact_widgets.drag_stopped;
 +                    } else if !modifiers.any() {
 +                        let rects = layers
 +                            .iter()

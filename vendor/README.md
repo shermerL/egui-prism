@@ -27,7 +27,7 @@ source pin.
 | --- | --- | --- |
 | Distribution metadata | `Cargo.toml` | Independent workspace and `publish = false`; version and official dependency requirements unchanged |
 | License texts | `LICENSE-MIT`, `LICENSE-APACHE` | Add the unchanged official license files omitted from the crate archive |
-| Input lifecycle and public entry points | `src/context.rs`, `src/context/input_dispatch.rs`, `src/lib.rs` | Opt-in registration/event/paint phases, explicit raw/time triggers, current widget-tree routing, egui capture, pass-local part/rounding metadata, event and composition ownership |
+| Input lifecycle and public entry points | `src/context.rs`, `src/context/input_dispatch.rs`, `src/lib.rs` | Opt-in registration/event/paint phases, explicit raw/time triggers, current widget-tree routing, egui capture including Escape drag termination, modal-blocked policy retention, pass-local part/rounding metadata, event and composition ownership |
 | Focus state | `src/memory/mod.rs`, `src/memory/focus_policy_tests.rs` | Current-pass policy registration, ordered focus changes, interruption generations, current layer ordering and closed-viewport focus pruning |
 | Authoritative geometry | `src/hit_test.rs`, `src/widget_rect.rs` | Shape predicates before native hit selection and removal of closed layer geometry |
 | Modal placement | `src/containers/area.rs`, `src/containers/modal.rs` | Explicit layout-only measurement/registration and current modal barrier after stock Area placement |

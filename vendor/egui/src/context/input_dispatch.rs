@@ -587,7 +587,10 @@ impl Context {
                         if let Some(id) = ctx.memory.focused() {
                             ctx.memory.surrender_focus(id);
                         }
-                        target = None;
+                        // Navigation still surrenders focus, but the drag owner
+                        // must finish its session before another event replaces
+                        // this one-shot interaction transition.
+                        target = viewport.interact_widgets.drag_stopped;
                     } else if !modifiers.any() {
                         let rects = layers
                             .iter()

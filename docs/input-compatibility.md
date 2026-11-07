@@ -112,6 +112,9 @@ and overlapping widgets still participate in the normal authoritative hit test.
 Release reaches the capture owner even outside the shape, but cannot activate a
 click outside the owner's hit parts. Release never requests focus: an explicit
 host surrender or transfer stays effective.
+When unmodified Escape performs focus navigation and stops a drag, its target is
+the drag owner so that handler can observe `drag_stopped()` before the next event.
+Focus surrender still occurs, even if another control held keyboard focus.
 
 Disabled, disappeared or modal-blocked owners cancel egui capture before the
 next event, including on empty frames. Pointer disappearance/window focus loss

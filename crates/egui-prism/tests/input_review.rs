@@ -533,3 +533,132 @@ fn ime_interruption_alone_does_not_override_click_surrender_policy() {
     .drop_without_applying_deltas();
     assert_eq!(ctx.memory(|m| m.focused()), None);
 }
+
+#[test]
+fn modal_close_preserves_stock_text_edit_caret_policy() {
+    for split_frames in [false, true] {
+        let ctx = context();
+        let mut texts = ["abc".into(), "xyz".into()];
+        let mut state = egui::text_edit::TextEditState::default();
+        state
+            .cursor
+            .set_char_range(Some(egui::text::CCursorRange::one(
+                egui::text::CCursor::new(0),
+            )));
+        state.store(&ctx, id(0));
+        let mut open = true;
+        let batches = if split_frames {
+            vec![vec![key(Key::Escape)], vec![key(Key::ArrowRight)]]
+        } else {
+            vec![vec![key(Key::Escape), key(Key::ArrowRight)]]
+        };
+        for (frame, events) in batches.into_iter().enumerate() {
+            ctx.run_ui(raw(events, frame as f64 * 0.1), |ui| {
+                ctx.begin_input();
+                let modal =
+                    open.then(|| egui::Modal::new(id(30)).register(&ctx, |ui| ui.button("Close")));
+                // Stock TextEdit registers its policy before allocating interaction.
+                editors(ui, &mut texts, None);
+                if let Some(modal) = &modal {
+                    ctx.memory_mut(|m| m.request_focus(modal.inner.id));
+                }
+                while let Some(input) = ctx.next_input_event() {
+                    if matches!(
+                        input.trigger,
+                        egui::InputTrigger::Event {
+                            event: Event::Key {
+                                key: Key::Escape,
+                                ..
+                            },
+                            ..
+                        }
+                    ) {
+                        ctx.remove_input_layer(modal.as_ref().unwrap().response.layer_id);
+                        open = false;
+                        ctx.memory_mut(|m| m.request_focus(id(0)));
+                    } else if let Some(target) = input.target {
+                        editors(ui, &mut texts, Some(target));
+                    }
+                }
+                editors(ui, &mut texts, None);
+            })
+            .drop_without_applying_deltas();
+        }
+        assert_eq!(
+            ctx.memory(|m| m.focused()),
+            Some(id(0)),
+            "split={split_frames}"
+        );
+        let caret = egui::TextEdit::load_state(&ctx, id(0))
+            .unwrap()
+            .cursor
+            .char_range()
+            .unwrap();
+        assert_eq!(caret.primary.index, egui::text::CharIndex(1));
+        assert_eq!(caret.secondary.index, egui::text::CharIndex(1));
+        assert_eq!(texts, ["abc", "xyz"]);
+    }
+}
+
+#[test]
+fn escape_delivers_drag_stop_once_and_preserves_focus_navigation() {
+    for split_frames in [false, true] {
+        let ctx = context();
+        let pos = rect(0).center();
+        let start = vec![
+            pointer(pos, true),
+            Event::PointerMoved(pos + vec2(30.0, 0.0)),
+        ];
+        let finish = vec![key(Key::Escape), key(Key::Tab), pointer(pos, false)];
+        let batches = if split_frames {
+            vec![start, finish]
+        } else {
+            vec![start.into_iter().chain(finish).collect()]
+        };
+        let mut started = 0;
+        let mut stopped = 0;
+        let mut dragging = false;
+        for (frame, events) in batches.into_iter().chain([vec![]]).enumerate() {
+            ctx.run_ui(raw(events, frame as f64 * 0.1), |ui| {
+                ctx.begin_input();
+                ui.interact(rect(0), id(0), Sense::click_and_drag());
+                ui.interact(rect(1), id(1), Sense::click());
+                while let Some(input) = ctx.next_input_event() {
+                    if input.target == Some(id(0)) {
+                        let response = ui.interact(rect(0), id(0), Sense::click_and_drag());
+                        if response.drag_started() {
+                            started += 1;
+                            dragging = true;
+                            // The host may focus another control while A owns the drag.
+                            ctx.memory_mut(|m| m.request_focus(id(1)));
+                        }
+                        if response.drag_stopped() {
+                            assert!(dragging);
+                            stopped += 1;
+                            dragging = false;
+                        }
+                    }
+                    if matches!(
+                        input.trigger,
+                        egui::InputTrigger::Event {
+                            event: Event::Key {
+                                key: Key::Escape,
+                                ..
+                            },
+                            ..
+                        }
+                    ) {
+                        assert!(!dragging, "Escape must finish A before the next event");
+                        assert_eq!(ctx.memory(|m| m.focused()), None);
+                    }
+                }
+                let paint = ui.interact(rect(0), id(0), Sense::click_and_drag());
+                assert!(!paint.drag_started() && !paint.drag_stopped());
+            })
+            .drop_without_applying_deltas();
+        }
+        assert_eq!((started, stopped), (1, 1));
+        assert!(!dragging);
+        assert_eq!(ctx.memory(|m| m.focused()), Some(id(0)));
+    }
+}

@@ -1552,8 +1552,15 @@ impl Context {
         });
 
         if allow_focus && !interested_in_focus {
-            // Not interested or allowed input:
-            self.memory_mut(|mem| mem.ignore_focus(w.id));
+            self.memory_mut(|mem| {
+                if mem.options.ordered_input && w.enabled && w.sense.is_focusable() {
+                    // A modal may close during this pass. Keep the live widget's
+                    // registered policy, but never retain its blocked focus.
+                    mem.surrender_focus(w.id);
+                } else {
+                    mem.ignore_focus(w.id);
+                }
+            });
         }
 
         if w.sense.interactive() || w.sense.is_focusable() {
