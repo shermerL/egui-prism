@@ -874,7 +874,12 @@ impl Memory {
 
     /// Top-most layer at the given position.
     pub fn layer_id_at(&self, pos: Pos2) -> Option<LayerId> {
-        let layer_id = self.areas().layer_id_at(pos, &self.to_global)?;
+        let areas = self.areas();
+        let layer_id = if self.options.ordered_input {
+            areas.layer_id_at_in_order(pos, &self.to_global, &areas.order_current())
+        } else {
+            areas.layer_id_at(pos, &self.to_global)
+        }?;
         if self.is_above_modal_layer(layer_id) {
             Some(layer_id)
         } else {
@@ -1429,7 +1434,16 @@ impl Areas {
         pos: Pos2,
         layer_to_global: &HashMap<LayerId, TSTransform>,
     ) -> Option<LayerId> {
-        for layer in self.order.iter().rev() {
+        self.layer_id_at_in_order(pos, layer_to_global, &self.order)
+    }
+
+    fn layer_id_at_in_order(
+        &self,
+        pos: Pos2,
+        layer_to_global: &HashMap<LayerId, TSTransform>,
+        order: &[LayerId],
+    ) -> Option<LayerId> {
+        for layer in order.iter().rev() {
             if self.is_visible(layer)
                 && let Some(state) = self.areas.get(&layer.id)
             {

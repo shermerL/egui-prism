@@ -367,18 +367,25 @@ diff --git a/src/containers/scroll_area.rs b/src/containers/scroll_area.rs
          }
      }
  }
-@@ -101,7 +106,9 @@
+@@ -101,8 +106,15 @@
          ctx.data_mut(|d| d.get_persisted(id))
      }
  
 -    pub fn store(self, ctx: &Context, id: Id) {
+-        ctx.data_mut(|d| d.insert_persisted(id, self));
 +    pub fn store(mut self, ctx: &Context, id: Id) {
-+        // Explicit restoration may move state to another Context or instance.
-+        self.input_token = None;
-         ctx.data_mut(|d| d.insert_persisted(id, self));
++        // Consumption belongs to the destination instance, not imported state.
++        // A same-instance round trip must not grant another time opportunity.
++        ctx.data_mut(|data| {
++            self.input_token = data
++                .get_persisted::<Self>(id)
++                .and_then(|state| state.input_token);
++            data.insert_persisted(id, self);
++        });
      }
  
-@@ -729,6 +736,8 @@
+     /// The current kinetic scrolling velocity of the offset, in ui points per second.
+@@ -729,6 +741,8 @@
  }
  
  struct Prepared {
@@ -387,7 +394,7 @@ diff --git a/src/containers/scroll_area.rs b/src/containers/scroll_area.rs
      id: Id,
      state: State,
  
-@@ -818,6 +827,7 @@
+@@ -818,6 +832,7 @@
              "ScrollArea",
          );
          let mut state = State::load(&ctx, id).unwrap_or_default();
@@ -395,7 +402,7 @@ diff --git a/src/containers/scroll_area.rs b/src/containers/scroll_area.rs
  
          state.offset.x = offset_x.unwrap_or(state.offset.x);
          state.offset.y = offset_y.unwrap_or(state.offset.y);
-@@ -913,7 +923,6 @@
+@@ -913,7 +928,6 @@
          let dt = ui.input(|i| i.stable_dt).at_most(0.1);
  
          let kinetic_style = ui.spacing().scroll.kinetic;
@@ -403,7 +410,7 @@ diff --git a/src/containers/scroll_area.rs b/src/containers/scroll_area.rs
  
          let axis_physics: [AxisPhysics; 2] = core::array::from_fn(|d| AxisPhysics {
              bounds: scroll_bounds(state.max_offset[d]),
-@@ -926,6 +935,11 @@
+@@ -926,6 +940,11 @@
                  ..kinetic_style
              },
          });
@@ -415,7 +422,7 @@ diff --git a/src/containers/scroll_area.rs b/src/containers/scroll_area.rs
  
          let background_drag_response = if scroll_source.drag.enabled(ui.ctx())
              && ui.is_enabled()
-@@ -956,74 +970,85 @@
+@@ -956,74 +975,85 @@
              None
          };
  
@@ -558,7 +565,7 @@ diff --git a/src/containers/scroll_area.rs b/src/containers/scroll_area.rs
                      }
                  }
              }
-@@ -1034,6 +1059,8 @@
+@@ -1034,6 +1064,8 @@
              .pass_state_mut(|state| core::mem::take(&mut state.scroll_target));
  
          Prepared {
@@ -567,7 +574,7 @@ diff --git a/src/containers/scroll_area.rs b/src/containers/scroll_area.rs
              id,
              state,
              auto_shrink,
-@@ -1164,6 +1191,8 @@
+@@ -1164,6 +1196,8 @@
      /// Returns content size and state
      fn end(self, ui: &mut Ui) -> (Vec2, State) {
          let Self {
@@ -576,7 +583,7 @@ diff --git a/src/containers/scroll_area.rs b/src/containers/scroll_area.rs
              id,
              mut state,
              inner_rect,
-@@ -1197,6 +1226,12 @@
+@@ -1197,6 +1231,12 @@
                  .ctx()
                  .pass_state_mut(|state| state.scroll_target[d].take());
  
@@ -589,7 +596,7 @@ diff --git a/src/containers/scroll_area.rs b/src/containers/scroll_area.rs
              if direction_enabled[d] {
                  let (scroll_delta, scroll_animation) = content_ui.ctx().pass_state_mut(|state| {
                      (
-@@ -1323,7 +1358,8 @@
+@@ -1323,7 +1363,8 @@
              && ui.ctx().dragged_id().is_none()
              || is_dragging_background;
  
@@ -599,7 +606,7 @@ diff --git a/src/containers/scroll_area.rs b/src/containers/scroll_area.rs
              && ui.is_enabled()
              && (ui.rect_contains_pointer(outer_rect) || is_dragging_background)
          {
-@@ -1356,7 +1392,7 @@
+@@ -1356,7 +1397,7 @@
                              delta: -scroll_delta,
                              source: scroll_source,
                              can_chain_to_parent: has_scrolling_ancestor,
@@ -608,7 +615,7 @@ diff --git a/src/containers/scroll_area.rs b/src/containers/scroll_area.rs
                          },
                          &mut state.bounced_this_momentum[d],
                      );
-@@ -1539,35 +1575,38 @@
+@@ -1539,35 +1580,38 @@
  
              state.scroll_bar_interaction[d] = response.hovered() || response.dragged();
  
@@ -675,13 +682,12 @@ diff --git a/src/containers/scroll_area.rs b/src/containers/scroll_area.rs
              }
  
              if !rubber_banding[d] {
-@@ -1695,7 +1734,9 @@
+@@ -1695,7 +1739,8 @@
          state.content_is_too_large = content_is_too_large;
          state.interact_rect = Some(inner_rect);
  
 -        state.store(ui.ctx(), id);
-+        // Internal phase updates retain the consumption token. Public restoration
-+        // clears it so another instance cannot inherit this pass's authority.
++        // Internal phase updates advance this instance's consumption token.
 +        ui.ctx().data_mut(|data| data.insert_persisted(id, state));
  
          (content_size, state)
@@ -2281,7 +2287,21 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
      }
  
      pub(crate) fn end_pass(&mut self, used_ids: &IdMap<Rect>) {
-@@ -899,6 +932,21 @@
+@@ -841,7 +874,12 @@
+ 
+     /// Top-most layer at the given position.
+     pub fn layer_id_at(&self, pos: Pos2) -> Option<LayerId> {
+-        let layer_id = self.areas().layer_id_at(pos, &self.to_global)?;
++        let areas = self.areas();
++        let layer_id = if self.options.ordered_input {
++            areas.layer_id_at_in_order(pos, &self.to_global, &areas.order_current())
++        } else {
++            areas.layer_id_at(pos, &self.to_global)
++        }?;
+         if self.is_above_modal_layer(layer_id) {
+             Some(layer_id)
+         } else {
+@@ -899,6 +937,21 @@
          self.focus()?.focused()
      }
  
@@ -2303,7 +2323,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
      /// Set an event filter for a widget.
      ///
      /// This allows you to control whether the widget will loose focus
-@@ -906,13 +954,47 @@
+@@ -906,13 +959,47 @@
      ///
      /// You must first give focus to the widget before calling this.
      pub fn set_focus_lock_filter(&mut self, id: Id, event_filter: EventFilter) {
@@ -2358,7 +2378,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
      }
  
      /// Give keyboard focus to a specific widget.
-@@ -921,13 +1003,17 @@
+@@ -921,13 +1008,17 @@
      /// Calling this will interrupt IME composition.
      #[inline(always)]
      pub fn request_focus(&mut self, id: Id) {
@@ -2378,7 +2398,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
          self.interrupt_ime();
      }
  
-@@ -938,6 +1024,7 @@
+@@ -938,6 +1029,7 @@
          let focus = self.focus_mut();
          if focus.focused() == Some(id) {
              focus.focused_widget = None;
@@ -2386,7 +2406,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
          }
      }
  
-@@ -946,14 +1033,19 @@
+@@ -946,14 +1038,19 @@
      pub fn ignore_focus(&mut self, id: Id) {
          let focus = self.focus_mut();
          focus.focus_widgets_cache.remove(&id);
@@ -2407,7 +2427,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
      }
  
      /// Returns true if
-@@ -961,8 +1053,13 @@
+@@ -961,8 +1058,13 @@
      /// - there is no modal layer
      pub fn is_above_modal_layer(&self, layer_id: LayerId) -> bool {
          if let Some(modal_layer) = self.focus().and_then(|f| f.top_modal_layer) {
@@ -2422,7 +2442,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
                  core::cmp::Ordering::Equal | core::cmp::Ordering::Greater
              )
          } else {
-@@ -1008,7 +1105,11 @@
+@@ -1008,7 +1110,11 @@
      pub fn set_modal_layer(&mut self, layer_id: LayerId) {
          if let Some(current) = self.focus().and_then(|f| f.top_modal_layer_current_frame)
              && matches!(
@@ -2435,7 +2455,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
                  core::cmp::Ordering::Less
              )
          {
-@@ -1016,6 +1117,19 @@
+@@ -1016,6 +1122,19 @@
          }
  
          self.focus_mut().set_modal_layer(layer_id);
@@ -2455,7 +2475,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
      }
  
      /// Get the top modal layer (from the previous frame).
-@@ -1026,7 +1140,13 @@
+@@ -1026,7 +1145,13 @@
      /// Stop editing the active [`TextEdit`](crate::TextEdit) (if any).
      #[inline(always)]
      pub fn stop_text_input(&mut self) {
@@ -2470,7 +2490,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
      }
  
      /// Forget window positions, sizes etc.
-@@ -1077,6 +1197,12 @@
+@@ -1077,6 +1202,12 @@
      /// Interrupt the current IME composition, if any.
      pub fn interrupt_ime(&mut self) {
          self.requested_interrupt_ime = true;
@@ -2483,12 +2503,10 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
      }
  
      pub(crate) fn should_interrupt_ime(&self) -> bool {
-@@ -1258,6 +1384,22 @@
-             core::cmp::Ordering::Equal => self.order_map.get(&a).cmp(&self.order_map.get(&b)),
-             cmp => cmp,
+@@ -1260,6 +1391,22 @@
          }
-+    }
-+
+     }
+ 
 +    pub(crate) fn order_current(&self) -> Vec<LayerId> {
 +        let mut order = self.order.clone();
 +        Self::sort_order(&mut order, &self.wants_to_be_on_top, &self.sublayers);
@@ -2503,10 +2521,30 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
 +                .position(|layer| *layer == a)
 +                .cmp(&order.iter().position(|layer| *layer == b))
 +        })
-     }
- 
++    }
++
      /// Set the state of the area of the given layer for this pass.
-@@ -1395,26 +1537,17 @@
+     ///
+     /// [`crate::Area`] does this for you. Call it yourself for a layer you show without an
+@@ -1287,7 +1434,16 @@
+         pos: Pos2,
+         layer_to_global: &HashMap<LayerId, TSTransform>,
+     ) -> Option<LayerId> {
+-        for layer in self.order.iter().rev() {
++        self.layer_id_at_in_order(pos, layer_to_global, &self.order)
++    }
++
++    fn layer_id_at_in_order(
++        &self,
++        pos: Pos2,
++        layer_to_global: &HashMap<LayerId, TSTransform>,
++        order: &[LayerId],
++    ) -> Option<LayerId> {
++        for layer in order.iter().rev() {
+             if self.is_visible(layer)
+                 && let Some(state) = self.areas.get(&layer.id)
+             {
+@@ -1395,26 +1551,17 @@
          self.parent_layer(*layer).is_some()
      }
  
@@ -2539,7 +2577,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
              let mut moved_layers = vec![parent]; // parent first…
  
              order.retain(|l| {
-@@ -1430,6 +1563,24 @@
+@@ -1430,6 +1577,24 @@
              };
              order.splice(parent_pos..=parent_pos, moved_layers); // replace the parent with itself and its children
          }
@@ -2564,7 +2602,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
  
          self.order_map = self
              .order
-@@ -1466,21 +1617,21 @@
+@@ -1466,21 +1631,21 @@
  
      // Frame N-1
      {
@@ -2591,7 +2629,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
          assert_eq!(focus.id_two_frames_ago, Some(a));
          assert_eq!(focus.id_previous_frame, Some(b));
          assert!(lost_focus_check(&focus, a), "`A` lost_focus must fire");
-@@ -1489,7 +1640,7 @@
+@@ -1489,7 +1654,7 @@
  
      // Frame N+2
      {
@@ -2600,7 +2638,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
          assert!(
              !lost_focus_check(&focus, a),
              "A's lost_focus must stop firing once the two-frame window passes",
-@@ -1582,3 +1733,6 @@
+@@ -1582,3 +1747,6 @@
      let (inside, _) = run_pass(false);
      assert_ne!(inside, Some(layer_id), "gone once no longer registered");
  }

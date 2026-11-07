@@ -132,7 +132,8 @@ integrate physics. Each container privately remembers its last input opportunity
 so repeated shell calls, including targeted pointer `Time` deliveries, cannot
 repeat its interaction. A discard continuation only remeasures layout; it does not
 release wheel carry or spend another frame budget. Explicitly restoring a public
-`scroll_area::State` resets its private consumption token. Removed containers have
+`scroll_area::State` preserves the destination Context/ID's consumption token;
+imported state cannot transfer or reset that authority. Removed containers have
 no update callback, and registration requests no scrolling opportunity when no
 containers remain. Native persisted offsets retain their existing lifetime.
 
@@ -157,6 +158,8 @@ release and isolated inertia/spring trajectories are compared with ordinary mode
 Nested areas retain stock whole-axis consumption: an inner area that consumes an
 axis clears it before its parent runs; this is not proportional overflow sharing.
 Clips, transformed layers, top Areas and modal barriers remain authoritative.
+Ordered Area containment uses the same current layer order as event routing, so
+same-batch `move_to_top` changes wheel ownership immediately.
 Stock scrolling is not blocked merely by a same-layer child button. No separate
 scroll hit tree, retained container registry or public phase query is introduced.
 

@@ -961,3 +961,140 @@ fn mixed_gesture_modifiers_and_sources_take_effect_in_event_order() {
     assert_eq!(deltas[4].1, 1.);
     assert_eq!(result.unwrap().offset, 44.);
 }
+
+#[test]
+fn public_state_roundtrip_preserves_same_instance_consumption() {
+    let seed = kinetic_seed(true);
+    let initial = State::load(&seed.ctx, seed.last.unwrap().id).unwrap();
+    for ordered in [false, true] {
+        let mut h = Harness::new();
+        h.warm(seed.frame);
+        initial.store(&h.ctx, h.last.unwrap().id);
+        h.ctx.options_mut(|o| o.ordered_input = ordered);
+        let mut samples = None;
+        h.ctx
+            .run_ui(
+                RawInput {
+                    time: Some(h.frame as f64 / 60.),
+                    screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(200., 120.))),
+                    ..Default::default()
+                },
+                |ui| {
+                    let mut counts = Counts::default();
+                    if ordered {
+                        h.ctx.begin_input();
+                        shell(ui, true, false, &mut counts);
+                        let event = h.ctx.next_input_event().unwrap();
+                        assert!(matches!(event.trigger, InputTrigger::Time));
+                    }
+                    let first = shell(ui, true, false, &mut counts);
+                    State::load(&h.ctx, first.id)
+                        .unwrap()
+                        .store(&h.ctx, first.id);
+                    let second = shell(ui, true, false, &mut counts);
+                    samples = Some((first, second));
+                    if ordered {
+                        while h.ctx.next_input_event().is_some() {}
+                    }
+                },
+            )
+            .drop_without_applying_deltas();
+        let (first, second) = samples.unwrap();
+        if ordered {
+            close(second, first);
+        } else {
+            assert!(
+                second.offset > first.offset,
+                "ordinary mode retains native per-show integration"
+            );
+        }
+    }
+}
+
+fn overlapping_scroll_areas(ctx: &Context, layout_order: [usize; 2]) -> [f32; 2] {
+    let mut offsets = [0.; 2];
+    for n in layout_order {
+        egui::Area::new(Id::unique(("wheel-area", n)))
+            .order(egui::Order::Middle)
+            .fixed_pos(Pos2::ZERO)
+            .default_size(egui::vec2(200., 120.))
+            .movable(false)
+            .sense(Sense::hover())
+            .show(ctx, |ui| {
+                let out = egui::ScrollArea::vertical()
+                    .id_salt("scroll")
+                    .max_height(120.)
+                    .auto_shrink([false, false])
+                    .content_margin(0.)
+                    .show_viewport(ui, |ui, _| {
+                        ui.set_min_size(egui::vec2(180., 600.));
+                    });
+                offsets[n] = out.state.unclamped_offset().y;
+            });
+    }
+    offsets
+}
+
+#[test]
+fn ordered_wheel_uses_same_batch_area_promotion() {
+    for layout_order in [[0, 1], [1, 0]] {
+        for ordered in [false, true] {
+            let ctx = Context::default();
+            ctx.options_mut(|o| o.max_passes = 1.try_into().unwrap());
+            for frame in 0..3 {
+                ctx.run_ui(
+                    RawInput {
+                        time: Some(frame as f64 / 60.),
+                        events: vec![Event::PointerMoved(egui::pos2(70., 30.))],
+                        ..Default::default()
+                    },
+                    |_| {
+                        overlapping_scroll_areas(&ctx, [0, 1]);
+                    },
+                )
+                .drop_without_applying_deltas();
+            }
+            let a = egui::LayerId::new(egui::Order::Middle, Id::unique(("wheel-area", 0_usize)));
+            let b = egui::LayerId::new(egui::Order::Middle, Id::unique(("wheel-area", 1_usize)));
+            assert_eq!(ctx.layer_id_at(egui::pos2(70., 30.)), Some(b));
+            ctx.options_mut(|o| o.ordered_input = ordered);
+            let mut offsets = [0.; 2];
+            ctx.run_ui(
+                RawInput {
+                    time: Some(3. / 60.),
+                    events: vec![
+                        Event::Text("raise".into()),
+                        wheel(-4., egui::MouseWheelSource::Wheel),
+                    ],
+                    ..Default::default()
+                },
+                |_| {
+                    if ordered {
+                        ctx.begin_input();
+                        overlapping_scroll_areas(&ctx, layout_order);
+                        while let Some(event) = ctx.next_input_event() {
+                            match event.trigger {
+                                InputTrigger::Event {
+                                    event: Event::Text(_),
+                                    ..
+                                } => ctx.move_to_top(a),
+                                _ => {
+                                    offsets = overlapping_scroll_areas(&ctx, layout_order);
+                                }
+                            }
+                        }
+                    } else {
+                        ctx.move_to_top(a);
+                        offsets = overlapping_scroll_areas(&ctx, layout_order);
+                    }
+                },
+            )
+            .drop_without_applying_deltas();
+            assert_eq!(
+                offsets,
+                if ordered { [4., 0.] } else { [0., 4.] },
+                "layout order {layout_order:?}, ordered {ordered}"
+            );
+        }
+    }
+}

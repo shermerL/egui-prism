@@ -107,9 +107,14 @@ impl State {
     }
 
     pub fn store(mut self, ctx: &Context, id: Id) {
-        // Explicit restoration may move state to another Context or instance.
-        self.input_token = None;
-        ctx.data_mut(|d| d.insert_persisted(id, self));
+        // Consumption belongs to the destination instance, not imported state.
+        // A same-instance round trip must not grant another time opportunity.
+        ctx.data_mut(|data| {
+            self.input_token = data
+                .get_persisted::<Self>(id)
+                .and_then(|state| state.input_token);
+            data.insert_persisted(id, self);
+        });
     }
 
     /// The current kinetic scrolling velocity of the offset, in ui points per second.
@@ -1734,8 +1739,7 @@ impl Prepared {
         state.content_is_too_large = content_is_too_large;
         state.interact_rect = Some(inner_rect);
 
-        // Internal phase updates retain the consumption token. Public restoration
-        // clears it so another instance cannot inherit this pass's authority.
+        // Internal phase updates advance this instance's consumption token.
         ui.ctx().data_mut(|data| data.insert_persisted(id, state));
 
         (content_size, state)
