@@ -30,6 +30,3 @@ Handle this at the input/framework boundary without reclaiming focus that the
 caller deliberately released or canceling a pending Tab traversal. Preserve the
 existing hit-target, input-lifetime and inherited-text-color regression fixes.
 
-## Required
-
-- [Input compatibility](/quest/m1/shadcn-parity/input-compatibility.md) - ordered input and authoritative focus, hit and capture behavior

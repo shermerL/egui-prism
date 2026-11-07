@@ -52,6 +52,10 @@ The current components are undergoing a full parity correction; existing test an
 CI results do not establish visual acceptance. See the [reference contract and
 component audit](docs/shadcn-parity.md) and [correction Quests](quest/m1/shadcn-parity/README.md).
 
+The opt-in [ordered input integration](docs/input-compatibility.md) requires an
+application-root Cargo patch. Its [source inventory](vendor/README.md) and
+standalone consumer checks keep the official platform/renderer types unified.
+
 The optional [`egui-prism-wgpu`](docs/compositing.md) host adapter provides isolated
 group opacity with the official wgpu renderer. The core remains egui-only; hosts own
 renderer initialization, texture lifetimes and explicit shutdown. The Gallery
