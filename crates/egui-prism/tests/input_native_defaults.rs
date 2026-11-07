@@ -641,3 +641,37 @@ fn label_selection_is_removed_with_its_viewport() {
     assert!(copied(&out).is_empty());
     out.drop_without_applying_deltas();
 }
+
+#[test]
+fn local_policy_change_limits_existing_selection_on_key_input() {
+    let mut results = Vec::new();
+    for ordered in [false, true] {
+        let ctx = context(ordered);
+        let (out, rects) = label_frame(&ctx, vec![], 0.0);
+        out.drop_without_applying_deltas();
+        for (n, events) in [
+            vec![press(rects[0].left_center(), true)],
+            vec![Event::PointerMoved(rects[1].right_center())],
+            vec![press(rects[1].right_center(), false)],
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            label_frame(&ctx, events, 0.1 + n as f64 * 0.1)
+                .0
+                .drop_without_applying_deltas();
+        }
+        label_frame_with_policy(
+            &ctx,
+            raw(vec![key(Key::ArrowLeft, Modifiers::NONE)], 0.5),
+            Some(false),
+        )
+        .0
+        .drop_without_applying_deltas();
+        let out = label_frame_with_policy(&ctx, raw(vec![Event::Copy], 0.6), Some(false)).0;
+        results.push(copied(&out));
+        out.drop_without_applying_deltas();
+    }
+    assert_eq!(results[0], vec!["bravo"]);
+    assert_eq!(results[0], results[1]);
+}
