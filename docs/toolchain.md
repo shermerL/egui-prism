@@ -36,8 +36,16 @@ upstream `quest-pinned` input serves its own development and is not this project
 selected CLI. Init installs upstream skill stubs and the clone-local merge driver;
 no global hooks or unattended services are enabled.
 
-Change explicit pins, regenerate locks, review upstream behavior, and rerun checks
-when upgrading. Keep the tool and runtime dependency graphs separate.
+Retain Quest at `19a2438cd80cf968dddfbf664570a2c8b9a254bf`. Upgrade evaluation
+is deferred until the maintainer explicitly requests it again. Do not track newer
+revisions automatically, resume upgrade experiments, or change the Quest pin or
+lock entry as routine maintenance. This deferral does not block the completed M0
+foundations or component work using the current tool.
+
+If the maintainer requests a new evaluation, scope it as a separate Quest before
+changing explicit pins or regenerating locks. Review upstream behavior and rerun
+the relevant checks before proposing a version switch. Keep the tool and runtime
+dependency graphs separate.
 
 ## Source and assets
 
