@@ -28,6 +28,8 @@ licenses. Do not patch epaint, egui-winit, egui-wgpu or wgpu. The standalone
 an optional official system font provider across these boundaries. Its dependency
 graph check requires exactly one egui and one epaint. This is not a published
 package configuration, renderer fork or platform runtime test.
+The same check validates the actual workspace graph, including the native Gallery
+and compositing adapter, against the vendored egui and official integration crates.
 
 ## Host-owned phases
 

@@ -1,7 +1,7 @@
 # Contributing
 
 The workspace contains the egui-only library in `crates/egui-prism` and the
-native/WebAssembly host in `gallery`. The host displays semantic themes, Prism buttons and text inputs, and labeled egui harness
+native winit/wgpu host in `gallery`. The host displays semantic themes, Prism buttons and text inputs, and labeled egui harness
 controls. Other components are subsequent quests.
 The [quest tree](quest/README.md) is the task source.
 
@@ -15,8 +15,8 @@ quest init
 quest context
 ```
 
-The locked shell supplies Quest, rustup, Trunk, wasm-bindgen, Python, and lint
-utilities. Rustup installs the exact toolchain and wasm target declared in
+The locked shell supplies Quest, rustup, Node.js, Python, and lint
+utilities. Rustup installs the exact toolchain declared in
 `rust-toolchain.toml` on first use, without changing the global default Rust
 toolchain. See [tool provenance](docs/toolchain.md) for versions and limits.
 
@@ -31,14 +31,13 @@ Run the complete local and CI entry point through the resource gate:
 nix develop --command quest gate python3 scripts/check.py
 ```
 
-It checks Quest structure, Nix and Rust formatting, workflow lint, the standalone
-core library, native and wasm Clippy, tests and doctests, documentation, native
-builds, and a release wasm bundle. Finally it checks generated assets and license
-notices below `/egui-prism/`. Cargo and Trunk use `Cargo.lock` without updating it.
-To check only the native path while iterating:
+The default checks cover repository policy, locked native Rust checks and the
+pinned shadcn reference. `--cargo-only` runs portable Rust checks on macOS,
+Windows and Linux; `--policy-only` runs repository tooling and the reference.
+`--native-only` is retained as an alias for the default native checks.
 
 ```sh
-nix develop --command quest gate python3 scripts/check.py --native-only
+python scripts/check.py --cargo-only
 ```
 
 The library has compiling documentation examples and public component behavior tests.
@@ -53,15 +52,11 @@ Native:
 nix develop --command cargo run --locked -p egui-prism-gallery
 ```
 
-Browser, after the full check builds the bundle:
-
-```sh
-nix develop --command python3 -m http.server 8080 --directory dist
-```
-
-Open `http://localhost:8080/egui-prism/`. The browser requires WebGL 2. The host
-selects glow explicitly, with no WebGPU fallback. The bundle is under
-`dist/egui-prism/`, including license notices. Local serving does not deploy Pages.
+The host selects Metal on macOS, DX12 on Windows and Vulkan on Linux, with
+X11 and Wayland input bridges enabled. A matching native toolchain and GPU driver
+are required. Browser product builds and Pages are outside this phase's required
+checks. Build the pinned CSS reference with `npm ci --prefix reference` followed
+by `npm run build --prefix reference`; see `reference/README.md`.
 
 ## Changes and review
 
@@ -76,7 +71,7 @@ A ready PR is a candidate for maintainer review, not an instruction to merge.
 The maintainer selects which reviewed changes may land; releases and the first
 Pages deployment are separate decisions.
 
-PR CI has read-only permissions, skips drafts, and uploads native/wasm artifacts.
+PR CI has read-only permissions, includes drafts, and uploads native artifacts for each OS.
 It contains no deployment job. Keep private notes and raw review logs out of
 public changes.
 

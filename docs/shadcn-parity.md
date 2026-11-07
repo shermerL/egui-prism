@@ -36,13 +36,16 @@ shape's alpha produces different text, image, border and shadow colors. Strict
 parity therefore requires host-owned group compositing over the actual surface;
 a fixed background-color approximation is insufficient.
 
-The planned [host compositing capability](/quest/m1/shadcn-parity/host-compositing.md)
+The [host compositing capability](/docs/compositing.md)
 keeps the core egui-only and adds a separately installed wgpu adapter. The native
 Gallery directly integrates official winit, egui-winit and egui-wgpu; the host
 owns windows, GPU resources, current-frame texture preparation and ordered command
 submission. Backend setup failures are explicit. Component implementation and
-acceptance stay with their own Quests after the shared capability lands. This
-capability is planned, not yet implemented or accepted.
+acceptance stay with their own Quests. The shared capability has native Metal
+framebuffer regressions and software Vulkan GPU contract coverage; these do not
+establish component parity or Windows/Linux desktop acceptance. Full native
+platform input, IME, clipboard and OS DPI observations remain in the
+[native Gallery Quest](/quest/m1/native-gallery.md).
 
 ## Shared input boundary
 
