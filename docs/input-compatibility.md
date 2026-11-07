@@ -89,7 +89,11 @@ These are not another hit tree: eligibility and pointer containment still come
 from current egui widgets. Widget re-registration revokes the previous text
 source until a selectable Label renews it, including when the same ID remains
 visible and enabled. Event finalization removes unrenewed or vanished sources
-and invalidates their selection endpoints. Sources are cleared at input begin/pass
+and invalidates their selection endpoints. `Response::interact` appends interaction
+without replacing a text source, including for the same sense or a response read
+with `Context::read_response`. Ui geometry finalization preserves appended senses
+while applying current enabled/visible state. Neither update can renew a text
+source revoked by a real replacement. Sources are cleared at input begin/pass
 end; closed viewports are pruned. Registration and final painting do not process
 selection input again. Keyboard changes preserve the active endpoint and local
 selection policy. Pointer release ends dragging while retaining a word/line anchor;

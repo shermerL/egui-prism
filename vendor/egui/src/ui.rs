@@ -1096,7 +1096,7 @@ impl Ui {
             fs.used_ids.remove(&self.unique_id);
         });
         // This will update the WidgetRect that was first created in `Ui::new`.
-        let mut response = self.ctx().create_widget(
+        let mut response = self.ctx().update_widget(
             WidgetRect {
                 id: self.unique_id,
                 parent_id: self

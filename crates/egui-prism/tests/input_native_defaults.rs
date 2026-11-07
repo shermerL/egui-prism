@@ -831,7 +831,14 @@ fn released_word_and_line_anchors_survive_shift_clicks() {
 
 #[test]
 fn current_registration_revokes_or_renews_same_id_label_text() {
-    for renewal in ["unselectable", "replacement", "new-text", "unchanged"] {
+    for renewal in [
+        "unselectable",
+        "replacement",
+        "new-text",
+        "unchanged",
+        "unselectable-then-interact",
+        "replacement-then-interact",
+    ] {
         let ctx = context(true);
         let (out, rect) = selection_frame(&ctx, raw(vec![], 0.0), "alpha");
         out.drop_without_applying_deltas();
@@ -855,7 +862,8 @@ fn current_registration_revokes_or_renews_same_id_label_text() {
             raw(vec![Event::Text("change".into()), Event::Copy], 0.5),
             |ui| {
                 ctx.begin_input();
-                let id = selection_label(ui, text, selectable).id;
+                let response = selection_label(ui, text, selectable);
+                let id = response.id;
                 while ctx.next_input_event().is_some() {
                     if ctx.input(|input| {
                         input
@@ -865,19 +873,22 @@ fn current_registration_revokes_or_renews_same_id_label_text() {
                     }) {
                         ctx.input_layout(|| {
                             match renewal {
-                                "unselectable" => selectable = false,
+                                mode if mode.starts_with("unselectable") => selectable = false,
                                 "new-text" => text = "bravo",
                                 _ => (),
                             }
-                            if renewal == "replacement" {
+                            if renewal.starts_with("replacement") {
                                 ui.interact(rect, id, egui::Sense::hover());
                             } else {
                                 assert_eq!(selection_label(ui, text, selectable).id, id);
                             }
+                            if renewal.ends_with("then-interact") {
+                                let _ = response.interact(response.sense);
+                            }
                         });
                     }
                 }
-                if renewal != "replacement" {
+                if !renewal.starts_with("replacement") {
                     selection_label(ui, text, selectable);
                 }
             },
@@ -953,4 +964,171 @@ fn batched_label_presses_update_granularity_and_cancel_old_anchors() {
     }
     assert_eq!(copies[0], vec!["two", "two t", "on"]);
     assert_eq!(copies[0], copies[1]);
+}
+
+#[test]
+fn response_interaction_preserves_selectable_label_sources() {
+    let mut results = Vec::new();
+    for extension in ["same-sense", "returned", "read-response"] {
+        for ordered in [false, true] {
+            let ctx = context(ordered);
+            let render = |ui: &mut Ui| {
+                let response = selection_label(ui, "alpha", true);
+                match extension {
+                    "same-sense" => response.interact(response.sense),
+                    "returned" => response.interact(egui::Sense::click()),
+                    _ => ctx
+                        .read_response(response.id)
+                        .unwrap()
+                        .interact(egui::Sense::click()),
+                }
+            };
+            let frame = |events, time| {
+                let mut rect = Rect::NOTHING;
+                let out = ctx.run_ui(raw(events, time), |ui| {
+                    if ordered {
+                        ctx.begin_input();
+                        let id = render(ui).id;
+                        while let Some(input) = ctx.next_input_event() {
+                            if input.target == Some(id) {
+                                render(ui);
+                            }
+                        }
+                    }
+                    rect = render(ui).rect;
+                });
+                (out, rect)
+            };
+            let (out, rect) = frame(vec![], 0.0);
+            out.drop_without_applying_deltas();
+            for (n, events) in [
+                vec![press(rect.left_center(), true)],
+                vec![Event::PointerMoved(rect.right_center())],
+                vec![press(rect.right_center(), false)],
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                frame(events, 0.1 + n as f64 * 0.1)
+                    .0
+                    .drop_without_applying_deltas();
+            }
+            let out = frame(vec![Event::Copy], 0.5).0;
+            results.push((extension, ordered, copied(&out)));
+            out.drop_without_applying_deltas();
+        }
+    }
+    for (extension, ordered, copies) in results {
+        assert_eq!(
+            copies,
+            vec!["alpha"],
+            "extension={extension}, ordered={ordered}"
+        );
+    }
+}
+
+#[test]
+fn response_interaction_registers_previous_pass_widgets() {
+    for ordered in [false, true] {
+        let ctx = context(ordered);
+        let mut id = Id::NULL;
+        let mut rect = Rect::NOTHING;
+        ctx.run_ui(raw(vec![], 0.0), |ui| {
+            if ordered {
+                ctx.begin_input();
+            }
+            let response = selection_label(ui, "alpha", true);
+            id = response.id;
+            rect = response.rect;
+            if ordered {
+                while ctx.next_input_event().is_some() {}
+            }
+        })
+        .drop_without_applying_deltas();
+        let mut clicked = false;
+        ctx.run_ui(
+            raw(
+                vec![press(rect.center(), true), press(rect.center(), false)],
+                0.1,
+            ),
+            |_| {
+                if ordered {
+                    ctx.begin_input();
+                }
+                // This pass has not allocated the label. read_response uses its previous-pass widget.
+                let response = ctx.read_response(id).unwrap();
+                clicked |= response.interact(egui::Sense::click()).clicked();
+                if ordered {
+                    while let Some(input) = ctx.next_input_event() {
+                        assert_eq!(input.target, Some(id));
+                        clicked |= response.interact(egui::Sense::click()).clicked();
+                    }
+                }
+            },
+        )
+        .drop_without_applying_deltas();
+        assert!(clicked, "ordered={ordered}");
+    }
+}
+
+#[test]
+fn ui_response_interaction_survives_geometry_finalization() {
+    for ordered in [false, true] {
+        let ctx = context(ordered);
+        let mut rect = Rect::NOTHING;
+        let render = |ui: &mut Ui| {
+            let mut child = ui.new_child(
+                egui::UiBuilder::new()
+                    .scope_id(Id::unique("response-background"))
+                    .max_rect(Rect::from_min_size(pos2(20.0, 30.0), vec2(200.0, 50.0))),
+            );
+            child.allocate_space(vec2(120.0, 30.0));
+            // The Ui will finalize its geometry when it drops after this response.
+            child.response().interact(egui::Sense::click())
+        };
+        ctx.run_ui(raw(vec![], 0.0), |ui| {
+            if ordered {
+                ctx.begin_input();
+            }
+            render(ui);
+            if ordered {
+                while ctx.next_input_event().is_some() {}
+            }
+        })
+        .drop_without_applying_deltas();
+        // A second pass supplies the previous final rect to Ui::response.
+        ctx.run_ui(raw(vec![], 0.1), |ui| {
+            if ordered {
+                ctx.begin_input();
+            }
+            rect = render(ui).rect;
+            if ordered {
+                while ctx.next_input_event().is_some() {}
+            }
+        })
+        .drop_without_applying_deltas();
+        assert!(rect.is_positive());
+        let mut clicked = false;
+        ctx.run_ui(
+            raw(
+                vec![press(rect.center(), true), press(rect.center(), false)],
+                0.2,
+            ),
+            |ui| {
+                if ordered {
+                    ctx.begin_input();
+                    let response = render(ui);
+                    while let Some(input) = ctx.next_input_event() {
+                        if input.target == Some(response.id) {
+                            clicked |= render(ui).clicked();
+                        }
+                    }
+                } else {
+                    clicked |= render(ui).clicked();
+                }
+            },
+        )
+        .drop_without_applying_deltas();
+        assert!(clicked, "ordered={ordered}");
+    }
 }

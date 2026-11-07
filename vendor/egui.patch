@@ -383,17 +383,68 @@ diff --git a/src/context.rs b/src/context.rs
              // Areas that are not interactable are click-through: skip them in the hit-test.
              let mut layers: Vec<LayerId> = viewport
                  .prev_pass
-@@ -1522,18 +1529,26 @@
-     ) -> Response {
-         debug_assert!(!w.rect.any_nan(), "widget rect is NaN: {:?}", w.rect);
+@@ -779,6 +786,11 @@
+ #[derive(Clone)]
+ pub struct Context(Arc<RwLock<ContextImpl>>);
  
++enum WidgetRegistration {
++    Replace,
++    Update,
++}
++
+ impl core::fmt::Debug for Context {
+     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+         f.debug_struct("Context").finish_non_exhaustive()
+@@ -1504,13 +1516,13 @@
+ 
+     // ---------------------------------------------------------------------
+ 
+-    /// Create a widget and check for interaction.
+-    ///
+-    /// If this is not called, the widget doesn't exist.
++    /// Register a widget declaration and check for interaction.
+     ///
+     /// You should use [`Ui::interact`] instead.
+     ///
+-    /// If the widget already exists, its state (sense, Rect, etc) will be updated.
++    /// In ordered mode, a new declaration replaces its current interaction and revokes
++    /// its text source until a selectable label renews it. Use `update_widget` for
++    /// appended interaction or final geometry of the existing widget.
+     ///
+     /// `allow_focus` should usually be true, unless you call this function multiple times with the
+     /// same widget, then `allow_focus` should only be true once (like in [`Ui::new`] (true) and [`Ui::remember_min_rect`] (false)).
+@@ -1520,6 +1532,30 @@
+         allow_focus: bool,
+         options: crate::InteractOptions,
+     ) -> Response {
 +        if self.options(|options| options.ordered_input) {
 +            crate::text_selection::LabelSelectionState::invalidate_input_text(self, w.id);
 +        }
++        self.register_widget(w, allow_focus, options, WidgetRegistration::Replace)
++    }
 +
++    /// Update interaction or final geometry without replacing a widget's text source.
++    /// This still registers responses obtained from a previous pass.
++    pub(crate) fn update_widget(
++        &self,
++        w: WidgetRect,
++        allow_focus: bool,
++        options: crate::InteractOptions,
++    ) -> Response {
++        self.register_widget(w, allow_focus, options, WidgetRegistration::Update)
++    }
++
++    fn register_widget(
++        &self,
++        w: WidgetRect,
++        allow_focus: bool,
++        options: crate::InteractOptions,
++        registration: WidgetRegistration,
++    ) -> Response {
+         debug_assert!(!w.rect.any_nan(), "widget rect is NaN: {:?}", w.rect);
+ 
          let interested_in_focus = w.enabled
-             && w.sense.is_focusable()
-             && self.memory(|mem| mem.allows_interaction(w.layer_id));
+@@ -1528,12 +1564,30 @@
  
          // Remember this widget
          self.write(|ctx| {
@@ -405,12 +456,26 @@ diff --git a/src/context.rs b/src/context.rs
              // but also to know when we have reached the widget we are checking for cover.
              viewport.this_pass.widgets.insert(w.layer_id, w, options);
 +            if ordered_input {
-+                viewport.this_pass.widgets.replace_input_interaction(w);
++                let mut current = w;
++                if matches!(registration, WidgetRegistration::Update) {
++                    // Preserve appended interaction when a Ui finalizes its geometry,
++                    // while enabled/visible still reflect its current state.
++                    current.sense = viewport
++                        .this_pass
++                        .widgets
++                        .get(w.id)
++                        .expect("widget was just inserted")
++                        .sense;
++                }
++                viewport
++                    .this_pass
++                    .widgets
++                    .replace_input_interaction(current);
 +            }
  
              if allow_focus && interested_in_focus {
                  ctx.memory.interested_in_focus(w.id, w.layer_id);
-@@ -1541,8 +1556,15 @@
+@@ -1541,8 +1595,15 @@
          });
  
          if allow_focus && !interested_in_focus {
@@ -428,7 +493,7 @@ diff --git a/src/context.rs b/src/context.rs
          }
  
          if w.sense.interactive() || w.sense.is_focusable() {
-@@ -1744,12 +1766,41 @@
+@@ -1744,12 +1805,41 @@
          res.flags.set(Flags::VISIBLE, visible);
          res.flags.set(Flags::HIGHLIGHTED, highlighted);
  
@@ -471,7 +536,7 @@ diff --git a/src/context.rs b/src/context.rs
              );
  
              let input = &viewport.input;
-@@ -1771,7 +1822,9 @@
+@@ -1771,7 +1861,9 @@
                  res.flags.set(Flags::FAKE_PRIMARY_CLICKED, true);
              }
  
@@ -482,7 +547,7 @@ diff --git a/src/context.rs b/src/context.rs
              {
                  res.flags.set(Flags::LONG_TOUCHED, true);
              }
-@@ -1780,30 +1833,30 @@
+@@ -1780,30 +1872,30 @@
  
              res.flags.set(
                  Flags::IS_POINTER_BUTTON_DOWN_ON,
@@ -520,7 +585,7 @@ diff --git a/src/context.rs b/src/context.rs
              let mut any_press = false;
  
              for pointer_event in &input.pointer.pointer_events {
-@@ -1848,7 +1901,7 @@
+@@ -1848,7 +1940,7 @@
              };
  
              let pointer_clicked_elsewhere = should_surrender_focus && !res.hovered();
@@ -529,7 +594,7 @@ diff --git a/src/context.rs b/src/context.rs
                  memory.surrender_focus(id);
              }
          });
-@@ -2928,6 +2981,16 @@
+@@ -2928,6 +3020,16 @@
  
          self.finish_root_ui();
  
@@ -546,7 +611,7 @@ diff --git a/src/context.rs b/src/context.rs
          if self.options(|o| o.zoom_with_keyboard) {
              crate::gui_zoom::zoom_with_keyboard(self);
          }
-@@ -2938,12 +3001,18 @@
+@@ -2938,12 +3040,18 @@
              }
          }
  
@@ -565,7 +630,7 @@ diff --git a/src/context.rs b/src/context.rs
  
          let plugins = self.read(|ctx| ctx.plugins.ordered_plugins());
          plugins.on_output(self, &mut output);
-@@ -3150,6 +3219,12 @@
+@@ -3150,6 +3258,12 @@
          let ended_viewport_id = self.viewport_id();
          let viewport = self.viewports.entry(ended_viewport_id).or_default();
          let pixels_per_point = viewport.input.pixels_per_point;
@@ -2060,6 +2125,23 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
 +
 +#[cfg(test)]
 +mod focus_policy_tests;
+diff --git a/src/response.rs b/src/response.rs
+--- a/src/response.rs
++++ b/src/response.rs
+@@ -882,11 +882,11 @@
+     /// ```
+     #[must_use]
+     pub fn interact(&self, sense: Sense) -> Self {
+-        // We could check here if the new Sense equals the old one to avoid the extra create_widget
++        // We could check here if the new Sense equals the old one to avoid the extra update_widget
+         // call. But that would break calling `interact` on a response from `Context::read_response`
+         // or `Ui::response`. (See https://github.com/emilk/egui/pull/7713 for more details.)
+ 
+-        self.ctx.create_widget(
++        self.ctx.update_widget(
+             WidgetRect {
+                 layer_id: self.layer_id,
+                 id: self.id,
 diff --git a/src/text_selection/label_text_selection.rs b/src/text_selection/label_text_selection.rs
 --- a/src/text_selection/label_text_selection.rs
 +++ b/src/text_selection/label_text_selection.rs
@@ -2613,6 +2695,18 @@ diff --git a/src/text_selection/text_cursor_state.rs b/src/text_selection/text_c
                  let existing_range = if shift { self.range(galley) } else { None };
  
                  if let Some(mut cursor_range) = existing_range {
+diff --git a/src/ui.rs b/src/ui.rs
+--- a/src/ui.rs
++++ b/src/ui.rs
+@@ -1096,7 +1096,7 @@
+             fs.used_ids.remove(&self.unique_id);
+         });
+         // This will update the WidgetRect that was first created in `Ui::new`.
+-        let mut response = self.ctx().create_widget(
++        let mut response = self.ctx().update_widget(
+             WidgetRect {
+                 id: self.unique_id,
+                 parent_id: self
 diff --git a/src/widget_rect.rs b/src/widget_rect.rs
 --- a/src/widget_rect.rs
 +++ b/src/widget_rect.rs

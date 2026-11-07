@@ -786,6 +786,11 @@ impl ContextImpl {
 #[derive(Clone)]
 pub struct Context(Arc<RwLock<ContextImpl>>);
 
+enum WidgetRegistration {
+    Replace,
+    Update,
+}
+
 impl core::fmt::Debug for Context {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Context").finish_non_exhaustive()
@@ -1511,13 +1516,13 @@ impl Context {
 
     // ---------------------------------------------------------------------
 
-    /// Create a widget and check for interaction.
-    ///
-    /// If this is not called, the widget doesn't exist.
+    /// Register a widget declaration and check for interaction.
     ///
     /// You should use [`Ui::interact`] instead.
     ///
-    /// If the widget already exists, its state (sense, Rect, etc) will be updated.
+    /// In ordered mode, a new declaration replaces its current interaction and revokes
+    /// its text source until a selectable label renews it. Use `update_widget` for
+    /// appended interaction or final geometry of the existing widget.
     ///
     /// `allow_focus` should usually be true, unless you call this function multiple times with the
     /// same widget, then `allow_focus` should only be true once (like in [`Ui::new`] (true) and [`Ui::remember_min_rect`] (false)).
@@ -1527,11 +1532,31 @@ impl Context {
         allow_focus: bool,
         options: crate::InteractOptions,
     ) -> Response {
-        debug_assert!(!w.rect.any_nan(), "widget rect is NaN: {:?}", w.rect);
-
         if self.options(|options| options.ordered_input) {
             crate::text_selection::LabelSelectionState::invalidate_input_text(self, w.id);
         }
+        self.register_widget(w, allow_focus, options, WidgetRegistration::Replace)
+    }
+
+    /// Update interaction or final geometry without replacing a widget's text source.
+    /// This still registers responses obtained from a previous pass.
+    pub(crate) fn update_widget(
+        &self,
+        w: WidgetRect,
+        allow_focus: bool,
+        options: crate::InteractOptions,
+    ) -> Response {
+        self.register_widget(w, allow_focus, options, WidgetRegistration::Update)
+    }
+
+    fn register_widget(
+        &self,
+        w: WidgetRect,
+        allow_focus: bool,
+        options: crate::InteractOptions,
+        registration: WidgetRegistration,
+    ) -> Response {
+        debug_assert!(!w.rect.any_nan(), "widget rect is NaN: {:?}", w.rect);
 
         let interested_in_focus = w.enabled
             && w.sense.is_focusable()
@@ -1547,7 +1572,21 @@ impl Context {
             // but also to know when we have reached the widget we are checking for cover.
             viewport.this_pass.widgets.insert(w.layer_id, w, options);
             if ordered_input {
-                viewport.this_pass.widgets.replace_input_interaction(w);
+                let mut current = w;
+                if matches!(registration, WidgetRegistration::Update) {
+                    // Preserve appended interaction when a Ui finalizes its geometry,
+                    // while enabled/visible still reflect its current state.
+                    current.sense = viewport
+                        .this_pass
+                        .widgets
+                        .get(w.id)
+                        .expect("widget was just inserted")
+                        .sense;
+                }
+                viewport
+                    .this_pass
+                    .widgets
+                    .replace_input_interaction(current);
             }
 
             if allow_focus && interested_in_focus {
