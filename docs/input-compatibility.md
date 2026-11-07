@@ -80,6 +80,26 @@ pointer/key state are retained, while the consumed event stream stays empty.
 Interactive plugins must join the host's registration/event/paint flow; a legacy
 plugin that performs actions only in `on_begin_pass` is not an ordered consumer.
 
+Built-in Label selection handles remaining events after each target handler, before
+the next event changes the selection. Copy/Cut emits an owned text snapshot at
+that point, including selections spanning several Labels; Escape cancels the
+selection. The selection plugin retains current-pass `Arc<Galley>` text sources,
+IDs, text transforms, clip rectangles and local multi-widget selection policy.
+These are not another hit tree: eligibility and pointer containment still come
+from current egui widgets. Sources are replaced on re-registration, removed when
+the widget disappears, and cleared at input begin/pass end; closed viewports are
+pruned. Registration and final painting do not process selection input again.
+
+Remaining key events are saved privately until the stock frame-level zoom/quit
+step, after built-in plugin processing. Handler consumption remains authoritative;
+beginning-of-pass consumption is never reconstructed from raw input. Zoom keeps
+stock reset priority, repeat coalescing and next-pass application. Ordered mode
+does not make arbitrary legacy `on_end_pass` input plugins compatible.
+
+`MiddleClickPaste` uses its own position and current geometry, including for an
+unfocused stock TextEdit. Its target and response containment agree; the editor
+owns insertion and focus. Ordinary keyboard paste retains focus routing.
+
 Drain the input cursor even when no event is relevant. Failing to begin or finish
 an enabled pass is a programming error and asserts. Existing egui discard passes
 remain supported: raw events are taken once by `run_ui`, so a caller-requested

@@ -2977,6 +2977,16 @@ impl Context {
 
         self.finish_root_ui();
 
+        // Ordered handlers and built-in selection have already had their turn.
+        // Keep the stock frame-wide shortcut rules and deferred zoom application.
+        let ordered_input = self.options(|o| o.ordered_input);
+        let ended_viewport = self.viewport_id();
+        if ordered_input {
+            self.write(|ctx| {
+                let viewport = ctx.viewport();
+                viewport.input.events = core::mem::take(&mut viewport.dispatch.shortcut_events);
+            });
+        }
         if self.options(|o| o.zoom_with_keyboard) {
             crate::gui_zoom::zoom_with_keyboard(self);
         }
@@ -2987,12 +2997,18 @@ impl Context {
             }
         }
 
+        if ordered_input {
+            self.input_mut(|input| input.events.clear());
+        }
         self.sync_window_theme();
 
         #[cfg(debug_assertions)]
         self.debug_painting();
 
         let mut output = self.write(|ctx| ctx.end_pass());
+        if ordered_input {
+            crate::text_selection::LabelSelectionState::clear_input_text(self, ended_viewport);
+        }
 
         let plugins = self.read(|ctx| ctx.plugins.ordered_plugins());
         plugins.on_output(self, &mut output);

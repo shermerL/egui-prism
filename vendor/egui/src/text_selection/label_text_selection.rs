@@ -106,11 +106,23 @@ pub struct LabelSelectionState {
     states: ViewportIdMap<ViewportLabelSelectionState>,
 }
 
+// Immutable text sources for this pass's selection output. Geometry ownership and
+// hit testing stay in the existing widget tree; no Ui or input state is retained.
+#[derive(Clone, Debug)]
+struct LabelText {
+    id: Id,
+    galley: Arc<Galley>,
+    global_from_galley: TSTransform,
+    multi_widget_text_select: bool,
+    clip_rect: Rect,
+}
+
 /// Text selection state for all labels in one viewport.
 #[derive(Clone, Debug)]
 struct ViewportLabelSelectionState {
     /// The current selection, if any.
     selection: Option<CurrentSelection>,
+    ordered_labels: Vec<LabelText>,
 
     selection_bbox_last_frame: Rect,
     selection_bbox_this_frame: Rect,
@@ -151,6 +163,7 @@ impl Default for ViewportLabelSelectionState {
     fn default() -> Self {
         Self {
             selection: Default::default(),
+            ordered_labels: Vec::new(),
             selection_bbox_last_frame: Rect::NOTHING,
             selection_bbox_this_frame: Rect::NOTHING,
             any_hovered: Default::default(),
@@ -187,9 +200,43 @@ impl Plugin for LabelSelectionState {
             self.states.remove(&viewport_id);
         }
     }
+
+    fn output_hook(&mut self, ctx: &Context, output: &mut crate::FullOutput) {
+        if ctx.options(|options| options.ordered_input) {
+            self.states
+                .retain(|id, _| output.viewport_output.contains_key(id));
+        }
+    }
 }
 
 impl LabelSelectionState {
+    pub(crate) fn clear_input_text(ctx: &Context, viewport: crate::ViewportId) {
+        let plugin = ctx.plugin::<Self>();
+        if let Some(state) = plugin.lock().states.get_mut(&viewport) {
+            state.ordered_labels.clear();
+        }
+    }
+
+    pub(crate) fn finish_input_event(ctx: &Context) {
+        let plugin = ctx.plugin::<Self>();
+        let mut plugin = plugin.lock();
+        if let Some(state) = plugin.states.get_mut(&ctx.viewport_id()) {
+            state.finish_input_event(ctx);
+        }
+    }
+
+    pub(crate) fn prepare_input_paint(ctx: &Context) {
+        let plugin = ctx.plugin::<Self>();
+        let mut plugin = plugin.lock();
+        if let Some(state) = plugin.states.get_mut(&ctx.viewport_id()) {
+            state.has_reached_primary = false;
+            state.has_reached_secondary = false;
+            state.any_hovered = false;
+            state.selection_bbox_this_frame = Rect::NOTHING;
+            state.painted_selections.clear();
+        }
+    }
+
     /// Is there a label text selection in any viewport?
     pub fn has_selection(&self) -> bool {
         self.states
@@ -230,7 +277,203 @@ impl LabelSelectionState {
 }
 
 impl ViewportLabelSelectionState {
+    fn ordered_selected_text(&mut self, ctx: &Context) -> Option<String> {
+        let selection = self.selection?;
+        let sources: Vec<_> = self
+            .ordered_labels
+            .iter()
+            .filter(|source| {
+                ctx.pass_state(|pass| {
+                    pass.widgets.get(source.id).is_some_and(|widget| {
+                        widget.enabled && widget.visible && widget.layer_id == selection.layer_id
+                    })
+                }) && ctx.memory(|memory| memory.allows_interaction(selection.layer_id))
+            })
+            .cloned()
+            .collect();
+        let primary = sources
+            .iter()
+            .position(|source| source.id == selection.primary.widget_id)?;
+        let secondary = sources
+            .iter()
+            .position(|source| source.id == selection.secondary.widget_id)?;
+        self.text_to_copy.clear();
+        self.last_copied_galley_rect = None;
+        for (index, source) in sources
+            .iter()
+            .enumerate()
+            .take(primary.max(secondary) + 1)
+            .skip(primary.min(secondary))
+        {
+            let range = if primary == secondary {
+                CCursorRange::two(selection.primary.ccursor, selection.secondary.ccursor)
+            } else {
+                let first = if index == primary.min(secondary) {
+                    if primary < secondary {
+                        selection.primary.ccursor
+                    } else {
+                        selection.secondary.ccursor
+                    }
+                } else {
+                    source.galley.begin()
+                };
+                let last = if index == primary.max(secondary) {
+                    if primary > secondary {
+                        selection.primary.ccursor
+                    } else {
+                        selection.secondary.ccursor
+                    }
+                } else {
+                    source.galley.end()
+                };
+                CCursorRange::two(first, last)
+            };
+            let rect =
+                source.global_from_galley * Rect::from_min_size(Pos2::ZERO, source.galley.size());
+            self.copy_text(rect, &source.galley, &range);
+        }
+        Some(core::mem::take(&mut self.text_to_copy))
+    }
+
+    fn finish_selection_key_event(&mut self, ctx: &Context) {
+        let Some(selection) = &mut self.selection else {
+            return;
+        };
+        let Some(primary) = self
+            .ordered_labels
+            .iter()
+            .position(|source| source.id == selection.primary.widget_id)
+        else {
+            return;
+        };
+        let Some(secondary) = self
+            .ordered_labels
+            .iter()
+            .position(|source| source.id == selection.secondary.widget_id)
+        else {
+            return;
+        };
+        let source = &self.ordered_labels[primary];
+        if !ctx.pass_state(|pass| {
+            pass.widgets
+                .get(source.id)
+                .is_some_and(|widget| widget.enabled && widget.visible)
+        }) || !ctx.memory(|memory| memory.allows_interaction(selection.layer_id))
+        {
+            return;
+        }
+        let other = if primary == secondary {
+            selection.secondary.ccursor
+        } else if primary < secondary {
+            source.galley.end()
+        } else {
+            source.galley.begin()
+        };
+        let previous = CCursorRange::two(selection.primary.ccursor, other);
+        let mut range = previous;
+        if process_selection_key_events(ctx, &source.galley, source.id, &mut range) {
+            if range.primary != previous.primary {
+                selection.primary = WidgetTextCursor::new(
+                    source.id,
+                    range.primary,
+                    source.global_from_galley,
+                    &source.galley,
+                );
+            }
+            if range.secondary != previous.secondary {
+                selection.secondary = WidgetTextCursor::new(
+                    source.id,
+                    range.secondary,
+                    source.global_from_galley,
+                    &source.galley,
+                );
+            }
+            self.selection_is_dirty |= range != previous;
+            self.granular_drag = None;
+        }
+    }
+
+    fn finish_input_event(&mut self, ctx: &Context) {
+        self.ordered_labels
+            .retain(|source| ctx.pass_state(|pass| pass.widgets.contains(source.id)));
+        if self.selection.is_some_and(|selection| {
+            [selection.primary.widget_id, selection.secondary.widget_id]
+                .iter()
+                .any(|id| !self.ordered_labels.iter().any(|source| source.id == *id))
+        }) {
+            self.selection = None;
+            self.is_dragging = false;
+            self.granular_drag = None;
+        }
+        self.finish_selection_key_event(ctx);
+        if got_copy_event(ctx)
+            && let Some(text) = self.ordered_selected_text(ctx)
+            && !text.is_empty()
+        {
+            ctx.copy_text(text);
+        }
+        if ctx.input(|input| input.key_pressed(crate::Key::Escape)) {
+            self.selection = None;
+            self.is_dragging = false;
+            self.granular_drag = None;
+        }
+        let pointer_event = ctx.input(|input| {
+            input
+                .events
+                .iter()
+                .any(|event| matches!(event, Event::PointerMoved(_) | Event::PointerButton { .. }))
+        });
+        if !pointer_event {
+            return;
+        }
+        let hovered = self.ordered_labels.iter().rev().find(|source| {
+            ctx.pass_state(|pass| {
+                pass.widgets
+                    .get(source.id)
+                    .is_some_and(|widget| widget.enabled && widget.visible)
+            }) && ctx
+                .read_response(source.id)
+                .is_some_and(|response| response.contains_pointer())
+        });
+        if ctx.input(|input| input.pointer.any_pressed()) && hovered.is_none() {
+            self.selection = None;
+            self.is_dragging = false;
+            self.granular_drag = None;
+        }
+        if self.is_dragging {
+            let previous = self.selection;
+            self.has_reached_primary = false;
+            self.has_reached_secondary = false;
+            // Visit only the registered text sources, using the same selection
+            // calculation as ordinary labels. This performs no layout or paint.
+            for source in self.ordered_labels.clone() {
+                let eligible = ctx.pass_state(|pass| {
+                    pass.widgets
+                        .get(source.id)
+                        .is_some_and(|widget| widget.enabled && widget.visible)
+                });
+                if eligible
+                    && let Some(response) = ctx.read_response(source.id)
+                    && ctx.memory(|memory| memory.allows_interaction(response.layer_id))
+                {
+                    self.cursor_for(ctx, &response, &source);
+                }
+            }
+            if let (Some(previous), Some(current)) = (previous, self.selection) {
+                self.selection_is_dirty |= previous.primary.widget_id != current.primary.widget_id
+                    || previous.primary.ccursor != current.primary.ccursor
+                    || previous.secondary.widget_id != current.secondary.widget_id
+                    || previous.secondary.ccursor != current.secondary.ccursor;
+            }
+        }
+        if ctx.input(|input| input.pointer.any_released()) {
+            self.is_dragging = false;
+            self.granular_drag = None;
+        }
+    }
+
     fn on_begin_pass(&mut self, ui: &Ui) {
+        self.ordered_labels.clear();
         if ui.input(|i| i.pointer.any_pressed() && !i.modifiers.shift) {
             // Maybe a new selection is about to begin, but the old one is over:
             // state.selection = None; // TODO(emilk): this makes sense, but doesn't work as expected.
@@ -308,19 +551,30 @@ impl ViewportLabelSelectionState {
             }
         }
 
-        let pressed_escape = ui.input(|i| i.key_pressed(crate::Key::Escape));
-        let clicked_something_else = ui.input(|i| i.pointer.any_pressed()) && !self.any_hovered;
+        let ordered = ui.ctx().options(|o| o.ordered_input);
+        let pressed_escape = !ordered && ui.input(|i| i.key_pressed(crate::Key::Escape));
+        let clicked_something_else =
+            !ordered && ui.input(|i| i.pointer.any_pressed()) && !self.any_hovered;
         let delected_everything = pressed_escape || clicked_something_else;
 
         if delected_everything {
             self.selection = None;
         }
 
-        if ui.input(|i| i.pointer.any_released()) {
+        if !ordered && ui.input(|i| i.pointer.any_released()) {
             self.is_dragging = false;
         }
 
-        let text_to_copy = core::mem::take(&mut self.text_to_copy);
+        let text_to_copy = if ordered {
+            if self.report_selection {
+                self.ordered_selected_text(ui.ctx()).unwrap_or_default()
+            } else {
+                String::new()
+            }
+        } else {
+            core::mem::take(&mut self.text_to_copy)
+        };
+        self.ordered_labels.clear();
         if self.report_selection {
             self.selection_is_dirty = false;
             if !text_to_copy.is_empty() {
@@ -330,7 +584,7 @@ impl ViewportLabelSelectionState {
                     ));
             }
         }
-        if !text_to_copy.is_empty() && got_copy_event(ui.ctx()) {
+        if !ordered && !text_to_copy.is_empty() && got_copy_event(ui.ctx()) {
             ui.copy_text(text_to_copy);
         }
     }
@@ -391,11 +645,12 @@ impl ViewportLabelSelectionState {
 
     fn cursor_for(
         &mut self,
-        ui: &Ui,
+        ctx: &Context,
         response: &Response,
-        global_from_galley: TSTransform,
-        galley: &Galley,
+        source: &LabelText,
     ) -> TextCursorState {
+        let global_from_galley = source.global_from_galley;
+        let galley = &source.galley;
         let Some(selection) = &mut self.selection else {
             // Nothing selected.
             return TextCursorState::default();
@@ -408,17 +663,18 @@ impl ViewportLabelSelectionState {
 
         let galley_from_global = global_from_galley.inverse();
 
-        let multi_widget_text_select = ui.style().interaction.multi_widget_text_select;
+        let multi_widget_text_select = source.multi_widget_text_select;
 
         let may_select_widget =
             multi_widget_text_select || selection.primary.widget_id == response.id;
 
         if self.is_dragging
+            && ctx.is_handling_input()
             && may_select_widget
-            && let Some(pointer_pos) = ui.ctx().pointer_interact_pos()
+            && let Some(pointer_pos) = ctx.pointer_interact_pos()
         {
             let galley_rect = global_from_galley * Rect::from_min_size(Pos2::ZERO, galley.size());
-            let galley_rect = galley_rect.intersect(ui.clip_rect());
+            let galley_rect = galley_rect.intersect(source.clip_rect);
 
             let is_in_same_column = galley_rect
                 .x_range()
@@ -486,8 +742,7 @@ impl ViewportLabelSelectionState {
             {
                 // The user is dragging the text selection upwards, above the first selected widget (this one):
                 if DEBUG {
-                    ui.ctx()
-                        .debug_text(format!("Upwards drag; include {:?}", response.id));
+                    ctx.debug_text(format!("Upwards drag; include {:?}", response.id));
                 }
                 Some(galley.begin())
             } else if is_in_same_column
@@ -501,8 +756,7 @@ impl ViewportLabelSelectionState {
                 // We move the cursor to the end of this widget,
                 // (and we may do the same for the next widget too).
                 if DEBUG {
-                    ui.ctx()
-                        .debug_text(format!("Downwards drag; include {:?}", response.id));
+                    ctx.debug_text(format!("Downwards drag; include {:?}", response.id));
                 }
                 Some(galley.end())
             } else {
@@ -514,10 +768,10 @@ impl ViewportLabelSelectionState {
                     WidgetTextCursor::new(response.id, new_primary, global_from_galley, galley);
 
                 // We don't want the latency of `drag_started`.
-                let drag_started = ui.input(|i| i.pointer.any_pressed());
+                let drag_started = ctx.input(|i| i.pointer.any_pressed());
                 if drag_started {
                     if selection.layer_id == response.layer_id {
-                        if ui.input(|i| i.modifiers.shift) {
+                        if ctx.input(|i| i.modifiers.shift) {
                             // A continuation of a previous selection.
                         } else {
                             // A new selection in the same layer.
@@ -640,21 +894,41 @@ impl ViewportLabelSelectionState {
         let layer_from_global = global_from_layer.inverse();
         let galley_from_global = galley_from_layer * layer_from_global;
         let global_from_galley = global_from_layer * layer_from_galley;
+        let ordered = ui.ctx().options(|o| o.ordered_input);
+        let source = LabelText {
+            id: response.id,
+            galley: Arc::clone(galley),
+            global_from_galley,
+            multi_widget_text_select: ui.style().interaction.multi_widget_text_select,
+            clip_rect: ui.clip_rect(),
+        };
+        if ordered {
+            if let Some(previous) = self
+                .ordered_labels
+                .iter_mut()
+                .find(|source| source.id == response.id)
+            {
+                *previous = source.clone();
+            } else {
+                self.ordered_labels.push(source.clone());
+            }
+        }
 
         if response.hovered() {
             ui.set_cursor_icon(CursorIcon::Text);
         }
 
         self.any_hovered |= response.hovered();
-        self.is_dragging |= response.is_pointer_button_down_on(); // we don't want the initial latency of drag vs click decision
+        self.is_dragging |= ui.ctx().is_handling_input() && response.is_pointer_button_down_on(); // we don't want the initial latency of drag vs click decision
 
         let old_selection = self.selection;
 
-        let mut cursor_state = self.cursor_for(ui, response, global_from_galley, galley);
+        let mut cursor_state = self.cursor_for(ui.ctx(), response, &source);
 
         let old_range = cursor_state.range(galley);
 
-        if let Some(pointer_pos) = ui.ctx().pointer_interact_pos()
+        if ui.ctx().is_handling_input()
+            && let Some(pointer_pos) = ui.ctx().pointer_interact_pos()
             && response.contains_pointer()
         {
             let cursor_at_pointer =
@@ -716,13 +990,14 @@ impl ViewportLabelSelectionState {
 
             if let Some(selection) = &self.selection
                 && selection.primary.widget_id == response.id
+                && !ordered
                 && process_selection_key_events(ui.ctx(), galley, response.id, &mut cursor_range)
             {
                 // The keyboard changed the selection, so forget any double- or triple-clicked word/line:
                 self.granular_drag = None;
             }
 
-            if got_copy_event(ui.ctx()) || self.report_selection {
+            if !ordered && (got_copy_event(ui.ctx()) || self.report_selection) {
                 self.copy_text(galley_rect, galley, &cursor_range);
             }
 

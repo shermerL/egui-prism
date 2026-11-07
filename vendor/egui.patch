@@ -519,7 +519,43 @@ diff --git a/src/context.rs b/src/context.rs
                  memory.surrender_focus(id);
              }
          });
-@@ -3150,6 +3199,12 @@
+@@ -2928,6 +2977,16 @@
+ 
+         self.finish_root_ui();
+ 
++        // Ordered handlers and built-in selection have already had their turn.
++        // Keep the stock frame-wide shortcut rules and deferred zoom application.
++        let ordered_input = self.options(|o| o.ordered_input);
++        let ended_viewport = self.viewport_id();
++        if ordered_input {
++            self.write(|ctx| {
++                let viewport = ctx.viewport();
++                viewport.input.events = core::mem::take(&mut viewport.dispatch.shortcut_events);
++            });
++        }
+         if self.options(|o| o.zoom_with_keyboard) {
+             crate::gui_zoom::zoom_with_keyboard(self);
+         }
+@@ -2938,12 +2997,18 @@
+             }
+         }
+ 
++        if ordered_input {
++            self.input_mut(|input| input.events.clear());
++        }
+         self.sync_window_theme();
+ 
+         #[cfg(debug_assertions)]
+         self.debug_painting();
+ 
+         let mut output = self.write(|ctx| ctx.end_pass());
++        if ordered_input {
++            crate::text_selection::LabelSelectionState::clear_input_text(self, ended_viewport);
++        }
+ 
+         let plugins = self.read(|ctx| ctx.plugins.ordered_plugins());
+         plugins.on_output(self, &mut output);
+@@ -3150,6 +3215,12 @@
          let ended_viewport_id = self.viewport_id();
          let viewport = self.viewports.entry(ended_viewport_id).or_default();
          let pixels_per_point = viewport.input.pixels_per_point;
@@ -536,7 +572,7 @@ diff --git a/src/context/input_dispatch.rs b/src/context/input_dispatch.rs
 new file mode 100644
 --- /dev/null
 +++ b/src/context/input_dispatch.rs
-@@ -0,0 +1,748 @@
+@@ -0,0 +1,789 @@
 +use super::*;
 +use crate::{Event, InputState, Key, RawInput};
 +
@@ -550,6 +586,7 @@ new file mode 100644
 +    press_focus_revision: Option<u64>,
 +    events: Option<alloc::vec::IntoIter<Event>>,
 +    header: Option<RawInput>,
++    pub(super) shortcut_events: Vec<Event>,
 +    index: usize,
 +    timed_targets: alloc::vec::IntoIter<Id>,
 +    owners: IdMap<Id>,
@@ -626,6 +663,7 @@ new file mode 100644
 +            v.dispatch.paint_before = Some(core::mem::take(&mut v.graphics));
 +            v.input.events.clear();
 +        });
++        crate::text_selection::LabelSelectionState::clear_input_text(self, self.viewport_id());
 +    }
 +    /// Register changed structure without consuming the event currently being handled.
 +    pub fn input_layout<R>(&self, layout: impl FnOnce() -> R) -> R {
@@ -804,7 +842,24 @@ new file mode 100644
 +    }
 +    /// Dispatch the next raw event or time-driven interaction against current geometry.
 +    pub fn next_input_event(&self) -> Option<RoutedInput> {
-+        self.write(|ctx| {
++        let (finish_event, already_finished) = self.read(|ctx| {
++            let dispatch = &ctx.viewports[&ctx.viewport_id()].dispatch;
++            (dispatch.in_event && !dispatch.finished, dispatch.finished)
++        });
++        if finish_event {
++            crate::text_selection::LabelSelectionState::finish_input_event(self);
++            self.write(|ctx| {
++                let viewport = ctx.viewport();
++                viewport.dispatch.shortcut_events.extend(
++                    viewport
++                        .input
++                        .events
++                        .drain(..)
++                        .filter(|event| matches!(event, Event::Key { .. })),
++                );
++            });
++        }
++        let routed = self.write(|ctx| {
 +            assert!(
 +                ctx.memory.options.ordered_input,
 +                "enable ordered input before using its phases"
@@ -986,7 +1041,11 @@ new file mode 100644
 +                ctx.memory.options.input_options,
 +            );
 +            viewport.input.raw = original_raw;
-+            let (layers, hits) = current_hits(viewport, &ctx.memory);
++            let (layers, hits) = if let Event::MiddleClickPaste { pos, .. } = &event {
++                current_hits_at(viewport, &ctx.memory, Some(*pos))
++            } else {
++                current_hits(viewport, &ctx.memory)
++            };
 +            viewport.hits = hits;
 +            let release_owner = ctx
 +                .memory
@@ -1022,6 +1081,9 @@ new file mode 100644
 +                    .potential_drag_id
 +                    .or_else(|| viewport.hits.drag.or(viewport.hits.click).map(|w| w.id)),
 +                Event::PointerGone => None,
++                Event::MiddleClickPaste { .. } => {
++                    viewport.hits.click.or(viewport.hits.drag).map(|w| w.id)
++                }
 +                _ => ctx.memory.focused(),
 +            };
 +            if let Event::AccessKitActionRequest(request) = &event {
@@ -1196,11 +1258,29 @@ new file mode 100644
 +                target,
 +                trigger: InputTrigger::Event { index, event },
 +            })
++        });
++        if routed.is_none() && !already_finished {
++            crate::text_selection::LabelSelectionState::prepare_input_paint(self);
++        }
++        routed
++    }
++
++    pub(crate) fn is_handling_input(&self) -> bool {
++        self.read(|ctx| {
++            !ctx.memory.options.ordered_input || ctx.viewports[&ctx.viewport_id()].dispatch.in_event
 +        })
 +    }
 +}
 +
 +fn current_hits(viewport: &ViewportState, memory: &Memory) -> (Vec<LayerId>, WidgetHits) {
++    current_hits_at(viewport, memory, viewport.input.pointer.interact_pos())
++}
++
++fn current_hits_at(
++    viewport: &ViewportState,
++    memory: &Memory,
++    pos: Option<Pos2>,
++) -> (Vec<LayerId>, WidgetHits) {
 +    let mut layers: Vec<_> = viewport
 +        .this_pass
 +        .widgets
@@ -1209,10 +1289,7 @@ new file mode 100644
 +        .collect();
 +    let order = memory.areas().order_current();
 +    layers.sort_by_key(|layer| (layer.order, order.iter().position(|entry| entry == layer)));
-+    let mut hits = viewport
-+        .input
-+        .pointer
-+        .interact_pos()
++    let mut hits = pos
 +        .map(|pos| {
 +            crate::hit_test::hit_test_filtered(
 +                &viewport.this_pass.widgets,
@@ -1971,6 +2048,465 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
 +
 +#[cfg(test)]
 +mod focus_policy_tests;
+diff --git a/src/text_selection/label_text_selection.rs b/src/text_selection/label_text_selection.rs
+--- a/src/text_selection/label_text_selection.rs
++++ b/src/text_selection/label_text_selection.rs
+@@ -106,11 +106,23 @@
+     states: ViewportIdMap<ViewportLabelSelectionState>,
+ }
+ 
++// Immutable text sources for this pass's selection output. Geometry ownership and
++// hit testing stay in the existing widget tree; no Ui or input state is retained.
++#[derive(Clone, Debug)]
++struct LabelText {
++    id: Id,
++    galley: Arc<Galley>,
++    global_from_galley: TSTransform,
++    multi_widget_text_select: bool,
++    clip_rect: Rect,
++}
++
+ /// Text selection state for all labels in one viewport.
+ #[derive(Clone, Debug)]
+ struct ViewportLabelSelectionState {
+     /// The current selection, if any.
+     selection: Option<CurrentSelection>,
++    ordered_labels: Vec<LabelText>,
+ 
+     selection_bbox_last_frame: Rect,
+     selection_bbox_this_frame: Rect,
+@@ -151,6 +163,7 @@
+     fn default() -> Self {
+         Self {
+             selection: Default::default(),
++            ordered_labels: Vec::new(),
+             selection_bbox_last_frame: Rect::NOTHING,
+             selection_bbox_this_frame: Rect::NOTHING,
+             any_hovered: Default::default(),
+@@ -187,9 +200,43 @@
+             self.states.remove(&viewport_id);
+         }
+     }
++
++    fn output_hook(&mut self, ctx: &Context, output: &mut crate::FullOutput) {
++        if ctx.options(|options| options.ordered_input) {
++            self.states
++                .retain(|id, _| output.viewport_output.contains_key(id));
++        }
++    }
+ }
+ 
+ impl LabelSelectionState {
++    pub(crate) fn clear_input_text(ctx: &Context, viewport: crate::ViewportId) {
++        let plugin = ctx.plugin::<Self>();
++        if let Some(state) = plugin.lock().states.get_mut(&viewport) {
++            state.ordered_labels.clear();
++        }
++    }
++
++    pub(crate) fn finish_input_event(ctx: &Context) {
++        let plugin = ctx.plugin::<Self>();
++        let mut plugin = plugin.lock();
++        if let Some(state) = plugin.states.get_mut(&ctx.viewport_id()) {
++            state.finish_input_event(ctx);
++        }
++    }
++
++    pub(crate) fn prepare_input_paint(ctx: &Context) {
++        let plugin = ctx.plugin::<Self>();
++        let mut plugin = plugin.lock();
++        if let Some(state) = plugin.states.get_mut(&ctx.viewport_id()) {
++            state.has_reached_primary = false;
++            state.has_reached_secondary = false;
++            state.any_hovered = false;
++            state.selection_bbox_this_frame = Rect::NOTHING;
++            state.painted_selections.clear();
++        }
++    }
++
+     /// Is there a label text selection in any viewport?
+     pub fn has_selection(&self) -> bool {
+         self.states
+@@ -230,7 +277,203 @@
+ }
+ 
+ impl ViewportLabelSelectionState {
++    fn ordered_selected_text(&mut self, ctx: &Context) -> Option<String> {
++        let selection = self.selection?;
++        let sources: Vec<_> = self
++            .ordered_labels
++            .iter()
++            .filter(|source| {
++                ctx.pass_state(|pass| {
++                    pass.widgets.get(source.id).is_some_and(|widget| {
++                        widget.enabled && widget.visible && widget.layer_id == selection.layer_id
++                    })
++                }) && ctx.memory(|memory| memory.allows_interaction(selection.layer_id))
++            })
++            .cloned()
++            .collect();
++        let primary = sources
++            .iter()
++            .position(|source| source.id == selection.primary.widget_id)?;
++        let secondary = sources
++            .iter()
++            .position(|source| source.id == selection.secondary.widget_id)?;
++        self.text_to_copy.clear();
++        self.last_copied_galley_rect = None;
++        for (index, source) in sources
++            .iter()
++            .enumerate()
++            .take(primary.max(secondary) + 1)
++            .skip(primary.min(secondary))
++        {
++            let range = if primary == secondary {
++                CCursorRange::two(selection.primary.ccursor, selection.secondary.ccursor)
++            } else {
++                let first = if index == primary.min(secondary) {
++                    if primary < secondary {
++                        selection.primary.ccursor
++                    } else {
++                        selection.secondary.ccursor
++                    }
++                } else {
++                    source.galley.begin()
++                };
++                let last = if index == primary.max(secondary) {
++                    if primary > secondary {
++                        selection.primary.ccursor
++                    } else {
++                        selection.secondary.ccursor
++                    }
++                } else {
++                    source.galley.end()
++                };
++                CCursorRange::two(first, last)
++            };
++            let rect =
++                source.global_from_galley * Rect::from_min_size(Pos2::ZERO, source.galley.size());
++            self.copy_text(rect, &source.galley, &range);
++        }
++        Some(core::mem::take(&mut self.text_to_copy))
++    }
++
++    fn finish_selection_key_event(&mut self, ctx: &Context) {
++        let Some(selection) = &mut self.selection else {
++            return;
++        };
++        let Some(primary) = self
++            .ordered_labels
++            .iter()
++            .position(|source| source.id == selection.primary.widget_id)
++        else {
++            return;
++        };
++        let Some(secondary) = self
++            .ordered_labels
++            .iter()
++            .position(|source| source.id == selection.secondary.widget_id)
++        else {
++            return;
++        };
++        let source = &self.ordered_labels[primary];
++        if !ctx.pass_state(|pass| {
++            pass.widgets
++                .get(source.id)
++                .is_some_and(|widget| widget.enabled && widget.visible)
++        }) || !ctx.memory(|memory| memory.allows_interaction(selection.layer_id))
++        {
++            return;
++        }
++        let other = if primary == secondary {
++            selection.secondary.ccursor
++        } else if primary < secondary {
++            source.galley.end()
++        } else {
++            source.galley.begin()
++        };
++        let previous = CCursorRange::two(selection.primary.ccursor, other);
++        let mut range = previous;
++        if process_selection_key_events(ctx, &source.galley, source.id, &mut range) {
++            if range.primary != previous.primary {
++                selection.primary = WidgetTextCursor::new(
++                    source.id,
++                    range.primary,
++                    source.global_from_galley,
++                    &source.galley,
++                );
++            }
++            if range.secondary != previous.secondary {
++                selection.secondary = WidgetTextCursor::new(
++                    source.id,
++                    range.secondary,
++                    source.global_from_galley,
++                    &source.galley,
++                );
++            }
++            self.selection_is_dirty |= range != previous;
++            self.granular_drag = None;
++        }
++    }
++
++    fn finish_input_event(&mut self, ctx: &Context) {
++        self.ordered_labels
++            .retain(|source| ctx.pass_state(|pass| pass.widgets.contains(source.id)));
++        if self.selection.is_some_and(|selection| {
++            [selection.primary.widget_id, selection.secondary.widget_id]
++                .iter()
++                .any(|id| !self.ordered_labels.iter().any(|source| source.id == *id))
++        }) {
++            self.selection = None;
++            self.is_dragging = false;
++            self.granular_drag = None;
++        }
++        self.finish_selection_key_event(ctx);
++        if got_copy_event(ctx)
++            && let Some(text) = self.ordered_selected_text(ctx)
++            && !text.is_empty()
++        {
++            ctx.copy_text(text);
++        }
++        if ctx.input(|input| input.key_pressed(crate::Key::Escape)) {
++            self.selection = None;
++            self.is_dragging = false;
++            self.granular_drag = None;
++        }
++        let pointer_event = ctx.input(|input| {
++            input
++                .events
++                .iter()
++                .any(|event| matches!(event, Event::PointerMoved(_) | Event::PointerButton { .. }))
++        });
++        if !pointer_event {
++            return;
++        }
++        let hovered = self.ordered_labels.iter().rev().find(|source| {
++            ctx.pass_state(|pass| {
++                pass.widgets
++                    .get(source.id)
++                    .is_some_and(|widget| widget.enabled && widget.visible)
++            }) && ctx
++                .read_response(source.id)
++                .is_some_and(|response| response.contains_pointer())
++        });
++        if ctx.input(|input| input.pointer.any_pressed()) && hovered.is_none() {
++            self.selection = None;
++            self.is_dragging = false;
++            self.granular_drag = None;
++        }
++        if self.is_dragging {
++            let previous = self.selection;
++            self.has_reached_primary = false;
++            self.has_reached_secondary = false;
++            // Visit only the registered text sources, using the same selection
++            // calculation as ordinary labels. This performs no layout or paint.
++            for source in self.ordered_labels.clone() {
++                let eligible = ctx.pass_state(|pass| {
++                    pass.widgets
++                        .get(source.id)
++                        .is_some_and(|widget| widget.enabled && widget.visible)
++                });
++                if eligible
++                    && let Some(response) = ctx.read_response(source.id)
++                    && ctx.memory(|memory| memory.allows_interaction(response.layer_id))
++                {
++                    self.cursor_for(ctx, &response, &source);
++                }
++            }
++            if let (Some(previous), Some(current)) = (previous, self.selection) {
++                self.selection_is_dirty |= previous.primary.widget_id != current.primary.widget_id
++                    || previous.primary.ccursor != current.primary.ccursor
++                    || previous.secondary.widget_id != current.secondary.widget_id
++                    || previous.secondary.ccursor != current.secondary.ccursor;
++            }
++        }
++        if ctx.input(|input| input.pointer.any_released()) {
++            self.is_dragging = false;
++            self.granular_drag = None;
++        }
++    }
++
+     fn on_begin_pass(&mut self, ui: &Ui) {
++        self.ordered_labels.clear();
+         if ui.input(|i| i.pointer.any_pressed() && !i.modifiers.shift) {
+             // Maybe a new selection is about to begin, but the old one is over:
+             // state.selection = None; // TODO(emilk): this makes sense, but doesn't work as expected.
+@@ -308,19 +551,30 @@
+             }
+         }
+ 
+-        let pressed_escape = ui.input(|i| i.key_pressed(crate::Key::Escape));
+-        let clicked_something_else = ui.input(|i| i.pointer.any_pressed()) && !self.any_hovered;
++        let ordered = ui.ctx().options(|o| o.ordered_input);
++        let pressed_escape = !ordered && ui.input(|i| i.key_pressed(crate::Key::Escape));
++        let clicked_something_else =
++            !ordered && ui.input(|i| i.pointer.any_pressed()) && !self.any_hovered;
+         let delected_everything = pressed_escape || clicked_something_else;
+ 
+         if delected_everything {
+             self.selection = None;
+         }
+ 
+-        if ui.input(|i| i.pointer.any_released()) {
++        if !ordered && ui.input(|i| i.pointer.any_released()) {
+             self.is_dragging = false;
+         }
+ 
+-        let text_to_copy = core::mem::take(&mut self.text_to_copy);
++        let text_to_copy = if ordered {
++            if self.report_selection {
++                self.ordered_selected_text(ui.ctx()).unwrap_or_default()
++            } else {
++                String::new()
++            }
++        } else {
++            core::mem::take(&mut self.text_to_copy)
++        };
++        self.ordered_labels.clear();
+         if self.report_selection {
+             self.selection_is_dirty = false;
+             if !text_to_copy.is_empty() {
+@@ -330,7 +584,7 @@
+                     ));
+             }
+         }
+-        if !text_to_copy.is_empty() && got_copy_event(ui.ctx()) {
++        if !ordered && !text_to_copy.is_empty() && got_copy_event(ui.ctx()) {
+             ui.copy_text(text_to_copy);
+         }
+     }
+@@ -391,11 +645,12 @@
+ 
+     fn cursor_for(
+         &mut self,
+-        ui: &Ui,
++        ctx: &Context,
+         response: &Response,
+-        global_from_galley: TSTransform,
+-        galley: &Galley,
++        source: &LabelText,
+     ) -> TextCursorState {
++        let global_from_galley = source.global_from_galley;
++        let galley = &source.galley;
+         let Some(selection) = &mut self.selection else {
+             // Nothing selected.
+             return TextCursorState::default();
+@@ -408,17 +663,18 @@
+ 
+         let galley_from_global = global_from_galley.inverse();
+ 
+-        let multi_widget_text_select = ui.style().interaction.multi_widget_text_select;
++        let multi_widget_text_select = source.multi_widget_text_select;
+ 
+         let may_select_widget =
+             multi_widget_text_select || selection.primary.widget_id == response.id;
+ 
+         if self.is_dragging
++            && ctx.is_handling_input()
+             && may_select_widget
+-            && let Some(pointer_pos) = ui.ctx().pointer_interact_pos()
++            && let Some(pointer_pos) = ctx.pointer_interact_pos()
+         {
+             let galley_rect = global_from_galley * Rect::from_min_size(Pos2::ZERO, galley.size());
+-            let galley_rect = galley_rect.intersect(ui.clip_rect());
++            let galley_rect = galley_rect.intersect(source.clip_rect);
+ 
+             let is_in_same_column = galley_rect
+                 .x_range()
+@@ -486,8 +742,7 @@
+             {
+                 // The user is dragging the text selection upwards, above the first selected widget (this one):
+                 if DEBUG {
+-                    ui.ctx()
+-                        .debug_text(format!("Upwards drag; include {:?}", response.id));
++                    ctx.debug_text(format!("Upwards drag; include {:?}", response.id));
+                 }
+                 Some(galley.begin())
+             } else if is_in_same_column
+@@ -501,8 +756,7 @@
+                 // We move the cursor to the end of this widget,
+                 // (and we may do the same for the next widget too).
+                 if DEBUG {
+-                    ui.ctx()
+-                        .debug_text(format!("Downwards drag; include {:?}", response.id));
++                    ctx.debug_text(format!("Downwards drag; include {:?}", response.id));
+                 }
+                 Some(galley.end())
+             } else {
+@@ -514,10 +768,10 @@
+                     WidgetTextCursor::new(response.id, new_primary, global_from_galley, galley);
+ 
+                 // We don't want the latency of `drag_started`.
+-                let drag_started = ui.input(|i| i.pointer.any_pressed());
++                let drag_started = ctx.input(|i| i.pointer.any_pressed());
+                 if drag_started {
+                     if selection.layer_id == response.layer_id {
+-                        if ui.input(|i| i.modifiers.shift) {
++                        if ctx.input(|i| i.modifiers.shift) {
+                             // A continuation of a previous selection.
+                         } else {
+                             // A new selection in the same layer.
+@@ -640,21 +894,41 @@
+         let layer_from_global = global_from_layer.inverse();
+         let galley_from_global = galley_from_layer * layer_from_global;
+         let global_from_galley = global_from_layer * layer_from_galley;
++        let ordered = ui.ctx().options(|o| o.ordered_input);
++        let source = LabelText {
++            id: response.id,
++            galley: Arc::clone(galley),
++            global_from_galley,
++            multi_widget_text_select: ui.style().interaction.multi_widget_text_select,
++            clip_rect: ui.clip_rect(),
++        };
++        if ordered {
++            if let Some(previous) = self
++                .ordered_labels
++                .iter_mut()
++                .find(|source| source.id == response.id)
++            {
++                *previous = source.clone();
++            } else {
++                self.ordered_labels.push(source.clone());
++            }
++        }
+ 
+         if response.hovered() {
+             ui.set_cursor_icon(CursorIcon::Text);
+         }
+ 
+         self.any_hovered |= response.hovered();
+-        self.is_dragging |= response.is_pointer_button_down_on(); // we don't want the initial latency of drag vs click decision
++        self.is_dragging |= ui.ctx().is_handling_input() && response.is_pointer_button_down_on(); // we don't want the initial latency of drag vs click decision
+ 
+         let old_selection = self.selection;
+ 
+-        let mut cursor_state = self.cursor_for(ui, response, global_from_galley, galley);
++        let mut cursor_state = self.cursor_for(ui.ctx(), response, &source);
+ 
+         let old_range = cursor_state.range(galley);
+ 
+-        if let Some(pointer_pos) = ui.ctx().pointer_interact_pos()
++        if ui.ctx().is_handling_input()
++            && let Some(pointer_pos) = ui.ctx().pointer_interact_pos()
+             && response.contains_pointer()
+         {
+             let cursor_at_pointer =
+@@ -716,13 +990,14 @@
+ 
+             if let Some(selection) = &self.selection
+                 && selection.primary.widget_id == response.id
++                && !ordered
+                 && process_selection_key_events(ui.ctx(), galley, response.id, &mut cursor_range)
+             {
+                 // The keyboard changed the selection, so forget any double- or triple-clicked word/line:
+                 self.granular_drag = None;
+             }
+ 
+-            if got_copy_event(ui.ctx()) || self.report_selection {
++            if !ordered && (got_copy_event(ui.ctx()) || self.report_selection) {
+                 self.copy_text(galley_rect, galley, &cursor_range);
+             }
+ 
 diff --git a/src/widget_rect.rs b/src/widget_rect.rs
 --- a/src/widget_rect.rs
 +++ b/src/widget_rect.rs

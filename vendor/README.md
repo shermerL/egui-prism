@@ -31,6 +31,7 @@ source pin.
 | Focus state | `src/memory/mod.rs`, `src/memory/focus_policy_tests.rs` | Current-pass policy registration, ordered focus changes, interruption generations, current layer ordering and closed-viewport focus pruning |
 | Authoritative geometry | `src/hit_test.rs`, `src/widget_rect.rs` | Shape predicates before native hit selection and removal of closed layer geometry |
 | Modal placement | `src/containers/area.rs`, `src/containers/modal.rs` | Explicit layout-only measurement/registration and current modal barrier after stock Area placement |
+| Built-in selection | `src/text_selection/label_text_selection.rs` | Event-time Label copy/cancel and shared stock range calculation; pass-local text references with explicit cleanup |
 | Stock editor migration | `src/widgets/text_edit/builder.rs` | Register its existing navigation policy before ordered first-focus input and preserve host focus on capture release |
 
 The patch uses the existing `this_pass.widgets`, native hit selection, egui

@@ -11,6 +11,7 @@ pub(super) struct DispatchState {
     press_focus_revision: Option<u64>,
     events: Option<alloc::vec::IntoIter<Event>>,
     header: Option<RawInput>,
+    pub(super) shortcut_events: Vec<Event>,
     index: usize,
     timed_targets: alloc::vec::IntoIter<Id>,
     owners: IdMap<Id>,
@@ -87,6 +88,7 @@ impl Context {
             v.dispatch.paint_before = Some(core::mem::take(&mut v.graphics));
             v.input.events.clear();
         });
+        crate::text_selection::LabelSelectionState::clear_input_text(self, self.viewport_id());
     }
     /// Register changed structure without consuming the event currently being handled.
     pub fn input_layout<R>(&self, layout: impl FnOnce() -> R) -> R {
@@ -265,7 +267,24 @@ impl Context {
     }
     /// Dispatch the next raw event or time-driven interaction against current geometry.
     pub fn next_input_event(&self) -> Option<RoutedInput> {
-        self.write(|ctx| {
+        let (finish_event, already_finished) = self.read(|ctx| {
+            let dispatch = &ctx.viewports[&ctx.viewport_id()].dispatch;
+            (dispatch.in_event && !dispatch.finished, dispatch.finished)
+        });
+        if finish_event {
+            crate::text_selection::LabelSelectionState::finish_input_event(self);
+            self.write(|ctx| {
+                let viewport = ctx.viewport();
+                viewport.dispatch.shortcut_events.extend(
+                    viewport
+                        .input
+                        .events
+                        .drain(..)
+                        .filter(|event| matches!(event, Event::Key { .. })),
+                );
+            });
+        }
+        let routed = self.write(|ctx| {
             assert!(
                 ctx.memory.options.ordered_input,
                 "enable ordered input before using its phases"
@@ -447,7 +466,11 @@ impl Context {
                 ctx.memory.options.input_options,
             );
             viewport.input.raw = original_raw;
-            let (layers, hits) = current_hits(viewport, &ctx.memory);
+            let (layers, hits) = if let Event::MiddleClickPaste { pos, .. } = &event {
+                current_hits_at(viewport, &ctx.memory, Some(*pos))
+            } else {
+                current_hits(viewport, &ctx.memory)
+            };
             viewport.hits = hits;
             let release_owner = ctx
                 .memory
@@ -483,6 +506,9 @@ impl Context {
                     .potential_drag_id
                     .or_else(|| viewport.hits.drag.or(viewport.hits.click).map(|w| w.id)),
                 Event::PointerGone => None,
+                Event::MiddleClickPaste { .. } => {
+                    viewport.hits.click.or(viewport.hits.drag).map(|w| w.id)
+                }
                 _ => ctx.memory.focused(),
             };
             if let Event::AccessKitActionRequest(request) = &event {
@@ -657,11 +683,29 @@ impl Context {
                 target,
                 trigger: InputTrigger::Event { index, event },
             })
+        });
+        if routed.is_none() && !already_finished {
+            crate::text_selection::LabelSelectionState::prepare_input_paint(self);
+        }
+        routed
+    }
+
+    pub(crate) fn is_handling_input(&self) -> bool {
+        self.read(|ctx| {
+            !ctx.memory.options.ordered_input || ctx.viewports[&ctx.viewport_id()].dispatch.in_event
         })
     }
 }
 
 fn current_hits(viewport: &ViewportState, memory: &Memory) -> (Vec<LayerId>, WidgetHits) {
+    current_hits_at(viewport, memory, viewport.input.pointer.interact_pos())
+}
+
+fn current_hits_at(
+    viewport: &ViewportState,
+    memory: &Memory,
+    pos: Option<Pos2>,
+) -> (Vec<LayerId>, WidgetHits) {
     let mut layers: Vec<_> = viewport
         .this_pass
         .widgets
@@ -670,10 +714,7 @@ fn current_hits(viewport: &ViewportState, memory: &Memory) -> (Vec<LayerId>, Wid
         .collect();
     let order = memory.areas().order_current();
     layers.sort_by_key(|layer| (layer.order, order.iter().position(|entry| entry == layer)));
-    let mut hits = viewport
-        .input
-        .pointer
-        .interact_pos()
+    let mut hits = pos
         .map(|pos| {
             crate::hit_test::hit_test_filtered(
                 &viewport.this_pass.widgets,
