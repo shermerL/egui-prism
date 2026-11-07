@@ -1,7 +1,10 @@
-//! Shared native and browser acceptance gallery for the component library.
+//! Native acceptance gallery for the component library.
+
+mod native;
 
 mod buttons;
 mod checkboxes;
+mod compositing;
 mod interaction;
 mod text_inputs;
 
@@ -16,9 +19,12 @@ enum Case {
     Checkboxes,
     Interaction,
     Layout,
+    Compositing,
 }
 
 struct Gallery {
+    compositor: egui_prism_wgpu::Host,
+    compositing: compositing::CompositingCase,
     dark: bool,
     case: Case,
     narrow: bool,
@@ -29,11 +35,22 @@ struct Gallery {
 }
 
 impl Gallery {
-    fn new(context: &egui::Context) -> Self {
+    fn new(
+        context: &egui::Context,
+        device: &wgpu::Device,
+    ) -> Result<Self, egui_prism::compositing::Error> {
+        let compositor = egui_prism_wgpu::Host::new(context, device)?;
+        let automatic = std::env::args().any(|arg| arg == "--compositing-check");
         egui_prism::theme::install_fonts(context, egui::FontDefinitions::default());
         let gallery = Self {
+            compositor,
+            compositing: compositing::CompositingCase::new(context, automatic),
             dark: false,
-            case: Case::Theme,
+            case: if automatic {
+                Case::Compositing
+            } else {
+                Case::Theme
+            },
             narrow: false,
             interaction: InteractionCase::default(),
             buttons: buttons::ButtonCase::new(context),
@@ -41,7 +58,7 @@ impl Gallery {
             checkboxes: checkboxes::CheckboxCase::default(),
         };
         gallery.apply_theme(context);
-        gallery
+        Ok(gallery)
     }
 
     fn theme(&self) -> Theme {
@@ -63,9 +80,40 @@ impl Gallery {
     }
 }
 
-impl eframe::App for Gallery {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+impl Gallery {
+    fn ui(&mut self, ui: &mut egui::Ui, device: &wgpu::Device) {
+        self.compositor.check().expect("compositing host failure");
+        if self.compositing.take_restart_request() {
+            let rect = egui::Rect::from_min_size(egui::pos2(4.0, 4.0), egui::vec2(8.0, 8.0));
+            let painter = egui::Painter::new(
+                ui.ctx().clone(),
+                egui::LayerId::new(
+                    egui::Order::Foreground,
+                    egui::Id::unique("revoked-compositor"),
+                ),
+                rect,
+            );
+            let group = egui_prism::compositing::Group::new(
+                rect,
+                1.0,
+                vec![egui_prism::compositing::Item::Shape(
+                    egui::epaint::ClippedShape::new(
+                        rect,
+                        egui::Shape::rect_filled(rect, 0, egui::Color32::RED),
+                    ),
+                )],
+            )
+            .expect("stale callback probe");
+            egui_prism::compositing::paint(&painter, group).expect("old host");
+            self.compositor.invalidate();
+            self.compositor =
+                egui_prism_wgpu::Host::new(ui.ctx(), device).expect("restart compositor");
+        }
         let theme = self.theme();
+        if self.compositing.automatic() {
+            egui::CentralPanel::default().show(ui, |ui| self.compositing.show(ui, &theme));
+            return;
+        }
         egui::CentralPanel::default()
             .frame(egui::Frame::central_panel(ui.style()).inner_margin(theme.metrics.page_margin))
             .show(ui, |ui| {
@@ -73,6 +121,7 @@ impl eframe::App for Gallery {
                 ui.label("Parity correction in progress: reference tokens and Geist fonts; components await individual acceptance.");
                 ui.horizontal_wrapped(|ui| {
                     ui.selectable_value(&mut self.case, Case::Theme, "Theme");
+                    ui.selectable_value(&mut self.case, Case::Compositing, "Compositing");
                     ui.selectable_value(&mut self.case, Case::Buttons, "Buttons");
                     ui.selectable_value(&mut self.case, Case::Inputs, "Inputs");
                     ui.selectable_value(&mut self.case, Case::Checkboxes, "Checkboxes");
@@ -99,6 +148,7 @@ impl eframe::App for Gallery {
                 egui::ScrollArea::vertical().id_salt("gallery-content").show(ui, |ui| {
                     if self.narrow { ui.set_max_width(ui.available_width().min(320.0)); }
                     match self.case {
+                        Case::Compositing => self.compositing.show(ui, &theme),
                         Case::Theme => {
                             ui.heading("Semantic palette");
                             show_palette(ui, &theme);
@@ -126,17 +176,13 @@ impl eframe::App for Gallery {
                     }
                     ui.separator();
                     ui.small(format!("Development v{} · {} · {}", env!("CARGO_PKG_VERSION"),
-                        if cfg!(target_arch = "wasm32") { "WebGL 2" } else { "native OpenGL" },
+                        if cfg!(target_os = "macos") { "wgpu Metal" } else if cfg!(target_os = "windows") { "wgpu DX12" } else { "wgpu Vulkan" },
                         if cfg!(debug_assertions) { "debug" } else { "release" }));
                     ui.small(format!("Build: {}", option_env!("EGUI_PRISM_BUILD_ID").unwrap_or("local development")));
                     ui.horizontal_wrapped(|ui| {
                         ui.hyperlink_to("Source", "https://github.com/shermerL/egui-prism");
-                        ui.hyperlink_to("MIT license", if cfg!(target_arch = "wasm32") {
-                            "/egui-prism/LICENSE"
-                        } else { "https://github.com/shermerL/egui-prism/blob/main/LICENSE" });
-                        ui.hyperlink_to("Third-party notices", if cfg!(target_arch = "wasm32") {
-                            "/egui-prism/THIRD_PARTY_NOTICES.md"
-                        } else { "https://github.com/shermerL/egui-prism/blob/main/THIRD_PARTY_NOTICES.md" });
+                        ui.hyperlink_to("MIT license", "https://github.com/shermerL/egui-prism/blob/main/LICENSE");
+                        ui.hyperlink_to("Third-party notices", "https://github.com/shermerL/egui-prism/blob/main/THIRD_PARTY_NOTICES.md");
                     });
                 });
             });
@@ -190,61 +236,6 @@ fn show_palette(ui: &mut egui::Ui, theme: &Theme) {
         });
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-fn main() -> eframe::Result {
-    let options = eframe::NativeOptions {
-        renderer: eframe::Renderer::Glow,
-        viewport: egui::ViewportBuilder::default().with_inner_size([720.0, 480.0]),
-        ..Default::default()
-    };
-    eframe::run_native(
-        "egui-prism gallery",
-        options,
-        Box::new(|cc| Ok(Box::new(Gallery::new(&cc.egui_ctx)))),
-    )
-}
-
-#[cfg(target_arch = "wasm32")]
-fn main() {
-    wasm_bindgen_futures::spawn_local(async {
-        use wasm_bindgen::JsCast as _;
-
-        let document = web_sys::window()
-            .expect("The gallery requires a browser window")
-            .document()
-            .expect("The gallery requires a document");
-        let canvas = document
-            .get_element_by_id("gallery")
-            .expect("The gallery canvas is part of index.html")
-            .dyn_into::<web_sys::HtmlCanvasElement>()
-            .expect("The gallery element must be a canvas");
-        let runner = eframe::WebRunner::new();
-        let result = runner
-            .start(
-                canvas,
-                eframe::WebOptions {
-                    renderer: eframe::Renderer::Glow,
-                    webgl_context_option: eframe::WebGlContextOption::WebGl2,
-                    ..Default::default()
-                },
-                Box::new(|cc| Ok(Box::new(Gallery::new(&cc.egui_ctx)))),
-            )
-            .await;
-        match result {
-            Ok(()) => {
-                if let Some(status) = document.get_element_by_id("status") {
-                    status.remove();
-                }
-            }
-            Err(error) => {
-                runner.destroy();
-                web_sys::console::error_1(&error);
-                if let Some(status) = document.get_element_by_id("status") {
-                    status.set_text_content(Some(
-                        "The gallery could not start. WebGL 2 is required. See the browser console for details.",
-                    ));
-                }
-            }
-        }
-    });
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    native::run()
 }

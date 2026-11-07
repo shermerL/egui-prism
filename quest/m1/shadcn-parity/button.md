@@ -23,9 +23,12 @@ with a theme color. Validate final pixels on arbitrary parent backgrounds,
 translucent images and overlapping shadows, then repeat native/browser acceptance,
 independent review, latest-head GitHub reviews and CI before completing this Quest.
 
-
 Also close the focus-acquisition gap: egui cannot install a focus filter on the
 pass that acquires focus, so immediate Escape/arrow input can navigate away.
 Handle this at the input/framework boundary without reclaiming focus that the
 caller deliberately released or canceling a pending Tab traversal. Preserve the
 existing hit-target, input-lifetime and inherited-text-color regression fixes.
+
+## Required
+
+- [Input compatibility](/quest/m1/shadcn-parity/input-compatibility.md) - ordered input and authoritative focus, hit and capture behavior

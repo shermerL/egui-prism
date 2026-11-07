@@ -25,3 +25,7 @@ fonts/OFL.txt, as well as THIRD_PARTY_NOTICES.md.
 Observed in the browser: light/dark rendering, checkbox Enter leaves state
 unchanged, Space toggles, Slider Home selects minimum, and Shift+Right advances
 ten steps. This is reference evidence, not Rust component acceptance.
+
+Open `/?compositing` for real CSS group-opacity samples over multiple backgrounds,
+opaque/translucent images, clipping, nested opacity, 100%/150% scale, and all pinned
+Button roles. This fixture does not alter the pinned source components.

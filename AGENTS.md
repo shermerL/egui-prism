@@ -1,7 +1,7 @@
 # Engineering
 
 Use the pinned development shell described in CONTRIBUTING.md. Keep the core
-library dependent on egui, with eframe and renderer choices in the gallery.
+library dependent on egui, with native winit/egui-winit integration and renderer choices in the gallery.
 
 ## Ownership, data flow, and lifecycle
 

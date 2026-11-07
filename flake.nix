@@ -28,8 +28,6 @@
             packages = [
               quest.packages.${system}.default
               pkgs.rustup
-              pkgs.trunk
-              pkgs.wasm-bindgen-cli
               pkgs.nodejs_24
               pkgs.python3
               pkgs.nixfmt
@@ -41,12 +39,14 @@
               pkgs.libxkbcommon
               pkgs.wayland
               pkgs.libGL
+              pkgs.vulkan-loader
             ];
             env = pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
               LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
                 pkgs.libxkbcommon
                 pkgs.wayland
                 pkgs.libGL
+                pkgs.vulkan-loader
                 pkgs.xorg.libX11
                 pkgs.xorg.libXcursor
                 pkgs.xorg.libXi

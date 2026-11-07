@@ -29,6 +29,41 @@ from the actual reference. Reusing an egui operation is acceptable only when the
 observed behavior satisfies that contract. A platform limitation is an open gap,
 not permission to substitute egui behavior or claim parity.
 
+## Shared compositing boundary
+
+CSS opacity applies to a completed group. Multiplying each overlapping egui
+shape's alpha produces different text, image, border and shadow colors. Strict
+parity therefore requires host-owned group compositing over the actual surface;
+a fixed background-color approximation is insufficient.
+
+The [host compositing capability](/docs/compositing.md)
+keeps the core egui-only and adds a separately installed wgpu adapter. The native
+Gallery directly integrates official winit, egui-winit and egui-wgpu; the host
+owns windows, GPU resources, current-frame texture preparation and ordered command
+submission. Backend setup failures are explicit. Component implementation and
+acceptance stay with their own Quests. The shared capability has native Metal
+framebuffer regressions and software Vulkan GPU contract coverage; these do not
+establish component parity or Windows/Linux desktop acceptance. Full native
+platform input, IME, clipboard and OS DPI observations remain in the
+[native Gallery Quest](/quest/m1/native-gallery.md).
+
+## Shared input boundary
+
+The planned [input compatibility capability](/quest/m1/shadcn-parity/input-compatibility.md)
+uses a controlled, fixed-version egui patch set for focus policy, ordered events
+and authoritative hit/capture behavior. It must preserve host focus ownership,
+exact geometry, modal isolation, text composition and event visibility. Document
+the upstream source, licenses, patch inventory and necessary API migrations.
+Consumers select one egui source from their application root Cargo configuration.
+This is planned work, not a claim that current interaction gaps are resolved.
+
+## Platform scope
+
+Native macOS, Windows and Linux are the primary targets. The Gallery uses official
+platform input bridges; a real pinned shadcn browser fixture supplies the visual
+and interaction reference. Shipping the Rust library in browsers is a separate,
+deferred product decision, and Pages does not block native M1 completion.
+
 ## Acceptance for every component
 
 Capture the reference and Rust implementation at matching size, scale, font,
@@ -37,9 +72,11 @@ disabled, selected/checked, invalid where supported, and long-content layouts.
 Check visible bounds and hit targets together. Verify keyboard behavior against
 the reference, including Home/End and modified steps where applicable.
 
-Record source identifiers, automated checks, actual browser/native observations,
-and remaining gaps separately. Tests, CI, and code reviews do not establish visual
-parity. A component remains unfinished while required visual or behavioral gaps
+Record source identifiers, automated checks, reference-browser observations,
+actual native platform/backend observations, IME evidence and remaining gaps
+separately. A macOS result cannot establish Windows or Linux acceptance.
+Tests, CI, and code reviews do not establish visual parity. A component remains
+unfinished while required visual or behavioral gaps
 remain. Keep the real rendered reference available for comparison; do not replace
 it with an independently approximated HTML mock.
 
