@@ -364,11 +364,43 @@ impl Default for InputState {
 impl InputState {
     #[must_use]
     pub fn begin_pass(
+        self,
+        new: RawInput,
+        requested_immediate_repaint_prev_frame: bool,
+        pixels_per_point: f32,
+        options: InputOptions,
+    ) -> Self {
+        self.begin_pass_impl(
+            new,
+            requested_immediate_repaint_prev_frame,
+            pixels_per_point,
+            options,
+            None,
+        )
+    }
+
+    pub(crate) fn begin_ordered_event(
+        self,
+        new: RawInput,
+        pixels_per_point: f32,
+        options: InputOptions,
+        frame_dt: f32,
+    ) -> Self {
+        self.begin_pass_impl(new, true, pixels_per_point, options, Some(frame_dt))
+    }
+
+    pub(crate) fn finish_ordered_scroll(&mut self, processed: &Self) {
+        self.wheel = processed.wheel.clone();
+        self.smooth_scroll_delta = Vec2::ZERO;
+    }
+
+    fn begin_pass_impl(
         mut self,
         mut new: RawInput,
         requested_immediate_repaint_prev_frame: bool,
         pixels_per_point: f32,
         options: InputOptions,
+        event_scroll_dt: Option<f32>,
     ) -> Self {
         profiling::function_scope!();
 
@@ -397,6 +429,7 @@ impl InputState {
         let mut rotation_radians = 0.0;
 
         self.wheel.smooth_wheel_delta = Vec2::ZERO;
+        let previous_scroll_carry = self.wheel.unprocessed_wheel_delta;
 
         for event in &mut new.events {
             match event {
@@ -457,7 +490,26 @@ impl InputState {
 
         {
             let dt = stable_dt.at_most(0.1);
-            self.wheel.after_events(time, dt);
+            if let Some(event_dt) = event_scroll_dt {
+                // The frame time opportunity already smoothed the old carry.
+                // Only a new impulse gets its first slice here. In particular,
+                // a key/pointer event must not flush a sub-point residual.
+                if new.events.iter().any(|event| {
+                    matches!(
+                        event,
+                        Event::MouseWheel {
+                            phase: crate::TouchPhase::Move,
+                            ..
+                        }
+                    )
+                }) {
+                    self.wheel.unprocessed_wheel_delta -= previous_scroll_carry;
+                    self.wheel.after_events(time, event_dt.at_most(0.1));
+                    self.wheel.unprocessed_wheel_delta += previous_scroll_carry;
+                }
+            } else {
+                self.wheel.after_events(time, dt);
+            }
 
             let is_zoom = self.wheel.modifiers.matches_any(options.zoom_modifier);
 

@@ -345,6 +345,347 @@ diff --git a/src/containers/modal.rs b/src/containers/modal.rs
              let bg_rect = ui.ctx().content_rect();
              let bg_sense = Sense::CLICK | Sense::DRAG;
              let mut backdrop = ui.new_child(UiBuilder::new().sense(bg_sense).max_rect(bg_rect));
+diff --git a/src/containers/scroll_area.rs b/src/containers/scroll_area.rs
+--- a/src/containers/scroll_area.rs
++++ b/src/containers/scroll_area.rs
+@@ -76,6 +76,10 @@
+     /// so they don't keep pushing the content out.
+     #[cfg_attr(feature = "serde", serde(skip))]
+     bounced_this_momentum: Vec2b,
++
++    /// Last ordered input opportunity consumed by this container instance.
++    #[cfg_attr(feature = "serde", serde(skip))]
++    input_token: Option<(crate::ViewportId, u64, usize)>,
+ }
+ 
+ impl Default for State {
+@@ -92,6 +96,7 @@
+             scroll_stuck_to_end: Vec2b::TRUE,
+             interact_rect: None,
+             bounced_this_momentum: Vec2b::FALSE,
++            input_token: None,
+         }
+     }
+ }
+@@ -101,7 +106,9 @@
+         ctx.data_mut(|d| d.get_persisted(id))
+     }
+ 
+-    pub fn store(self, ctx: &Context, id: Id) {
++    pub fn store(mut self, ctx: &Context, id: Id) {
++        // Explicit restoration may move state to another Context or instance.
++        self.input_token = None;
+         ctx.data_mut(|d| d.insert_persisted(id, self));
+     }
+ 
+@@ -729,6 +736,8 @@
+ }
+ 
+ struct Prepared {
++    consume_input: bool,
++    wheel_dt: f32,
+     id: Id,
+     state: State,
+ 
+@@ -818,6 +827,7 @@
+             "ScrollArea",
+         );
+         let mut state = State::load(&ctx, id).unwrap_or_default();
++        let (consume_input, advance_time, wheel_dt) = ctx.scroll_input(&mut state.input_token);
+ 
+         state.offset.x = offset_x.unwrap_or(state.offset.x);
+         state.offset.y = offset_y.unwrap_or(state.offset.y);
+@@ -913,7 +923,6 @@
+         let dt = ui.input(|i| i.stable_dt).at_most(0.1);
+ 
+         let kinetic_style = ui.spacing().scroll.kinetic;
+-        let mut rubber_banding = Vec2b::FALSE;
+ 
+         let axis_physics: [AxisPhysics; 2] = core::array::from_fn(|d| AxisPhysics {
+             bounds: scroll_bounds(state.max_offset[d]),
+@@ -926,6 +935,11 @@
+                 ..kinetic_style
+             },
+         });
++
++        let mut rubber_banding = Vec2b::new(
++            axis_physics[0].is_rubber_banding(state.offset[0]),
++            axis_physics[1].is_rubber_banding(state.offset[1]),
++        );
+ 
+         let background_drag_response = if scroll_source.drag.enabled(ui.ctx())
+             && ui.is_enabled()
+@@ -956,74 +970,85 @@
+             None
+         };
+ 
+-        if background_drag_response
+-            .as_ref()
+-            .is_some_and(|response| response.dragged())
+-        {
+-            let pointer_delta = ui.input(|input| input.pointer.delta());
+-            for d in 0..2 {
+-                if direction_enabled[d] {
++        if consume_input {
++            if background_drag_response
++                .as_ref()
++                .is_some_and(|response| response.dragged())
++            {
++                let pointer_delta = ui.input(|input| input.pointer.delta());
++                for d in 0..2 {
++                    if direction_enabled[d] {
++                        let physics = &axis_physics[d];
++                        // Offset has an inverted coordinate system compared to the pointer:
++                        state.offset[d] = physics.drag(state.offset[d], -pointer_delta[d]);
++                        rubber_banding[d] = physics.is_rubber_banding(state.offset[d]);
++                        state.scroll_stuck_to_end[d] = false;
++                        state.offset_target[d] = None;
++                    }
++                }
++            } else {
++                // Apply the cursor velocity to the scroll area when the user releases the drag.
++                if background_drag_response
++                    .as_ref()
++                    .is_some_and(|response| response.drag_stopped())
++                {
++                    // Offset has an inverted coordinate system compared to the pointer:
++                    state.vel =
++                        -(direction_enabled.to_vec2() * ui.input(|input| input.pointer.velocity()));
++                }
++
++                // While the fingers are still on the trackpad,
++                // hold the overscroll instead of springing back, like macOS does.
++                // The wheel events are applied in `end`.
++                let fingers_on_trackpad =
++                    ui.input(|i| i.scroll_source()) == Some(MouseWheelSource::Trackpad);
++                let hold_overscroll = fingers_on_trackpad && ui.rect_contains_pointer(inner_rect);
++
++                for d in 0..2 {
+                     let physics = &axis_physics[d];
+-                    // Offset has an inverted coordinate system compared to the pointer:
+-                    state.offset[d] = physics.drag(state.offset[d], -pointer_delta[d]);
++                    if advance_time
++                        && physics.step(
++                            &mut state.offset[d],
++                            &mut state.vel[d],
++                            dt,
++                            hold_overscroll,
++                        )
++                    {
++                        ctx.request_repaint();
++                    }
+                     rubber_banding[d] = physics.is_rubber_banding(state.offset[d]);
+-                    state.scroll_stuck_to_end[d] = false;
+-                    state.offset_target[d] = None;
+                 }
+             }
+-        } else {
+-            // Apply the cursor velocity to the scroll area when the user releases the drag.
+-            if background_drag_response
+-                .as_ref()
+-                .is_some_and(|response| response.drag_stopped())
+-            {
+-                // Offset has an inverted coordinate system compared to the pointer:
+-                state.vel =
+-                    -(direction_enabled.to_vec2() * ui.input(|input| input.pointer.velocity()));
+-            }
+-
+-            // While the fingers are still on the trackpad,
+-            // hold the overscroll instead of springing back, like macOS does.
+-            // The wheel events are applied in `end`.
+-            let fingers_on_trackpad =
+-                ui.input(|i| i.scroll_source()) == Some(MouseWheelSource::Trackpad);
+-            let hold_overscroll = fingers_on_trackpad && ui.rect_contains_pointer(inner_rect);
+-
+-            for d in 0..2 {
+-                let physics = &axis_physics[d];
+-                if physics.step(&mut state.offset[d], &mut state.vel[d], dt, hold_overscroll) {
+-                    ctx.request_repaint();
+-                }
+-                rubber_banding[d] = physics.is_rubber_banding(state.offset[d]);
+-            }
+         }
+ 
+         // Scroll with an animation if we have a target offset (that hasn't been cleared by the code
+         // above).
+-        for d in 0..2 {
+-            if let Some(scroll_target) = state.offset_target[d] {
+-                state.vel[d] = 0.0;
+-
+-                if (state.offset[d] - scroll_target.target_offset).abs() < 1.0 {
+-                    // Arrived
+-                    state.offset[d] = scroll_target.target_offset;
+-                    state.offset_target[d] = None;
+-                } else {
+-                    // Move towards target
+-                    let t = emath::interpolation_factor(
+-                        scroll_target.animation_time_span,
+-                        ui.input(|i| i.time),
+-                        dt,
+-                        emath::ease_in_ease_out,
+-                    );
+-                    if t < 1.0 {
+-                        state.offset[d] =
+-                            emath::lerp(state.offset[d]..=scroll_target.target_offset, t);
+-                        ctx.request_repaint();
+-                    } else {
++        if advance_time {
++            for d in 0..2 {
++                if let Some(scroll_target) = state.offset_target[d] {
++                    state.vel[d] = 0.0;
++
++                    if (state.offset[d] - scroll_target.target_offset).abs() < 1.0 {
+                         // Arrived
+                         state.offset[d] = scroll_target.target_offset;
+                         state.offset_target[d] = None;
++                    } else {
++                        // Move towards target
++                        let t = emath::interpolation_factor(
++                            scroll_target.animation_time_span,
++                            ui.input(|i| i.time),
++                            dt,
++                            emath::ease_in_ease_out,
++                        );
++                        if t < 1.0 {
++                            state.offset[d] =
++                                emath::lerp(state.offset[d]..=scroll_target.target_offset, t);
++                            ctx.request_repaint();
++                        } else {
++                            // Arrived
++                            state.offset[d] = scroll_target.target_offset;
++                            state.offset_target[d] = None;
++                        }
+                     }
+                 }
+             }
+@@ -1034,6 +1059,8 @@
+             .pass_state_mut(|state| core::mem::take(&mut state.scroll_target));
+ 
+         Prepared {
++            consume_input,
++            wheel_dt,
+             id,
+             state,
+             auto_shrink,
+@@ -1164,6 +1191,8 @@
+     /// Returns content size and state
+     fn end(self, ui: &mut Ui) -> (Vec2, State) {
+         let Self {
++            consume_input,
++            wheel_dt,
+             id,
+             mut state,
+             inner_rect,
+@@ -1197,6 +1226,12 @@
+                 .ctx()
+                 .pass_state_mut(|state| state.scroll_target[d].take());
+ 
++            if !consume_input {
++                content_ui
++                    .ctx()
++                    .pass_state_mut(|state| state.scroll_delta.0[d] = 0.0);
++                continue;
++            }
+             if direction_enabled[d] {
+                 let (scroll_delta, scroll_animation) = content_ui.ctx().pass_state_mut(|state| {
+                     (
+@@ -1323,7 +1358,8 @@
+             && ui.ctx().dragged_id().is_none()
+             || is_dragging_background;
+ 
+-        if scroll_source.mouse_wheel
++        if consume_input
++            && scroll_source.mouse_wheel
+             && ui.is_enabled()
+             && (ui.rect_contains_pointer(outer_rect) || is_dragging_background)
+         {
+@@ -1356,7 +1392,7 @@
+                             delta: -scroll_delta,
+                             source: scroll_source,
+                             can_chain_to_parent: has_scrolling_ancestor,
+-                            dt: ui.input(|i| i.stable_dt).at_most(0.1),
++                            dt: wheel_dt.at_most(0.1),
+                         },
+                         &mut state.bounced_this_momentum[d],
+                     );
+@@ -1539,35 +1575,38 @@
+ 
+             state.scroll_bar_interaction[d] = response.hovered() || response.dragged();
+ 
+-            if let Some(pointer_pos) = response.interact_pointer_pos() {
+-                let scroll_start_offset_from_top_left = state.scroll_start_offset_from_top_left[d]
+-                    .get_or_insert_with(|| {
+-                        if handle_rect.contains(pointer_pos) {
+-                            pointer_pos[d] - handle_rect.min[d]
+-                        } else {
+-                            let handle_top_pos_at_bottom =
+-                                scroll_bar_rect.max[d] - handle_rect.size()[d];
+-                            // Calculate the new handle top position, centering the handle on the mouse.
+-                            let new_handle_top_pos = (pointer_pos[d] - handle_rect.size()[d] * 0.5)
+-                                .clamp(scroll_bar_rect.min[d], handle_top_pos_at_bottom);
+-                            pointer_pos[d] - new_handle_top_pos
+-                        }
+-                    });
+-
+-                let new_handle_top = pointer_pos[d] - *scroll_start_offset_from_top_left;
+-                let handle_travel =
+-                    scroll_bar_rect.min[d]..=(scroll_bar_rect.max[d] - handle_rect.size()[d]);
+-                state.offset[d] = if handle_travel.start() == handle_travel.end() {
+-                    0.0
++            if consume_input {
++                if let Some(pointer_pos) = response.interact_pointer_pos() {
++                    let scroll_start_offset_from_top_left =
++                        state.scroll_start_offset_from_top_left[d].get_or_insert_with(|| {
++                            if handle_rect.contains(pointer_pos) {
++                                pointer_pos[d] - handle_rect.min[d]
++                            } else {
++                                let handle_top_pos_at_bottom =
++                                    scroll_bar_rect.max[d] - handle_rect.size()[d];
++                                // Calculate the new handle top position, centering the handle on the mouse.
++                                let new_handle_top_pos = (pointer_pos[d]
++                                    - handle_rect.size()[d] * 0.5)
++                                    .clamp(scroll_bar_rect.min[d], handle_top_pos_at_bottom);
++                                pointer_pos[d] - new_handle_top_pos
++                            }
++                        });
++
++                    let new_handle_top = pointer_pos[d] - *scroll_start_offset_from_top_left;
++                    let handle_travel =
++                        scroll_bar_rect.min[d]..=(scroll_bar_rect.max[d] - handle_rect.size()[d]);
++                    state.offset[d] = if handle_travel.start() == handle_travel.end() {
++                        0.0
++                    } else {
++                        remap(new_handle_top, handle_travel, 0.0..=max_offset[d])
++                    };
++
++                    // some manual action taken, scroll not stuck
++                    state.scroll_stuck_to_end[d] = false;
++                    state.offset_target[d] = None;
+                 } else {
+-                    remap(new_handle_top, handle_travel, 0.0..=max_offset[d])
+-                };
+-
+-                // some manual action taken, scroll not stuck
+-                state.scroll_stuck_to_end[d] = false;
+-                state.offset_target[d] = None;
+-            } else {
+-                state.scroll_start_offset_from_top_left[d] = None;
++                    state.scroll_start_offset_from_top_left[d] = None;
++                }
+             }
+ 
+             if !rubber_banding[d] {
+@@ -1695,7 +1734,9 @@
+         state.content_is_too_large = content_is_too_large;
+         state.interact_rect = Some(inner_rect);
+ 
+-        state.store(ui.ctx(), id);
++        // Internal phase updates retain the consumption token. Public restoration
++        // clears it so another instance cannot inherit this pass's authority.
++        ui.ctx().data_mut(|data| data.insert_persisted(id, state));
+ 
+         (content_size, state)
+     }
 diff --git a/src/context.rs b/src/context.rs
 --- a/src/context.rs
 +++ b/src/context.rs
@@ -364,17 +705,23 @@ diff --git a/src/context.rs b/src/context.rs
      /// The type of viewport.
      ///
      /// This will never be [`ViewportClass::EmbeddedWindow`],
-@@ -501,6 +505,9 @@
+@@ -501,6 +505,15 @@
  
          self.memory.begin_pass(&new_raw_input, &all_viewport_ids);
  
 +        viewport
 +            .dispatch
 +            .begin(&viewport.input, self.memory.options.ordered_input);
++        // A discarded ordered pass only remeasures the same frame. In particular,
++        // missing host timestamps must not synthesize another frame of time.
++        if self.memory.options.ordered_input && viewport.output.num_completed_passes > 0 {
++            new_raw_input.time = Some(viewport.input.time);
++            new_raw_input.predicted_dt = 0.0;
++        }
          viewport.input = core::mem::take(&mut viewport.input).begin_pass(
              new_raw_input,
              viewport.repaint.requested_immediate_repaint_prev_pass(),
-@@ -513,7 +520,7 @@
+@@ -513,7 +526,7 @@
  
          viewport.this_pass.begin_pass();
  
@@ -383,7 +730,7 @@ diff --git a/src/context.rs b/src/context.rs
              // Areas that are not interactable are click-through: skip them in the hit-test.
              let mut layers: Vec<LayerId> = viewport
                  .prev_pass
-@@ -779,6 +786,12 @@
+@@ -779,6 +792,12 @@
  #[derive(Clone)]
  pub struct Context(Arc<RwLock<ContextImpl>>);
  
@@ -396,7 +743,7 @@ diff --git a/src/context.rs b/src/context.rs
  impl core::fmt::Debug for Context {
      fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
          f.debug_struct("Context").finish_non_exhaustive()
-@@ -1504,13 +1517,13 @@
+@@ -1504,13 +1523,13 @@
  
      // ---------------------------------------------------------------------
  
@@ -414,7 +761,7 @@ diff --git a/src/context.rs b/src/context.rs
      ///
      /// `allow_focus` should usually be true, unless you call this function multiple times with the
      /// same widget, then `allow_focus` should only be true once (like in [`Ui::new`] (true) and [`Ui::remember_min_rect`] (false)).
-@@ -1520,6 +1533,30 @@
+@@ -1520,6 +1539,30 @@
          allow_focus: bool,
          options: crate::InteractOptions,
      ) -> Response {
@@ -445,7 +792,7 @@ diff --git a/src/context.rs b/src/context.rs
          debug_assert!(!w.rect.any_nan(), "widget rect is NaN: {:?}", w.rect);
  
          let interested_in_focus = w.enabled
-@@ -1528,12 +1565,30 @@
+@@ -1528,12 +1571,30 @@
  
          // Remember this widget
          self.write(|ctx| {
@@ -476,7 +823,7 @@ diff --git a/src/context.rs b/src/context.rs
  
              if allow_focus && interested_in_focus {
                  ctx.memory.interested_in_focus(w.id, w.layer_id);
-@@ -1541,8 +1596,15 @@
+@@ -1541,8 +1602,15 @@
          });
  
          if allow_focus && !interested_in_focus {
@@ -494,7 +841,7 @@ diff --git a/src/context.rs b/src/context.rs
          }
  
          if w.sense.interactive() || w.sense.is_focusable() {
-@@ -1744,12 +1806,41 @@
+@@ -1744,12 +1812,41 @@
          res.flags.set(Flags::VISIBLE, visible);
          res.flags.set(Flags::HIGHLIGHTED, highlighted);
  
@@ -537,7 +884,7 @@ diff --git a/src/context.rs b/src/context.rs
              );
  
              let input = &viewport.input;
-@@ -1771,7 +1862,9 @@
+@@ -1771,7 +1868,9 @@
                  res.flags.set(Flags::FAKE_PRIMARY_CLICKED, true);
              }
  
@@ -548,7 +895,7 @@ diff --git a/src/context.rs b/src/context.rs
              {
                  res.flags.set(Flags::LONG_TOUCHED, true);
              }
-@@ -1780,30 +1873,30 @@
+@@ -1780,30 +1879,30 @@
  
              res.flags.set(
                  Flags::IS_POINTER_BUTTON_DOWN_ON,
@@ -586,7 +933,7 @@ diff --git a/src/context.rs b/src/context.rs
              let mut any_press = false;
  
              for pointer_event in &input.pointer.pointer_events {
-@@ -1848,7 +1941,7 @@
+@@ -1848,7 +1947,7 @@
              };
  
              let pointer_clicked_elsewhere = should_surrender_focus && !res.hovered();
@@ -595,7 +942,7 @@ diff --git a/src/context.rs b/src/context.rs
                  memory.surrender_focus(id);
              }
          });
-@@ -2928,6 +3021,16 @@
+@@ -2928,6 +3027,16 @@
  
          self.finish_root_ui();
  
@@ -612,7 +959,7 @@ diff --git a/src/context.rs b/src/context.rs
          if self.options(|o| o.zoom_with_keyboard) {
              crate::gui_zoom::zoom_with_keyboard(self);
          }
-@@ -2938,12 +3041,18 @@
+@@ -2938,12 +3047,18 @@
              }
          }
  
@@ -631,7 +978,7 @@ diff --git a/src/context.rs b/src/context.rs
  
          let plugins = self.read(|ctx| ctx.plugins.ordered_plugins());
          plugins.on_output(self, &mut output);
-@@ -3150,6 +3259,12 @@
+@@ -3150,6 +3265,12 @@
          let ended_viewport_id = self.viewport_id();
          let viewport = self.viewports.entry(ended_viewport_id).or_default();
          let pixels_per_point = viewport.input.pixels_per_point;
@@ -648,7 +995,7 @@ diff --git a/src/context/input_dispatch.rs b/src/context/input_dispatch.rs
 new file mode 100644
 --- /dev/null
 +++ b/src/context/input_dispatch.rs
-@@ -0,0 +1,791 @@
+@@ -0,0 +1,842 @@
 +use super::*;
 +use crate::{Event, InputState, Key, RawInput};
 +
@@ -664,6 +1011,8 @@ new file mode 100644
 +    header: Option<RawInput>,
 +    pub(super) shortcut_events: Vec<Event>,
 +    index: usize,
++    scroll_time_pending: bool,
++    frame_dt: f32,
 +    timed_targets: alloc::vec::IntoIter<Id>,
 +    owners: IdMap<Id>,
 +    rounding: IdMap<f32>,
@@ -699,7 +1048,7 @@ new file mode 100644
 +        /// The original event, unchanged.
 +        event: Event,
 +    },
-+    /// Frame time advanced, producing a long touch or drag transition without a raw event.
++    /// Frame time advanced: untargeted scrolling or a targeted pointer transition.
 +    Time,
 +}
 +
@@ -734,6 +1083,8 @@ new file mode 100644
 +            let mut header = original_raw.clone();
 +            header.events.clear();
 +            header.time = Some(v.input.time);
++            header.predicted_dt = v.input.stable_dt;
++            v.dispatch.frame_dt = v.input.stable_dt;
 +            v.dispatch.header = Some(header);
 +            v.input.raw = original_raw;
 +            v.dispatch.paint_before = Some(core::mem::take(&mut v.graphics));
@@ -1009,12 +1360,23 @@ new file mode 100644
 +                    .as_ref()
 +                    .expect("begin_input saves the frame header")
 +                    .clone();
-+                viewport.input = previous.begin_pass(
-+                    header,
-+                    true,
-+                    viewport.input.pixels_per_point,
-+                    ctx.memory.options.input_options,
-+                );
++                viewport.input = if viewport.output.num_completed_passes == 0 {
++                    previous.begin_pass(
++                        header,
++                        false,
++                        viewport.input.pixels_per_point,
++                        ctx.memory.options.input_options,
++                    )
++                } else {
++                    // Do not release even a sub-point wheel remainder on a
++                    // layout retry. Its time budget was consumed by the first pass.
++                    previous.begin_ordered_event(
++                        header,
++                        viewport.input.pixels_per_point,
++                        ctx.memory.options.input_options,
++                        0.0,
++                    )
++                };
 +                viewport.input.raw = original_raw;
 +                let (_, hits) = current_hits(viewport, &ctx.memory);
 +                viewport.hits = hits;
@@ -1039,6 +1401,13 @@ new file mode 100644
 +                    }
 +                }
 +                viewport.dispatch.timed_targets = targets.into_iter();
++            }
++            if core::mem::take(&mut viewport.dispatch.scroll_time_pending) {
++                viewport.dispatch.in_event = true;
++                return Some(RoutedInput {
++                    target: None,
++                    trigger: InputTrigger::Time,
++                });
 +            }
 +            for target in viewport.dispatch.timed_targets.by_ref() {
 +                if viewport.this_pass.widgets.get(target).is_some_and(|w| {
@@ -1077,11 +1446,14 @@ new file mode 100644
 +                );
 +                viewport.interact_widgets.hovered = hover.hovered;
 +                viewport.interact_widgets.contains_pointer = hover.contains_pointer;
-+                viewport.input = viewport
++                let mut aggregate = viewport
 +                    .dispatch
 +                    .aggregate
 +                    .take()
 +                    .expect("aggregate input is restored once");
++                aggregate.finish_ordered_scroll(&viewport.input);
++                viewport.input = aggregate;
++
 +                viewport.input.events.clear();
 +                viewport.dispatch.in_event = false;
 +                viewport.dispatch.finished = true;
@@ -1110,11 +1482,11 @@ new file mode 100644
 +            raw.dropped_files.clear();
 +            let pixels_per_point = viewport.input.pixels_per_point;
 +            let previous = core::mem::take(&mut viewport.input);
-+            viewport.input = previous.begin_pass(
++            viewport.input = previous.begin_ordered_event(
 +                raw,
-+                true,
 +                pixels_per_point,
 +                ctx.memory.options.input_options,
++                viewport.dispatch.frame_dt,
 +            );
 +            viewport.input.raw = original_raw;
 +            let (layers, hits) = if let Event::MiddleClickPaste { pos, .. } = &event {
@@ -1343,6 +1715,32 @@ new file mode 100644
 +        routed
 +    }
 +
++    // A container owns its last consumption token. The dispatcher only requests
++    // one time opportunity, without retaining a registry of container instances.
++    pub(crate) fn scroll_input(
++        &self,
++        last: &mut Option<(ViewportId, u64, usize)>,
++    ) -> (bool, bool, f32) {
++        self.write(|ctx| {
++            let vp = ctx.viewport_id();
++            let viewport = ctx.viewports.get_mut(&vp).expect("active viewport");
++            if !ctx.memory.options.ordered_input {
++                return (true, true, viewport.input.stable_dt);
++            }
++            let dispatch = &mut viewport.dispatch;
++            if !dispatch.in_event {
++                if dispatch.previous.is_some() && viewport.output.num_completed_passes == 0 {
++                    dispatch.scroll_time_pending = true;
++                }
++                return (false, false, dispatch.frame_dt);
++            }
++            let token = (vp, viewport.repaint.cumulative_pass_nr, dispatch.index);
++            let consume = *last != Some(token);
++            *last = Some(token);
++            (consume, consume && dispatch.index == 0, dispatch.frame_dt)
++        })
++    }
++
 +    pub(crate) fn is_handling_input(&self) -> bool {
 +        self.read(|ctx| {
 +            !ctx.memory.options.ordered_input || ctx.viewports[&ctx.viewport_id()].dispatch.in_event
@@ -1477,6 +1875,89 @@ diff --git a/src/hit_test.rs b/src/hit_test.rs
 +            }
              // TODO(emilk): we should probably do the distance testing in global space instead
              let dist_sq = w.interact_rect.distance_sq_to_pos(pos_in_layer);
+ 
+diff --git a/src/input_state/mod.rs b/src/input_state/mod.rs
+--- a/src/input_state/mod.rs
++++ b/src/input_state/mod.rs
+@@ -364,11 +364,43 @@
+ impl InputState {
+     #[must_use]
+     pub fn begin_pass(
++        self,
++        new: RawInput,
++        requested_immediate_repaint_prev_frame: bool,
++        pixels_per_point: f32,
++        options: InputOptions,
++    ) -> Self {
++        self.begin_pass_impl(
++            new,
++            requested_immediate_repaint_prev_frame,
++            pixels_per_point,
++            options,
++            None,
++        )
++    }
++
++    pub(crate) fn begin_ordered_event(
++        self,
++        new: RawInput,
++        pixels_per_point: f32,
++        options: InputOptions,
++        frame_dt: f32,
++    ) -> Self {
++        self.begin_pass_impl(new, true, pixels_per_point, options, Some(frame_dt))
++    }
++
++    pub(crate) fn finish_ordered_scroll(&mut self, processed: &Self) {
++        self.wheel = processed.wheel.clone();
++        self.smooth_scroll_delta = Vec2::ZERO;
++    }
++
++    fn begin_pass_impl(
+         mut self,
+         mut new: RawInput,
+         requested_immediate_repaint_prev_frame: bool,
+         pixels_per_point: f32,
+         options: InputOptions,
++        event_scroll_dt: Option<f32>,
+     ) -> Self {
+         profiling::function_scope!();
+ 
+@@ -397,6 +429,7 @@
+         let mut rotation_radians = 0.0;
+ 
+         self.wheel.smooth_wheel_delta = Vec2::ZERO;
++        let previous_scroll_carry = self.wheel.unprocessed_wheel_delta;
+ 
+         for event in &mut new.events {
+             match event {
+@@ -457,7 +490,26 @@
+ 
+         {
+             let dt = stable_dt.at_most(0.1);
+-            self.wheel.after_events(time, dt);
++            if let Some(event_dt) = event_scroll_dt {
++                // The frame time opportunity already smoothed the old carry.
++                // Only a new impulse gets its first slice here. In particular,
++                // a key/pointer event must not flush a sub-point residual.
++                if new.events.iter().any(|event| {
++                    matches!(
++                        event,
++                        Event::MouseWheel {
++                            phase: crate::TouchPhase::Move,
++                            ..
++                        }
++                    )
++                }) {
++                    self.wheel.unprocessed_wheel_delta -= previous_scroll_carry;
++                    self.wheel.after_events(time, event_dt.at_most(0.1));
++                    self.wheel.unprocessed_wheel_delta += previous_scroll_carry;
++                }
++            } else {
++                self.wheel.after_events(time, dt);
++            }
+ 
+             let is_zoom = self.wheel.modifiers.matches_any(options.zoom_modifier);
  
 diff --git a/src/lib.rs b/src/lib.rs
 --- a/src/lib.rs

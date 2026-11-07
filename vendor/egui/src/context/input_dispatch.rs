@@ -13,6 +13,8 @@ pub(super) struct DispatchState {
     header: Option<RawInput>,
     pub(super) shortcut_events: Vec<Event>,
     index: usize,
+    scroll_time_pending: bool,
+    frame_dt: f32,
     timed_targets: alloc::vec::IntoIter<Id>,
     owners: IdMap<Id>,
     rounding: IdMap<f32>,
@@ -48,7 +50,7 @@ pub enum InputTrigger {
         /// The original event, unchanged.
         event: Event,
     },
-    /// Frame time advanced, producing a long touch or drag transition without a raw event.
+    /// Frame time advanced: untargeted scrolling or a targeted pointer transition.
     Time,
 }
 
@@ -83,6 +85,8 @@ impl Context {
             let mut header = original_raw.clone();
             header.events.clear();
             header.time = Some(v.input.time);
+            header.predicted_dt = v.input.stable_dt;
+            v.dispatch.frame_dt = v.input.stable_dt;
             v.dispatch.header = Some(header);
             v.input.raw = original_raw;
             v.dispatch.paint_before = Some(core::mem::take(&mut v.graphics));
@@ -358,12 +362,23 @@ impl Context {
                     .as_ref()
                     .expect("begin_input saves the frame header")
                     .clone();
-                viewport.input = previous.begin_pass(
-                    header,
-                    true,
-                    viewport.input.pixels_per_point,
-                    ctx.memory.options.input_options,
-                );
+                viewport.input = if viewport.output.num_completed_passes == 0 {
+                    previous.begin_pass(
+                        header,
+                        false,
+                        viewport.input.pixels_per_point,
+                        ctx.memory.options.input_options,
+                    )
+                } else {
+                    // Do not release even a sub-point wheel remainder on a
+                    // layout retry. Its time budget was consumed by the first pass.
+                    previous.begin_ordered_event(
+                        header,
+                        viewport.input.pixels_per_point,
+                        ctx.memory.options.input_options,
+                        0.0,
+                    )
+                };
                 viewport.input.raw = original_raw;
                 let (_, hits) = current_hits(viewport, &ctx.memory);
                 viewport.hits = hits;
@@ -388,6 +403,13 @@ impl Context {
                     }
                 }
                 viewport.dispatch.timed_targets = targets.into_iter();
+            }
+            if core::mem::take(&mut viewport.dispatch.scroll_time_pending) {
+                viewport.dispatch.in_event = true;
+                return Some(RoutedInput {
+                    target: None,
+                    trigger: InputTrigger::Time,
+                });
             }
             for target in viewport.dispatch.timed_targets.by_ref() {
                 if viewport.this_pass.widgets.get(target).is_some_and(|w| {
@@ -426,11 +448,14 @@ impl Context {
                 );
                 viewport.interact_widgets.hovered = hover.hovered;
                 viewport.interact_widgets.contains_pointer = hover.contains_pointer;
-                viewport.input = viewport
+                let mut aggregate = viewport
                     .dispatch
                     .aggregate
                     .take()
                     .expect("aggregate input is restored once");
+                aggregate.finish_ordered_scroll(&viewport.input);
+                viewport.input = aggregate;
+
                 viewport.input.events.clear();
                 viewport.dispatch.in_event = false;
                 viewport.dispatch.finished = true;
@@ -459,11 +484,11 @@ impl Context {
             raw.dropped_files.clear();
             let pixels_per_point = viewport.input.pixels_per_point;
             let previous = core::mem::take(&mut viewport.input);
-            viewport.input = previous.begin_pass(
+            viewport.input = previous.begin_ordered_event(
                 raw,
-                true,
                 pixels_per_point,
                 ctx.memory.options.input_options,
+                viewport.dispatch.frame_dt,
             );
             viewport.input.raw = original_raw;
             let (layers, hits) = if let Event::MiddleClickPaste { pos, .. } = &event {
@@ -690,6 +715,32 @@ impl Context {
             crate::text_selection::LabelSelectionState::prepare_input_paint(self);
         }
         routed
+    }
+
+    // A container owns its last consumption token. The dispatcher only requests
+    // one time opportunity, without retaining a registry of container instances.
+    pub(crate) fn scroll_input(
+        &self,
+        last: &mut Option<(ViewportId, u64, usize)>,
+    ) -> (bool, bool, f32) {
+        self.write(|ctx| {
+            let vp = ctx.viewport_id();
+            let viewport = ctx.viewports.get_mut(&vp).expect("active viewport");
+            if !ctx.memory.options.ordered_input {
+                return (true, true, viewport.input.stable_dt);
+            }
+            let dispatch = &mut viewport.dispatch;
+            if !dispatch.in_event {
+                if dispatch.previous.is_some() && viewport.output.num_completed_passes == 0 {
+                    dispatch.scroll_time_pending = true;
+                }
+                return (false, false, dispatch.frame_dt);
+            }
+            let token = (vp, viewport.repaint.cumulative_pass_nr, dispatch.index);
+            let consume = *last != Some(token);
+            *last = Some(token);
+            (consume, consume && dispatch.index == 0, dispatch.frame_dt)
+        })
     }
 
     pub(crate) fn is_handling_input(&self) -> bool {

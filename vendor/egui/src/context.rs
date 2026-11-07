@@ -508,6 +508,12 @@ impl ContextImpl {
         viewport
             .dispatch
             .begin(&viewport.input, self.memory.options.ordered_input);
+        // A discarded ordered pass only remeasures the same frame. In particular,
+        // missing host timestamps must not synthesize another frame of time.
+        if self.memory.options.ordered_input && viewport.output.num_completed_passes > 0 {
+            new_raw_input.time = Some(viewport.input.time);
+            new_raw_input.predicted_dt = 0.0;
+        }
         viewport.input = core::mem::take(&mut viewport.input).begin_pass(
             new_raw_input,
             viewport.repaint.requested_immediate_repaint_prev_pass(),

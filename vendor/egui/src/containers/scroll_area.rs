@@ -76,6 +76,10 @@ pub struct State {
     /// so they don't keep pushing the content out.
     #[cfg_attr(feature = "serde", serde(skip))]
     bounced_this_momentum: Vec2b,
+
+    /// Last ordered input opportunity consumed by this container instance.
+    #[cfg_attr(feature = "serde", serde(skip))]
+    input_token: Option<(crate::ViewportId, u64, usize)>,
 }
 
 impl Default for State {
@@ -92,6 +96,7 @@ impl Default for State {
             scroll_stuck_to_end: Vec2b::TRUE,
             interact_rect: None,
             bounced_this_momentum: Vec2b::FALSE,
+            input_token: None,
         }
     }
 }
@@ -101,7 +106,9 @@ impl State {
         ctx.data_mut(|d| d.get_persisted(id))
     }
 
-    pub fn store(self, ctx: &Context, id: Id) {
+    pub fn store(mut self, ctx: &Context, id: Id) {
+        // Explicit restoration may move state to another Context or instance.
+        self.input_token = None;
         ctx.data_mut(|d| d.insert_persisted(id, self));
     }
 
@@ -729,6 +736,8 @@ impl ScrollArea {
 }
 
 struct Prepared {
+    consume_input: bool,
+    wheel_dt: f32,
     id: Id,
     state: State,
 
@@ -818,6 +827,7 @@ impl ScrollArea {
             "ScrollArea",
         );
         let mut state = State::load(&ctx, id).unwrap_or_default();
+        let (consume_input, advance_time, wheel_dt) = ctx.scroll_input(&mut state.input_token);
 
         state.offset.x = offset_x.unwrap_or(state.offset.x);
         state.offset.y = offset_y.unwrap_or(state.offset.y);
@@ -913,7 +923,6 @@ impl ScrollArea {
         let dt = ui.input(|i| i.stable_dt).at_most(0.1);
 
         let kinetic_style = ui.spacing().scroll.kinetic;
-        let mut rubber_banding = Vec2b::FALSE;
 
         let axis_physics: [AxisPhysics; 2] = core::array::from_fn(|d| AxisPhysics {
             bounds: scroll_bounds(state.max_offset[d]),
@@ -926,6 +935,11 @@ impl ScrollArea {
                 ..kinetic_style
             },
         });
+
+        let mut rubber_banding = Vec2b::new(
+            axis_physics[0].is_rubber_banding(state.offset[0]),
+            axis_physics[1].is_rubber_banding(state.offset[1]),
+        );
 
         let background_drag_response = if scroll_source.drag.enabled(ui.ctx())
             && ui.is_enabled()
@@ -956,74 +970,85 @@ impl ScrollArea {
             None
         };
 
-        if background_drag_response
-            .as_ref()
-            .is_some_and(|response| response.dragged())
-        {
-            let pointer_delta = ui.input(|input| input.pointer.delta());
-            for d in 0..2 {
-                if direction_enabled[d] {
-                    let physics = &axis_physics[d];
-                    // Offset has an inverted coordinate system compared to the pointer:
-                    state.offset[d] = physics.drag(state.offset[d], -pointer_delta[d]);
-                    rubber_banding[d] = physics.is_rubber_banding(state.offset[d]);
-                    state.scroll_stuck_to_end[d] = false;
-                    state.offset_target[d] = None;
-                }
-            }
-        } else {
-            // Apply the cursor velocity to the scroll area when the user releases the drag.
+        if consume_input {
             if background_drag_response
                 .as_ref()
-                .is_some_and(|response| response.drag_stopped())
+                .is_some_and(|response| response.dragged())
             {
-                // Offset has an inverted coordinate system compared to the pointer:
-                state.vel =
-                    -(direction_enabled.to_vec2() * ui.input(|input| input.pointer.velocity()));
-            }
-
-            // While the fingers are still on the trackpad,
-            // hold the overscroll instead of springing back, like macOS does.
-            // The wheel events are applied in `end`.
-            let fingers_on_trackpad =
-                ui.input(|i| i.scroll_source()) == Some(MouseWheelSource::Trackpad);
-            let hold_overscroll = fingers_on_trackpad && ui.rect_contains_pointer(inner_rect);
-
-            for d in 0..2 {
-                let physics = &axis_physics[d];
-                if physics.step(&mut state.offset[d], &mut state.vel[d], dt, hold_overscroll) {
-                    ctx.request_repaint();
+                let pointer_delta = ui.input(|input| input.pointer.delta());
+                for d in 0..2 {
+                    if direction_enabled[d] {
+                        let physics = &axis_physics[d];
+                        // Offset has an inverted coordinate system compared to the pointer:
+                        state.offset[d] = physics.drag(state.offset[d], -pointer_delta[d]);
+                        rubber_banding[d] = physics.is_rubber_banding(state.offset[d]);
+                        state.scroll_stuck_to_end[d] = false;
+                        state.offset_target[d] = None;
+                    }
                 }
-                rubber_banding[d] = physics.is_rubber_banding(state.offset[d]);
+            } else {
+                // Apply the cursor velocity to the scroll area when the user releases the drag.
+                if background_drag_response
+                    .as_ref()
+                    .is_some_and(|response| response.drag_stopped())
+                {
+                    // Offset has an inverted coordinate system compared to the pointer:
+                    state.vel =
+                        -(direction_enabled.to_vec2() * ui.input(|input| input.pointer.velocity()));
+                }
+
+                // While the fingers are still on the trackpad,
+                // hold the overscroll instead of springing back, like macOS does.
+                // The wheel events are applied in `end`.
+                let fingers_on_trackpad =
+                    ui.input(|i| i.scroll_source()) == Some(MouseWheelSource::Trackpad);
+                let hold_overscroll = fingers_on_trackpad && ui.rect_contains_pointer(inner_rect);
+
+                for d in 0..2 {
+                    let physics = &axis_physics[d];
+                    if advance_time
+                        && physics.step(
+                            &mut state.offset[d],
+                            &mut state.vel[d],
+                            dt,
+                            hold_overscroll,
+                        )
+                    {
+                        ctx.request_repaint();
+                    }
+                    rubber_banding[d] = physics.is_rubber_banding(state.offset[d]);
+                }
             }
         }
 
         // Scroll with an animation if we have a target offset (that hasn't been cleared by the code
         // above).
-        for d in 0..2 {
-            if let Some(scroll_target) = state.offset_target[d] {
-                state.vel[d] = 0.0;
+        if advance_time {
+            for d in 0..2 {
+                if let Some(scroll_target) = state.offset_target[d] {
+                    state.vel[d] = 0.0;
 
-                if (state.offset[d] - scroll_target.target_offset).abs() < 1.0 {
-                    // Arrived
-                    state.offset[d] = scroll_target.target_offset;
-                    state.offset_target[d] = None;
-                } else {
-                    // Move towards target
-                    let t = emath::interpolation_factor(
-                        scroll_target.animation_time_span,
-                        ui.input(|i| i.time),
-                        dt,
-                        emath::ease_in_ease_out,
-                    );
-                    if t < 1.0 {
-                        state.offset[d] =
-                            emath::lerp(state.offset[d]..=scroll_target.target_offset, t);
-                        ctx.request_repaint();
-                    } else {
+                    if (state.offset[d] - scroll_target.target_offset).abs() < 1.0 {
                         // Arrived
                         state.offset[d] = scroll_target.target_offset;
                         state.offset_target[d] = None;
+                    } else {
+                        // Move towards target
+                        let t = emath::interpolation_factor(
+                            scroll_target.animation_time_span,
+                            ui.input(|i| i.time),
+                            dt,
+                            emath::ease_in_ease_out,
+                        );
+                        if t < 1.0 {
+                            state.offset[d] =
+                                emath::lerp(state.offset[d]..=scroll_target.target_offset, t);
+                            ctx.request_repaint();
+                        } else {
+                            // Arrived
+                            state.offset[d] = scroll_target.target_offset;
+                            state.offset_target[d] = None;
+                        }
                     }
                 }
             }
@@ -1034,6 +1059,8 @@ impl ScrollArea {
             .pass_state_mut(|state| core::mem::take(&mut state.scroll_target));
 
         Prepared {
+            consume_input,
+            wheel_dt,
             id,
             state,
             auto_shrink,
@@ -1164,6 +1191,8 @@ impl Prepared {
     /// Returns content size and state
     fn end(self, ui: &mut Ui) -> (Vec2, State) {
         let Self {
+            consume_input,
+            wheel_dt,
             id,
             mut state,
             inner_rect,
@@ -1197,6 +1226,12 @@ impl Prepared {
                 .ctx()
                 .pass_state_mut(|state| state.scroll_target[d].take());
 
+            if !consume_input {
+                content_ui
+                    .ctx()
+                    .pass_state_mut(|state| state.scroll_delta.0[d] = 0.0);
+                continue;
+            }
             if direction_enabled[d] {
                 let (scroll_delta, scroll_animation) = content_ui.ctx().pass_state_mut(|state| {
                     (
@@ -1323,7 +1358,8 @@ impl Prepared {
             && ui.ctx().dragged_id().is_none()
             || is_dragging_background;
 
-        if scroll_source.mouse_wheel
+        if consume_input
+            && scroll_source.mouse_wheel
             && ui.is_enabled()
             && (ui.rect_contains_pointer(outer_rect) || is_dragging_background)
         {
@@ -1356,7 +1392,7 @@ impl Prepared {
                             delta: -scroll_delta,
                             source: scroll_source,
                             can_chain_to_parent: has_scrolling_ancestor,
-                            dt: ui.input(|i| i.stable_dt).at_most(0.1),
+                            dt: wheel_dt.at_most(0.1),
                         },
                         &mut state.bounced_this_momentum[d],
                     );
@@ -1539,35 +1575,38 @@ impl Prepared {
 
             state.scroll_bar_interaction[d] = response.hovered() || response.dragged();
 
-            if let Some(pointer_pos) = response.interact_pointer_pos() {
-                let scroll_start_offset_from_top_left = state.scroll_start_offset_from_top_left[d]
-                    .get_or_insert_with(|| {
-                        if handle_rect.contains(pointer_pos) {
-                            pointer_pos[d] - handle_rect.min[d]
-                        } else {
-                            let handle_top_pos_at_bottom =
-                                scroll_bar_rect.max[d] - handle_rect.size()[d];
-                            // Calculate the new handle top position, centering the handle on the mouse.
-                            let new_handle_top_pos = (pointer_pos[d] - handle_rect.size()[d] * 0.5)
-                                .clamp(scroll_bar_rect.min[d], handle_top_pos_at_bottom);
-                            pointer_pos[d] - new_handle_top_pos
-                        }
-                    });
+            if consume_input {
+                if let Some(pointer_pos) = response.interact_pointer_pos() {
+                    let scroll_start_offset_from_top_left =
+                        state.scroll_start_offset_from_top_left[d].get_or_insert_with(|| {
+                            if handle_rect.contains(pointer_pos) {
+                                pointer_pos[d] - handle_rect.min[d]
+                            } else {
+                                let handle_top_pos_at_bottom =
+                                    scroll_bar_rect.max[d] - handle_rect.size()[d];
+                                // Calculate the new handle top position, centering the handle on the mouse.
+                                let new_handle_top_pos = (pointer_pos[d]
+                                    - handle_rect.size()[d] * 0.5)
+                                    .clamp(scroll_bar_rect.min[d], handle_top_pos_at_bottom);
+                                pointer_pos[d] - new_handle_top_pos
+                            }
+                        });
 
-                let new_handle_top = pointer_pos[d] - *scroll_start_offset_from_top_left;
-                let handle_travel =
-                    scroll_bar_rect.min[d]..=(scroll_bar_rect.max[d] - handle_rect.size()[d]);
-                state.offset[d] = if handle_travel.start() == handle_travel.end() {
-                    0.0
+                    let new_handle_top = pointer_pos[d] - *scroll_start_offset_from_top_left;
+                    let handle_travel =
+                        scroll_bar_rect.min[d]..=(scroll_bar_rect.max[d] - handle_rect.size()[d]);
+                    state.offset[d] = if handle_travel.start() == handle_travel.end() {
+                        0.0
+                    } else {
+                        remap(new_handle_top, handle_travel, 0.0..=max_offset[d])
+                    };
+
+                    // some manual action taken, scroll not stuck
+                    state.scroll_stuck_to_end[d] = false;
+                    state.offset_target[d] = None;
                 } else {
-                    remap(new_handle_top, handle_travel, 0.0..=max_offset[d])
-                };
-
-                // some manual action taken, scroll not stuck
-                state.scroll_stuck_to_end[d] = false;
-                state.offset_target[d] = None;
-            } else {
-                state.scroll_start_offset_from_top_left[d] = None;
+                    state.scroll_start_offset_from_top_left[d] = None;
+                }
             }
 
             if !rubber_banding[d] {
@@ -1695,7 +1734,9 @@ impl Prepared {
         state.content_is_too_large = content_is_too_large;
         state.interact_rect = Some(inner_rect);
 
-        state.store(ui.ctx(), id);
+        // Internal phase updates retain the consumption token. Public restoration
+        // clears it so another instance cannot inherit this pass's authority.
+        ui.ctx().data_mut(|data| data.insert_persisted(id, state));
 
         (content_size, state)
     }

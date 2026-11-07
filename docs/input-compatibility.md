@@ -46,8 +46,8 @@ requires every application viewport callback to complete the explicit phases:
    explicit `InputTrigger` and its authoritative target ID. An `Event { index,
    event }` trigger carries one original event and its position in the stream
    left by plugins; the handler sees that event in `InputState.events`. A `Time`
-   trigger delivers native long-touch or drag transitions with an empty event
-   stream. Run the target's widget handler against its registered rectangle. Apply
+   trigger delivers native long-touch or drag transitions, or an untargeted local
+   scrolling opportunity, with an empty event stream. Run the target's widget handler against its registered rectangle. Apply
    resulting application state changes before requesting another event. Untargeted
    events still reach the host through the returned event, including navigation
    already handled by the dispatcher and application/platform events.
@@ -114,6 +114,51 @@ an enabled pass is a programming error and asserts. Existing egui discard passes
 remain supported: raw events are taken once by `run_ui`, so a caller-requested
 second layout pass does not repeat actions. One-pass operation is independently
 tested; `request_discard` is not a prerequisite for input correctness.
+
+## Local scrolling
+
+Register each live `ScrollArea` with its normal scroll sources. When a `Time`
+trigger arrives, run the live local scroll shells so inertia, spring motion and
+pending wheel smoothing can advance, including on frames with no raw events.
+On `MouseWheel`, run the relevant nested shell chain in its normal inner-first
+consumption order. Scrollbar/background drag recipients likewise run their local
+shell. Shells declare the real content extent; they need not traverse the contents.
+Refresh affected control rectangles and clips with `input_layout` before asking
+for the next event. The example demonstrates a wheel followed by a click using
+updated geometry in the same callback.
+
+Registration, layout refresh and final paint do not consume scroll input or
+integrate physics. Each container privately remembers its last input opportunity,
+so repeated shell calls, including targeted pointer `Time` deliveries, cannot
+repeat its interaction. A discard continuation only remeasures layout; it does not
+release wheel carry or spend another frame budget. Explicitly restoring a public
+`scroll_area::State` resets its private consumption token. Removed containers have
+no update callback, and registration requests no scrolling opportunity when no
+containers remain. Native persisted offsets retain their existing lifetime.
+
+Old wheel carry is smoothed once at the frame-time opportunity using the existing
+repaint-aware `stable_dt`. Each new wheel impulse receives its initial slice with
+that same smoothing factor, without smoothing old carry again. Pointer/key events
+do not release even sub-point carry. Native momentum uses the frame dt for its
+velocity calculation, while physics integration and target animation run only at
+the time opportunity. The stock `WheelState` and `AxisPhysics` math is unchanged;
+ordinary, non-ordered execution retains its original algorithm.
+
+Ordered input preserves causal effects rather than promising the ordinary mode's
+whole-batch coalescing for every mixed batch. For example, `wheel(-40), click, End`
+releases the wheel's first slice and routes the click at its updated rectangle;
+End cancels future carry, without undoing that click or offset. Ordinary mode can
+coalesce End with the wheel before any widget sees it. Reversed impulses, changes
+of source/modifiers and the native sub-point flush threshold also obey event
+order. Each impulse uses the current native gesture classification; future carry
+retains native last-source/modifier state. Simple isolated wheel input, empty-frame
+release and isolated inertia/spring trajectories are compared with ordinary mode.
+
+Nested areas retain stock whole-axis consumption: an inner area that consumes an
+axis clears it before its parent runs; this is not proportional overflow sharing.
+Clips, transformed layers, top Areas and modal barriers remain authoritative.
+Stock scrolling is not blocked merely by a same-layer child button. No separate
+scroll hit tree, retained container registry or public phase query is introduced.
 
 ## Focus, geometry and capture
 
