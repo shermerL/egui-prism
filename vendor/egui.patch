@@ -383,7 +383,17 @@ diff --git a/src/context.rs b/src/context.rs
              // Areas that are not interactable are click-through: skip them in the hit-test.
              let mut layers: Vec<LayerId> = viewport
                  .prev_pass
-@@ -1528,12 +1535,16 @@
+@@ -1522,18 +1529,26 @@
+     ) -> Response {
+         debug_assert!(!w.rect.any_nan(), "widget rect is NaN: {:?}", w.rect);
+ 
++        if self.options(|options| options.ordered_input) {
++            crate::text_selection::LabelSelectionState::invalidate_input_text(self, w.id);
++        }
++
+         let interested_in_focus = w.enabled
+             && w.sense.is_focusable()
+             && self.memory(|mem| mem.allows_interaction(w.layer_id));
  
          // Remember this widget
          self.write(|ctx| {
@@ -400,7 +410,7 @@ diff --git a/src/context.rs b/src/context.rs
  
              if allow_focus && interested_in_focus {
                  ctx.memory.interested_in_focus(w.id, w.layer_id);
-@@ -1541,8 +1552,15 @@
+@@ -1541,8 +1556,15 @@
          });
  
          if allow_focus && !interested_in_focus {
@@ -418,7 +428,7 @@ diff --git a/src/context.rs b/src/context.rs
          }
  
          if w.sense.interactive() || w.sense.is_focusable() {
-@@ -1744,12 +1762,41 @@
+@@ -1744,12 +1766,41 @@
          res.flags.set(Flags::VISIBLE, visible);
          res.flags.set(Flags::HIGHLIGHTED, highlighted);
  
@@ -461,7 +471,7 @@ diff --git a/src/context.rs b/src/context.rs
              );
  
              let input = &viewport.input;
-@@ -1771,7 +1818,9 @@
+@@ -1771,7 +1822,9 @@
                  res.flags.set(Flags::FAKE_PRIMARY_CLICKED, true);
              }
  
@@ -472,7 +482,7 @@ diff --git a/src/context.rs b/src/context.rs
              {
                  res.flags.set(Flags::LONG_TOUCHED, true);
              }
-@@ -1780,30 +1829,30 @@
+@@ -1780,30 +1833,30 @@
  
              res.flags.set(
                  Flags::IS_POINTER_BUTTON_DOWN_ON,
@@ -510,7 +520,7 @@ diff --git a/src/context.rs b/src/context.rs
              let mut any_press = false;
  
              for pointer_event in &input.pointer.pointer_events {
-@@ -1848,7 +1897,7 @@
+@@ -1848,7 +1901,7 @@
              };
  
              let pointer_clicked_elsewhere = should_surrender_focus && !res.hovered();
@@ -519,7 +529,7 @@ diff --git a/src/context.rs b/src/context.rs
                  memory.surrender_focus(id);
              }
          });
-@@ -2928,6 +2977,16 @@
+@@ -2928,6 +2981,16 @@
  
          self.finish_root_ui();
  
@@ -536,7 +546,7 @@ diff --git a/src/context.rs b/src/context.rs
          if self.options(|o| o.zoom_with_keyboard) {
              crate::gui_zoom::zoom_with_keyboard(self);
          }
-@@ -2938,12 +2997,18 @@
+@@ -2938,12 +3001,18 @@
              }
          }
  
@@ -555,7 +565,7 @@ diff --git a/src/context.rs b/src/context.rs
  
          let plugins = self.read(|ctx| ctx.plugins.ordered_plugins());
          plugins.on_output(self, &mut output);
-@@ -3150,6 +3215,12 @@
+@@ -3150,6 +3219,12 @@
          let ended_viewport_id = self.viewport_id();
          let viewport = self.viewports.entry(ended_viewport_id).or_default();
          let pixels_per_point = viewport.input.pixels_per_point;
@@ -572,7 +582,7 @@ diff --git a/src/context/input_dispatch.rs b/src/context/input_dispatch.rs
 new file mode 100644
 --- /dev/null
 +++ b/src/context/input_dispatch.rs
-@@ -0,0 +1,789 @@
+@@ -0,0 +1,791 @@
 +use super::*;
 +use crate::{Event, InputState, Key, RawInput};
 +
@@ -1259,7 +1269,9 @@ new file mode 100644
 +                trigger: InputTrigger::Event { index, event },
 +            })
 +        });
-+        if routed.is_none() && !already_finished {
++        if routed.is_some() {
++            crate::text_selection::LabelSelectionState::begin_input_event(self);
++        } else if !already_finished {
 +            crate::text_selection::LabelSelectionState::prepare_input_paint(self);
 +        }
 +        routed
@@ -2051,7 +2063,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
 diff --git a/src/text_selection/label_text_selection.rs b/src/text_selection/label_text_selection.rs
 --- a/src/text_selection/label_text_selection.rs
 +++ b/src/text_selection/label_text_selection.rs
-@@ -106,11 +106,23 @@
+@@ -106,11 +106,25 @@
      states: ViewportIdMap<ViewportLabelSelectionState>,
  }
  
@@ -2060,6 +2072,8 @@ diff --git a/src/text_selection/label_text_selection.rs b/src/text_selection/lab
 +#[derive(Clone, Debug)]
 +struct LabelText {
 +    id: Id,
++    // Widget re-registration revokes the old source until its label renews it.
++    registered: bool,
 +    galley: Arc<Galley>,
 +    global_from_galley: TSTransform,
 +    multi_widget_text_select: bool,
@@ -2075,7 +2089,7 @@ diff --git a/src/text_selection/label_text_selection.rs b/src/text_selection/lab
  
      selection_bbox_last_frame: Rect,
      selection_bbox_this_frame: Rect,
-@@ -151,6 +163,7 @@
+@@ -151,6 +165,7 @@
      fn default() -> Self {
          Self {
              selection: Default::default(),
@@ -2083,7 +2097,7 @@ diff --git a/src/text_selection/label_text_selection.rs b/src/text_selection/lab
              selection_bbox_last_frame: Rect::NOTHING,
              selection_bbox_this_frame: Rect::NOTHING,
              any_hovered: Default::default(),
-@@ -187,9 +200,43 @@
+@@ -187,9 +202,62 @@
              self.states.remove(&viewport_id);
          }
      }
@@ -2097,6 +2111,18 @@ diff --git a/src/text_selection/label_text_selection.rs b/src/text_selection/lab
  }
  
  impl LabelSelectionState {
++    pub(crate) fn invalidate_input_text(ctx: &Context, id: Id) {
++        let plugin = ctx.plugin::<Self>();
++        if let Some(state) = plugin.lock().states.get_mut(&ctx.viewport_id())
++            && let Some(source) = state
++                .ordered_labels
++                .iter_mut()
++                .find(|source| source.id == id)
++        {
++            source.registered = false;
++        }
++    }
++
 +    pub(crate) fn clear_input_text(ctx: &Context, viewport: crate::ViewportId) {
 +        let plugin = ctx.plugin::<Self>();
 +        if let Some(state) = plugin.lock().states.get_mut(&viewport) {
@@ -2109,6 +2135,13 @@ diff --git a/src/text_selection/label_text_selection.rs b/src/text_selection/lab
 +        let mut plugin = plugin.lock();
 +        if let Some(state) = plugin.states.get_mut(&ctx.viewport_id()) {
 +            state.finish_input_event(ctx);
++        }
++    }
++
++    pub(crate) fn begin_input_event(ctx: &Context) {
++        let plugin = ctx.plugin::<Self>();
++        if let Some(state) = plugin.lock().states.get_mut(&ctx.viewport_id()) {
++            state.on_pointer_press(ctx);
 +        }
 +    }
 +
@@ -2127,21 +2160,27 @@ diff --git a/src/text_selection/label_text_selection.rs b/src/text_selection/lab
      /// Is there a label text selection in any viewport?
      pub fn has_selection(&self) -> bool {
          self.states
-@@ -230,7 +277,203 @@
+@@ -230,18 +298,224 @@
  }
  
  impl ViewportLabelSelectionState {
+-    fn on_begin_pass(&mut self, ui: &Ui) {
+-        if ui.input(|i| i.pointer.any_pressed() && !i.modifiers.shift) {
 +    fn ordered_selected_text(&mut self, ctx: &Context) -> Option<String> {
 +        let selection = self.selection?;
 +        let sources: Vec<_> = self
 +            .ordered_labels
 +            .iter()
 +            .filter(|source| {
-+                ctx.pass_state(|pass| {
-+                    pass.widgets.get(source.id).is_some_and(|widget| {
-+                        widget.enabled && widget.visible && widget.layer_id == selection.layer_id
++                source.registered
++                    && ctx.pass_state(|pass| {
++                        pass.widgets.get(source.id).is_some_and(|widget| {
++                            widget.enabled
++                                && widget.visible
++                                && widget.layer_id == selection.layer_id
++                        })
 +                    })
-+                }) && ctx.memory(|memory| memory.allows_interaction(selection.layer_id))
++                    && ctx.memory(|memory| memory.allows_interaction(selection.layer_id))
 +            })
 +            .cloned()
 +            .collect();
@@ -2223,10 +2262,15 @@ diff --git a/src/text_selection/label_text_selection.rs b/src/text_selection/lab
 +        } else {
 +            source.galley.begin()
 +        };
-+        let previous = CCursorRange::two(selection.primary.ccursor, other);
++        let previous = CCursorRange {
++            primary: selection.primary.ccursor,
++            secondary: other,
++            h_pos: None,
++        };
 +        let mut range = previous;
 +        if process_selection_key_events(ctx, &source.galley, source.id, &mut range) {
-+            if range.primary != previous.primary {
++            let changed = range != previous;
++            if changed && (range.primary != previous.primary || !source.multi_widget_text_select) {
 +                selection.primary = WidgetTextCursor::new(
 +                    source.id,
 +                    range.primary,
@@ -2234,7 +2278,9 @@ diff --git a/src/text_selection/label_text_selection.rs b/src/text_selection/lab
 +                    &source.galley,
 +                );
 +            }
-+            if range.secondary != previous.secondary {
++            if changed
++                && (range.secondary != previous.secondary || !source.multi_widget_text_select)
++            {
 +                selection.secondary = WidgetTextCursor::new(
 +                    source.id,
 +                    range.secondary,
@@ -2242,14 +2288,15 @@ diff --git a/src/text_selection/label_text_selection.rs b/src/text_selection/lab
 +                    &source.galley,
 +                );
 +            }
-+            self.selection_is_dirty |= range != previous;
++            self.selection_is_dirty |= changed;
 +            self.granular_drag = None;
 +        }
 +    }
 +
 +    fn finish_input_event(&mut self, ctx: &Context) {
-+        self.ordered_labels
-+            .retain(|source| ctx.pass_state(|pass| pass.widgets.contains(source.id)));
++        self.ordered_labels.retain(|source| {
++            source.registered && ctx.pass_state(|pass| pass.widgets.contains(source.id))
++        });
 +        if self.selection.is_some_and(|selection| {
 +            [selection.primary.widget_id, selection.secondary.widget_id]
 +                .iter()
@@ -2322,16 +2369,42 @@ diff --git a/src/text_selection/label_text_selection.rs b/src/text_selection/lab
 +        }
 +        if ctx.input(|input| input.pointer.any_released()) {
 +            self.is_dragging = false;
-+            self.granular_drag = None;
 +        }
 +    }
 +
-     fn on_begin_pass(&mut self, ui: &Ui) {
-+        self.ordered_labels.clear();
-         if ui.input(|i| i.pointer.any_pressed() && !i.modifiers.shift) {
++    fn on_pointer_press(&mut self, ctx: &Context) {
++        if ctx.input(|i| i.pointer.any_pressed() && !i.modifiers.shift) {
              // Maybe a new selection is about to begin, but the old one is over:
              // state.selection = None; // TODO(emilk): this makes sense, but doesn't work as expected.
-@@ -308,19 +551,30 @@
+         }
+ 
+-        if ui.input(|i| i.pointer.any_pressed()) {
+-            if ui.input(|i| i.modifiers.shift) && self.selection.is_some() {
++        if ctx.input(|i| i.pointer.any_pressed()) {
++            if ctx.input(|i| i.modifiers.shift) && self.selection.is_some() {
+                 // A shift-click extends the current selection, keeping any double- or
+                 // triple-clicked word/line selected, but now by the granularity of this press:
+                 if let Some(granular) = &mut self.granular_drag {
+-                    granular.granularity = SelectGranularity::of_press(ui);
++                    granular.granularity = SelectGranularity::of_press(ctx);
+                 }
+             } else {
+                 // Any other new press ends the previous word/line selection.
+@@ -249,6 +523,13 @@
+                 // `on_label` will set this again later this pass:
+                 self.granular_drag = None;
+             }
++        }
++    }
++
++    fn on_begin_pass(&mut self, ui: &Ui) {
++        self.ordered_labels.clear();
++        if !ui.ctx().options(|options| options.ordered_input) {
++            self.on_pointer_press(ui.ctx());
+         }
+ 
+         self.selection_bbox_last_frame = self.selection_bbox_this_frame;
+@@ -308,19 +589,30 @@
              }
          }
  
@@ -2366,7 +2439,7 @@ diff --git a/src/text_selection/label_text_selection.rs b/src/text_selection/lab
          if self.report_selection {
              self.selection_is_dirty = false;
              if !text_to_copy.is_empty() {
-@@ -330,7 +584,7 @@
+@@ -330,7 +622,7 @@
                      ));
              }
          }
@@ -2375,7 +2448,7 @@ diff --git a/src/text_selection/label_text_selection.rs b/src/text_selection/lab
              ui.copy_text(text_to_copy);
          }
      }
-@@ -391,11 +645,12 @@
+@@ -391,11 +683,12 @@
  
      fn cursor_for(
          &mut self,
@@ -2391,7 +2464,7 @@ diff --git a/src/text_selection/label_text_selection.rs b/src/text_selection/lab
          let Some(selection) = &mut self.selection else {
              // Nothing selected.
              return TextCursorState::default();
-@@ -408,17 +663,18 @@
+@@ -408,17 +701,18 @@
  
          let galley_from_global = global_from_galley.inverse();
  
@@ -2413,7 +2486,7 @@ diff --git a/src/text_selection/label_text_selection.rs b/src/text_selection/lab
  
              let is_in_same_column = galley_rect
                  .x_range()
-@@ -486,8 +742,7 @@
+@@ -486,8 +780,7 @@
              {
                  // The user is dragging the text selection upwards, above the first selected widget (this one):
                  if DEBUG {
@@ -2423,7 +2496,7 @@ diff --git a/src/text_selection/label_text_selection.rs b/src/text_selection/lab
                  }
                  Some(galley.begin())
              } else if is_in_same_column
-@@ -501,8 +756,7 @@
+@@ -501,8 +794,7 @@
                  // We move the cursor to the end of this widget,
                  // (and we may do the same for the next widget too).
                  if DEBUG {
@@ -2433,7 +2506,7 @@ diff --git a/src/text_selection/label_text_selection.rs b/src/text_selection/lab
                  }
                  Some(galley.end())
              } else {
-@@ -514,10 +768,10 @@
+@@ -514,10 +806,10 @@
                      WidgetTextCursor::new(response.id, new_primary, global_from_galley, galley);
  
                  // We don't want the latency of `drag_started`.
@@ -2446,13 +2519,14 @@ diff --git a/src/text_selection/label_text_selection.rs b/src/text_selection/lab
                              // A continuation of a previous selection.
                          } else {
                              // A new selection in the same layer.
-@@ -640,21 +894,41 @@
+@@ -640,21 +932,42 @@
          let layer_from_global = global_from_layer.inverse();
          let galley_from_global = galley_from_layer * layer_from_global;
          let global_from_galley = global_from_layer * layer_from_galley;
 +        let ordered = ui.ctx().options(|o| o.ordered_input);
 +        let source = LabelText {
 +            id: response.id,
++            registered: true,
 +            galley: Arc::clone(galley),
 +            global_from_galley,
 +            multi_widget_text_select: ui.style().interaction.multi_widget_text_select,
@@ -2491,7 +2565,16 @@ diff --git a/src/text_selection/label_text_selection.rs b/src/text_selection/lab
              && response.contains_pointer()
          {
              let cursor_at_pointer =
-@@ -716,13 +990,14 @@
+@@ -684,7 +997,7 @@
+ 
+             if shift && self.granular_drag.is_some() {
+                 // A shift-click extending a double- or triple-click selection:
+-                // keep the original word/line as the anchor (see `on_begin_pass`).
++                // keep the original word/line as the anchor (see `on_pointer_press`).
+                 // If the anchor is in another widget, `cursor_for` has already
+                 // extended the selection relative to it.
+             } else if let Some(granular) = cursor_state.granular_drag() {
+@@ -716,13 +1029,14 @@
  
              if let Some(selection) = &self.selection
                  && selection.primary.widget_id == response.id
@@ -2507,6 +2590,29 @@ diff --git a/src/text_selection/label_text_selection.rs b/src/text_selection/lab
                  self.copy_text(galley_rect, galley, &cursor_range);
              }
  
+diff --git a/src/text_selection/text_cursor_state.rs b/src/text_selection/text_cursor_state.rs
+--- a/src/text_selection/text_cursor_state.rs
++++ b/src/text_selection/text_cursor_state.rs
+@@ -39,8 +39,8 @@
+ 
+ impl SelectGranularity {
+     /// The granularity of the current press: by characters, words, or lines.
+-    pub(crate) fn of_press(ui: &Ui) -> Self {
+-        match ui.input(|i| i.pointer.press_click_count()) {
++    pub(crate) fn of_press(ctx: &crate::Context) -> Self {
++        match ctx.input(|i| i.pointer.press_click_count()) {
+             0 | 1 => Self::Char,
+             2 => Self::Word,
+             _ => Self::Line,
+@@ -163,7 +163,7 @@
+                 // The start of a drag (or a click).
+                 // Clicks are counted on release, but for double-click-and-drag
+                 // we need to select the word (or line) already on the second (or third) press:
+-                let granularity = SelectGranularity::of_press(ui);
++                let granularity = SelectGranularity::of_press(ui.ctx());
+                 let existing_range = if shift { self.range(galley) } else { None };
+ 
+                 if let Some(mut cursor_range) = existing_range {
 diff --git a/src/widget_rect.rs b/src/widget_rect.rs
 --- a/src/widget_rect.rs
 +++ b/src/widget_rect.rs

@@ -1529,6 +1529,10 @@ impl Context {
     ) -> Response {
         debug_assert!(!w.rect.any_nan(), "widget rect is NaN: {:?}", w.rect);
 
+        if self.options(|options| options.ordered_input) {
+            crate::text_selection::LabelSelectionState::invalidate_input_text(self, w.id);
+        }
+
         let interested_in_focus = w.enabled
             && w.sense.is_focusable()
             && self.memory(|mem| mem.allows_interaction(w.layer_id));

@@ -111,6 +111,8 @@ pub struct LabelSelectionState {
 #[derive(Clone, Debug)]
 struct LabelText {
     id: Id,
+    // Widget re-registration revokes the old source until its label renews it.
+    registered: bool,
     galley: Arc<Galley>,
     global_from_galley: TSTransform,
     multi_widget_text_select: bool,
@@ -210,6 +212,18 @@ impl Plugin for LabelSelectionState {
 }
 
 impl LabelSelectionState {
+    pub(crate) fn invalidate_input_text(ctx: &Context, id: Id) {
+        let plugin = ctx.plugin::<Self>();
+        if let Some(state) = plugin.lock().states.get_mut(&ctx.viewport_id())
+            && let Some(source) = state
+                .ordered_labels
+                .iter_mut()
+                .find(|source| source.id == id)
+        {
+            source.registered = false;
+        }
+    }
+
     pub(crate) fn clear_input_text(ctx: &Context, viewport: crate::ViewportId) {
         let plugin = ctx.plugin::<Self>();
         if let Some(state) = plugin.lock().states.get_mut(&viewport) {
@@ -222,6 +236,13 @@ impl LabelSelectionState {
         let mut plugin = plugin.lock();
         if let Some(state) = plugin.states.get_mut(&ctx.viewport_id()) {
             state.finish_input_event(ctx);
+        }
+    }
+
+    pub(crate) fn begin_input_event(ctx: &Context) {
+        let plugin = ctx.plugin::<Self>();
+        if let Some(state) = plugin.lock().states.get_mut(&ctx.viewport_id()) {
+            state.on_pointer_press(ctx);
         }
     }
 
@@ -283,11 +304,15 @@ impl ViewportLabelSelectionState {
             .ordered_labels
             .iter()
             .filter(|source| {
-                ctx.pass_state(|pass| {
-                    pass.widgets.get(source.id).is_some_and(|widget| {
-                        widget.enabled && widget.visible && widget.layer_id == selection.layer_id
+                source.registered
+                    && ctx.pass_state(|pass| {
+                        pass.widgets.get(source.id).is_some_and(|widget| {
+                            widget.enabled
+                                && widget.visible
+                                && widget.layer_id == selection.layer_id
+                        })
                     })
-                }) && ctx.memory(|memory| memory.allows_interaction(selection.layer_id))
+                    && ctx.memory(|memory| memory.allows_interaction(selection.layer_id))
             })
             .cloned()
             .collect();
@@ -369,10 +394,15 @@ impl ViewportLabelSelectionState {
         } else {
             source.galley.begin()
         };
-        let previous = CCursorRange::two(selection.primary.ccursor, other);
+        let previous = CCursorRange {
+            primary: selection.primary.ccursor,
+            secondary: other,
+            h_pos: None,
+        };
         let mut range = previous;
         if process_selection_key_events(ctx, &source.galley, source.id, &mut range) {
-            if range.primary != previous.primary {
+            let changed = range != previous;
+            if changed && (range.primary != previous.primary || !source.multi_widget_text_select) {
                 selection.primary = WidgetTextCursor::new(
                     source.id,
                     range.primary,
@@ -380,7 +410,9 @@ impl ViewportLabelSelectionState {
                     &source.galley,
                 );
             }
-            if range.secondary != previous.secondary {
+            if changed
+                && (range.secondary != previous.secondary || !source.multi_widget_text_select)
+            {
                 selection.secondary = WidgetTextCursor::new(
                     source.id,
                     range.secondary,
@@ -388,14 +420,15 @@ impl ViewportLabelSelectionState {
                     &source.galley,
                 );
             }
-            self.selection_is_dirty |= range != previous;
+            self.selection_is_dirty |= changed;
             self.granular_drag = None;
         }
     }
 
     fn finish_input_event(&mut self, ctx: &Context) {
-        self.ordered_labels
-            .retain(|source| ctx.pass_state(|pass| pass.widgets.contains(source.id)));
+        self.ordered_labels.retain(|source| {
+            source.registered && ctx.pass_state(|pass| pass.widgets.contains(source.id))
+        });
         if self.selection.is_some_and(|selection| {
             [selection.primary.widget_id, selection.secondary.widget_id]
                 .iter()
@@ -468,23 +501,21 @@ impl ViewportLabelSelectionState {
         }
         if ctx.input(|input| input.pointer.any_released()) {
             self.is_dragging = false;
-            self.granular_drag = None;
         }
     }
 
-    fn on_begin_pass(&mut self, ui: &Ui) {
-        self.ordered_labels.clear();
-        if ui.input(|i| i.pointer.any_pressed() && !i.modifiers.shift) {
+    fn on_pointer_press(&mut self, ctx: &Context) {
+        if ctx.input(|i| i.pointer.any_pressed() && !i.modifiers.shift) {
             // Maybe a new selection is about to begin, but the old one is over:
             // state.selection = None; // TODO(emilk): this makes sense, but doesn't work as expected.
         }
 
-        if ui.input(|i| i.pointer.any_pressed()) {
-            if ui.input(|i| i.modifiers.shift) && self.selection.is_some() {
+        if ctx.input(|i| i.pointer.any_pressed()) {
+            if ctx.input(|i| i.modifiers.shift) && self.selection.is_some() {
                 // A shift-click extends the current selection, keeping any double- or
                 // triple-clicked word/line selected, but now by the granularity of this press:
                 if let Some(granular) = &mut self.granular_drag {
-                    granular.granularity = SelectGranularity::of_press(ui);
+                    granular.granularity = SelectGranularity::of_press(ctx);
                 }
             } else {
                 // Any other new press ends the previous word/line selection.
@@ -492,6 +523,13 @@ impl ViewportLabelSelectionState {
                 // `on_label` will set this again later this pass:
                 self.granular_drag = None;
             }
+        }
+    }
+
+    fn on_begin_pass(&mut self, ui: &Ui) {
+        self.ordered_labels.clear();
+        if !ui.ctx().options(|options| options.ordered_input) {
+            self.on_pointer_press(ui.ctx());
         }
 
         self.selection_bbox_last_frame = self.selection_bbox_this_frame;
@@ -897,6 +935,7 @@ impl ViewportLabelSelectionState {
         let ordered = ui.ctx().options(|o| o.ordered_input);
         let source = LabelText {
             id: response.id,
+            registered: true,
             galley: Arc::clone(galley),
             global_from_galley,
             multi_widget_text_select: ui.style().interaction.multi_widget_text_select,
@@ -958,7 +997,7 @@ impl ViewportLabelSelectionState {
 
             if shift && self.granular_drag.is_some() {
                 // A shift-click extending a double- or triple-click selection:
-                // keep the original word/line as the anchor (see `on_begin_pass`).
+                // keep the original word/line as the anchor (see `on_pointer_press`).
                 // If the anchor is in another widget, `cursor_for` has already
                 // extended the selection relative to it.
             } else if let Some(granular) = cursor_state.granular_drag() {

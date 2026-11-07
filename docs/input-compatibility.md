@@ -86,9 +86,14 @@ that point, including selections spanning several Labels; Escape cancels the
 selection. The selection plugin retains current-pass `Arc<Galley>` text sources,
 IDs, text transforms, clip rectangles and local multi-widget selection policy.
 These are not another hit tree: eligibility and pointer containment still come
-from current egui widgets. Sources are replaced on re-registration, removed when
-the widget disappears, and cleared at input begin/pass end; closed viewports are
-pruned. Registration and final painting do not process selection input again.
+from current egui widgets. Widget re-registration revokes the previous text
+source until a selectable Label renews it, including when the same ID remains
+visible and enabled. Event finalization removes unrenewed or vanished sources
+and invalidates their selection endpoints. Sources are cleared at input begin/pass
+end; closed viewports are pruned. Registration and final painting do not process
+selection input again. Keyboard changes preserve the active endpoint and local
+selection policy. Pointer release ends dragging while retaining a word/line anchor;
+each new press updates its granularity or clears it using the stock selection rules.
 
 Remaining key events are saved privately until the stock frame-level zoom/quit
 step, after built-in plugin processing. Handler consumption remains authoritative;

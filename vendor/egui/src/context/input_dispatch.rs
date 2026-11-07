@@ -684,7 +684,9 @@ impl Context {
                 trigger: InputTrigger::Event { index, event },
             })
         });
-        if routed.is_none() && !already_finished {
+        if routed.is_some() {
+            crate::text_selection::LabelSelectionState::begin_input_event(self);
+        } else if !already_finished {
             crate::text_selection::LabelSelectionState::prepare_input_paint(self);
         }
         routed

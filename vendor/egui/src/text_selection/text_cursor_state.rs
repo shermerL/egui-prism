@@ -39,8 +39,8 @@ pub(crate) struct GranularDragSelect {
 
 impl SelectGranularity {
     /// The granularity of the current press: by characters, words, or lines.
-    pub(crate) fn of_press(ui: &Ui) -> Self {
-        match ui.input(|i| i.pointer.press_click_count()) {
+    pub(crate) fn of_press(ctx: &crate::Context) -> Self {
+        match ctx.input(|i| i.pointer.press_click_count()) {
             0 | 1 => Self::Char,
             2 => Self::Word,
             _ => Self::Line,
@@ -163,7 +163,7 @@ impl TextCursorState {
                 // The start of a drag (or a click).
                 // Clicks are counted on release, but for double-click-and-drag
                 // we need to select the word (or line) already on the second (or third) press:
-                let granularity = SelectGranularity::of_press(ui);
+                let granularity = SelectGranularity::of_press(ui.ctx());
                 let existing_range = if shift { self.range(galley) } else { None };
 
                 if let Some(mut cursor_range) = existing_range {

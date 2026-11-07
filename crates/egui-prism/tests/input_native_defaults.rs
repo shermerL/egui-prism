@@ -675,3 +675,282 @@ fn local_policy_change_limits_existing_selection_on_key_input() {
     assert_eq!(results[0], vec!["bravo"]);
     assert_eq!(results[0], results[1]);
 }
+
+#[test]
+fn selection_keys_preserve_the_active_endpoint_in_both_directions() {
+    for backwards in [false, true] {
+        let mut copies = Vec::new();
+        for ordered in [false, true] {
+            let ctx = context(ordered);
+            let (out, rects) = label_frame(&ctx, vec![], 0.0);
+            out.drop_without_applying_deltas();
+            let (start, end, arrow) = if backwards {
+                (
+                    rects[0].right_center(),
+                    rects[0].left_center(),
+                    Key::ArrowRight,
+                )
+            } else {
+                (
+                    rects[0].left_center(),
+                    rects[0].right_center(),
+                    Key::ArrowLeft,
+                )
+            };
+            for (n, events) in [
+                vec![press(start, true)],
+                vec![Event::PointerMoved(end)],
+                vec![press(end, false)],
+                vec![key(arrow, Modifiers::SHIFT)],
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                label_frame(&ctx, events, 0.1 + n as f64 * 0.1)
+                    .0
+                    .drop_without_applying_deltas();
+            }
+            let out = label_frame(&ctx, vec![Event::Copy], 0.6).0;
+            copies.push(copied(&out));
+            out.drop_without_applying_deltas();
+        }
+        assert_eq!(copies[0], vec![if backwards { "lpha" } else { "alph" }]);
+        assert_eq!(copies[0], copies[1], "backwards={backwards}");
+    }
+}
+
+fn selection_label(ui: &mut Ui, text: &str, selectable: bool) -> egui::Response {
+    ui.new_child(
+        egui::UiBuilder::new()
+            .scope_id(Id::unique("selection-label"))
+            .max_rect(Rect::from_min_size(pos2(20.0, 30.0), vec2(300.0, 100.0))),
+    )
+    .add(egui::Label::new(text).selectable(selectable))
+}
+
+fn selection_frame(ctx: &Context, input: RawInput, text: &str) -> (egui::FullOutput, Rect) {
+    let mut rect = Rect::NOTHING;
+    let out = ctx.run_ui(input, |ui| {
+        if ctx.options(|o| o.ordered_input) {
+            ctx.begin_input();
+            let id = selection_label(ui, text, true).id;
+            while let Some(input) = ctx.next_input_event() {
+                if input.target == Some(id) {
+                    selection_label(ui, text, true);
+                }
+            }
+        }
+        rect = selection_label(ui, text, true).rect;
+    });
+    (out, rect)
+}
+
+#[test]
+fn released_word_and_line_anchors_survive_shift_clicks() {
+    for triple in [false, true] {
+        for backwards in [false, true] {
+            let text = if triple {
+                "one two three\nfour five six\nseven eight nine"
+            } else {
+                "one two three"
+            };
+            let mut copies = Vec::new();
+            for ordered in [false, true] {
+                let ctx = context(ordered);
+                let (out, rect) = selection_frame(&ctx, raw(vec![], 0.0), text);
+                out.drop_without_applying_deltas();
+                let font = egui::TextStyle::Body.resolve(&ctx.global_style());
+                let galley = ctx.fonts_mut(|fonts| {
+                    fonts.layout_no_wrap(text.into(), font, egui::Color32::WHITE)
+                });
+                let pos = rect.min
+                    + galley
+                        .pos_from_cursor(egui::text::CCursor::new(if triple { 20 } else { 5 }))
+                        .center()
+                        .to_vec2();
+                let mut time = 0.1;
+                for _ in 0..if triple { 3 } else { 2 } {
+                    for down in [true, false] {
+                        selection_frame(&ctx, raw(vec![press(pos, down)], time), text)
+                            .0
+                            .drop_without_applying_deltas();
+                        time += 0.05;
+                    }
+                }
+                let end = if backwards {
+                    rect.left_top() + vec2(0.0, 2.0)
+                } else {
+                    rect.right_bottom() - vec2(0.0, 2.0)
+                };
+                selection_frame(&ctx, raw(vec![Event::PointerMoved(end)], 0.8), text)
+                    .0
+                    .drop_without_applying_deltas();
+                let out = selection_frame(&ctx, raw(vec![Event::Copy], 0.9), text).0;
+                let anchor = copied(&out);
+                out.drop_without_applying_deltas();
+                assert_eq!(
+                    anchor,
+                    vec![if triple { "four five six" } else { "two" }],
+                    "ordered={ordered}, triple={triple}"
+                );
+                for (n, down) in [true, false].into_iter().enumerate() {
+                    let input = raw(
+                        vec![
+                            Event::ModifiersChanged(Modifiers::SHIFT),
+                            Event::PointerButton {
+                                pos: end,
+                                button: egui::PointerButton::Primary,
+                                pressed: down,
+                                modifiers: Modifiers::SHIFT,
+                            },
+                        ],
+                        1.0 + n as f64 * 0.1,
+                    );
+                    selection_frame(&ctx, input, text)
+                        .0
+                        .drop_without_applying_deltas();
+                }
+                let out = selection_frame(&ctx, raw(vec![Event::Copy], 1.2), text).0;
+                copies.push(copied(&out));
+                out.drop_without_applying_deltas();
+            }
+            let expected = match (triple, backwards) {
+                (false, true) => "one two",
+                (false, false) => "two three",
+                (true, true) => "one two three\nfour five six",
+                (true, false) => "four five six\nseven eight nine",
+            };
+            assert_eq!(copies[0], vec![expected]);
+            assert_eq!(
+                copies[0], copies[1],
+                "triple={triple}, backwards={backwards}"
+            );
+        }
+    }
+}
+
+#[test]
+fn current_registration_revokes_or_renews_same_id_label_text() {
+    for renewal in ["unselectable", "replacement", "new-text", "unchanged"] {
+        let ctx = context(true);
+        let (out, rect) = selection_frame(&ctx, raw(vec![], 0.0), "alpha");
+        out.drop_without_applying_deltas();
+        selection_frame(
+            &ctx,
+            raw(
+                vec![
+                    press(rect.left_center(), true),
+                    Event::PointerMoved(rect.right_center()),
+                    press(rect.right_center(), false),
+                ],
+                0.1,
+            ),
+            "alpha",
+        )
+        .0
+        .drop_without_applying_deltas();
+        let mut text = "alpha";
+        let mut selectable = true;
+        let out = ctx.run_ui(
+            raw(vec![Event::Text("change".into()), Event::Copy], 0.5),
+            |ui| {
+                ctx.begin_input();
+                let id = selection_label(ui, text, selectable).id;
+                while ctx.next_input_event().is_some() {
+                    if ctx.input(|input| {
+                        input
+                            .events
+                            .iter()
+                            .any(|event| matches!(event, Event::Text(_)))
+                    }) {
+                        ctx.input_layout(|| {
+                            match renewal {
+                                "unselectable" => selectable = false,
+                                "new-text" => text = "bravo",
+                                _ => (),
+                            }
+                            if renewal == "replacement" {
+                                ui.interact(rect, id, egui::Sense::hover());
+                            } else {
+                                assert_eq!(selection_label(ui, text, selectable).id, id);
+                            }
+                        });
+                    }
+                }
+                if renewal != "replacement" {
+                    selection_label(ui, text, selectable);
+                }
+            },
+        );
+        let expected = match renewal {
+            "unchanged" => vec!["alpha"],
+            "new-text" => vec!["bravo"],
+            _ => vec![],
+        };
+        assert_eq!(copied(&out), expected, "renewal={renewal}");
+        out.drop_without_applying_deltas();
+        // Restoring selectability must not resurrect a revoked selection.
+        let out = selection_frame(&ctx, raw(vec![Event::Copy], 0.6), text).0;
+        assert_eq!(copied(&out), expected, "restored renewal={renewal}");
+        out.drop_without_applying_deltas();
+    }
+}
+
+#[test]
+fn batched_label_presses_update_granularity_and_cancel_old_anchors() {
+    let mut copies = Vec::new();
+    for ordered in [false, true] {
+        let ctx = context(ordered);
+        let text = "one two three";
+        let (out, rect) = selection_frame(&ctx, raw(vec![], 0.0), text);
+        out.drop_without_applying_deltas();
+        let font = egui::TextStyle::Body.resolve(&ctx.global_style());
+        let galley =
+            ctx.fonts_mut(|fonts| fonts.layout_no_wrap(text.into(), font, egui::Color32::WHITE));
+        let at = |index| {
+            rect.min
+                + galley
+                    .pos_from_cursor(egui::text::CCursor::new(index))
+                    .center()
+                    .to_vec2()
+        };
+        let shift_press = |index, pressed| Event::PointerButton {
+            pos: at(index),
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: Modifiers::SHIFT,
+        };
+        let events = vec![
+            press(at(5), true),
+            press(at(5), false),
+            press(at(5), true),
+            press(at(5), false),
+            Event::Copy,
+            Event::ModifiersChanged(Modifiers::SHIFT),
+            shift_press(9, true),
+            shift_press(9, false),
+            Event::Copy,
+            Event::ModifiersChanged(Modifiers::NONE),
+            press(at(0), true),
+            press(at(0), false),
+            Event::ModifiersChanged(Modifiers::SHIFT),
+            shift_press(2, true),
+            shift_press(2, false),
+            Event::Copy,
+        ];
+        let mut result = Vec::new();
+        let batches = if ordered {
+            vec![events]
+        } else {
+            events.into_iter().map(|event| vec![event]).collect()
+        };
+        for (n, events) in batches.into_iter().enumerate() {
+            let out = selection_frame(&ctx, raw(events, 0.1 + n as f64 * 0.05), text).0;
+            result.extend(copied(&out));
+            out.drop_without_applying_deltas();
+        }
+        copies.push(result);
+    }
+    assert_eq!(copies[0], vec!["two", "two t", "on"]);
+    assert_eq!(copies[0], copies[1]);
+}
