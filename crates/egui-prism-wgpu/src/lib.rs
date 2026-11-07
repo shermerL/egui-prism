@@ -1,3 +1,4 @@
+#![doc = include_str!("../../../docs/compositing.md")]
 //! Native frame integration for isolated egui drawing groups.
 //!
 //! Upload current texture deltas, call [`Host::prepare_frame`], then

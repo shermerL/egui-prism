@@ -16,8 +16,13 @@ remains the visual and interaction reference.
 
 Create the device and egui renderer, then install one compositor per egui context:
 
-```rust,ignore
+```no_run
+# use egui_prism::egui;
+# use egui_prism_wgpu::egui_wgpu::wgpu;
+# fn install(context: egui::Context, device: wgpu::Device) -> Result<(), egui_prism::compositing::Error> {
 let mut compositor = egui_prism_wgpu::Host::new(&context, &device)?;
+# Ok(())
+# }
 ```
 
 The context registration lives with the host. Duplicate installation fails. The
@@ -41,7 +46,13 @@ For each frame:
 6. Submit returned callback command buffers before the main command buffer.
 7. Drop the frame and free egui's requested source textures after submission.
 
-```rust,ignore
+```no_run
+# use egui_prism::egui;
+# use egui_prism_wgpu::{Host, egui_wgpu::{self, wgpu}};
+# fn render(compositor: &mut Host, mut renderer: egui_wgpu::Renderer,
+#     queue: &wgpu::Queue, mut encoder: wgpu::CommandEncoder,
+#     paint_jobs: Vec<egui::ClippedPrimitive>, screen: egui_wgpu::ScreenDescriptor,
+#     descriptor: wgpu::RenderPassDescriptor<'_>) -> Result<(), egui_prism::compositing::Error> {
 let mut frame = compositor.prepare_frame(&mut renderer, paint_jobs, screen)?;
 let commands = frame.encode(&queue, &mut encoder)?;
 {
@@ -50,6 +61,8 @@ let commands = frame.encode(&queue, &mut encoder)?;
 }
 queue.submit(commands.into_iter().chain([encoder.finish()]));
 drop(frame);
+# Ok(())
+# }
 ```
 
 The frame exclusively borrows the compositor and renderer. Temporary image
@@ -71,14 +84,19 @@ not submit a partial frame as successful output.
 Use unfaded shapes in egui points, individual clip rectangles, and finite bounds
 that include desired antialiasing, borders, rings and shadows:
 
-```rust,ignore
+```no_run
 use egui_prism::{compositing::{self, Group, Item}, egui};
+# fn draw(ui: &egui::Ui, visual_bounds: egui::Rect, clip: egui::Rect,
+#     opacity: f32, fill: egui::Shape, image: egui::Shape, text: egui::Shape)
+#     -> Result<(), compositing::Error> {
 let group = Group::new(visual_bounds, opacity, vec![
     Item::Shape(egui::epaint::ClippedShape::new(clip, fill)),
     Item::Shape(egui::epaint::ClippedShape::new(clip, image)),
     Item::Shape(egui::epaint::ClippedShape::new(clip, text)),
 ])?;
 compositing::paint(ui.painter(), group)?;
+# Ok(())
+# }
 ```
 
 Inherited painter opacity is applied to the assembled root once. It cannot undo
@@ -134,3 +152,9 @@ OS DPI transitions and actual platform observations are separate evidence.
 Metal observations do not establish Windows or Linux runtime acceptance. Linux
 X11 and Wayland observations are also separate. No browser product compatibility
 or release/deployment follows from building the reference page.
+
+CI explicitly runs the GPU contract test on Linux Mesa software Vulkan; an
+unavailable adapter fails the check. It covers current-frame image producers,
+temporary registration cleanup and installation revocation. This headless
+software backend is regression coverage, not desktop or physical GPU acceptance.
+The documentation examples compile as consumer doctests of the adapter crate.

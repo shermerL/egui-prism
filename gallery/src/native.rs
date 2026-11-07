@@ -86,8 +86,9 @@ impl ApplicationHandler<Wake> for App {
         match event {
             WindowEvent::RedrawRequested => {
                 self.deadline = None;
-                if let Err(error) = runtime.paint(event_loop) {
-                    self.fail(event_loop, error);
+                match runtime.paint(event_loop) {
+                    Ok(retry) => self.deadline = retry,
+                    Err(error) => self.fail(event_loop, error),
                 }
             }
             WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
@@ -239,7 +240,7 @@ impl Runtime {
             window,
         })
     }
-    fn paint(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
+    fn paint(&mut self, event_loop: &ActiveEventLoop) -> Result<Option<Instant>> {
         if let Some(error) = self.gpu_error.lock().expect("GPU error lock").clone() {
             return Err(error.into());
         }
@@ -248,7 +249,7 @@ impl Runtime {
             if self.close_requested {
                 event_loop.exit();
             }
-            return Ok(());
+            return Ok(None);
         }
         if self.reconfigure || self.config.width != size.width || self.config.height != size.height
         {
@@ -267,23 +268,23 @@ impl Runtime {
                 self.surface = self.instance.create_surface(self.window.clone())?;
                 self.surface.configure(&self.device, &self.config);
                 self.window.request_redraw();
-                return Ok(());
+                return Ok(None);
             }
             wgpu::CurrentSurfaceTexture::Outdated => {
                 self.surface.configure(&self.device, &self.config);
                 self.window.request_redraw();
-                return Ok(());
+                return Ok(None);
             }
             wgpu::CurrentSurfaceTexture::Timeout => {
-                self.context
-                    .request_repaint_after(std::time::Duration::from_millis(50));
-                return Ok(());
+                // No UI pass ran, so egui may still coalesce repaint requests.
+                // The host must schedule every failed acquisition independently.
+                return Ok(Some(Instant::now() + std::time::Duration::from_millis(50)));
             }
             wgpu::CurrentSurfaceTexture::Occluded => {
                 if self.close_requested {
                     event_loop.exit();
                 }
-                return Ok(());
+                return Ok(None);
             }
             wgpu::CurrentSurfaceTexture::Validation => {
                 return Err("surface validation failed".into());
@@ -431,6 +432,6 @@ impl Runtime {
         if close {
             event_loop.exit();
         }
-        Ok(())
+        Ok(None)
     }
 }

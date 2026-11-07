@@ -1,6 +1,6 @@
 [package]
 name = "egui-prism-gallery"
-description = "Native and WebAssembly engineering gallery for egui-prism"
+description = "Native engineering gallery for egui-prism"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

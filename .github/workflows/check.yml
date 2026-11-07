@@ -11,7 +11,6 @@ permissions:
 
 jobs:
   policy:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -22,7 +21,6 @@ jobs:
       - name: Repository policy and pinned CSS reference
         run: nix develop --command quest gate python3 scripts/check.py --policy-only
   native:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     strategy:
       fail-fast: false
       matrix:
@@ -35,13 +33,22 @@ jobs:
           persist-credentials: false
       - name: Linux development dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y pkg-config libx11-dev libxcursor-dev libxi-dev libxrandr-dev libxkbcommon-dev libwayland-dev libvulkan-dev
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libx11-dev libxcursor-dev libxi-dev libxrandr-dev libxkbcommon-dev libwayland-dev libvulkan-dev mesa-vulkan-drivers
       - name: Install pinned Rust tools
         run: rustup show active-toolchain
       - name: Locked native build and CPU checks
         env:
           EGUI_PRISM_BUILD_ID: ${{ github.sha }}
         run: python scripts/check.py --cargo-only
+      - name: GPU contracts on Mesa software Vulkan
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          icds=(/usr/share/vulkan/icd.d/lvp_icd*.json)
+          test -f "${icds[0]}"
+          export VK_ICD_FILENAMES="${icds[0]}"
+          export XDG_RUNTIME_DIR="${RUNNER_TEMP}"
+          cargo test --locked -p egui-prism-wgpu tests::current_frame_producers_cleanup_and_revocation -- --ignored --exact --nocapture
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: gallery-${{ runner.os }}-${{ github.sha }}
