@@ -99,10 +99,13 @@ impl Harness {
                             self.clicks[n] +=
                                 usize::from(ui.interact(rect(n), id(n), Sense::click()).clicked());
                             self.arrows[n] += usize::from(matches!(
-                                event.event,
-                                Event::Key {
-                                    key: Key::ArrowRight,
-                                    pressed: true,
+                                event.trigger,
+                                egui::InputTrigger::Event {
+                                    event: Event::Key {
+                                        key: Key::ArrowRight,
+                                        pressed: true,
+                                        ..
+                                    },
                                     ..
                                 }
                             ));

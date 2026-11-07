@@ -545,6 +545,8 @@ pub(crate) struct Focus {
     policy_seen: crate::IdSet,
     filter_written_this_pass: Option<Id>,
     ime_generation: u64,
+    // Distinguish a newer host focus decision from an unrelated IME interruption.
+    focus_revision: u64,
 }
 
 /// The widget with focus.
@@ -932,7 +934,7 @@ impl Memory {
 
     /// Register a live widget's navigation policy for this viewport and pass.
     pub fn register_focus_policy(&mut self, id: Id, layer: LayerId, filter: EventFilter) {
-        if !self.allows_interaction(layer) {
+        if !self.options.ordered_input && !self.allows_interaction(layer) {
             return;
         }
         let focus = self.focus_mut();
@@ -977,6 +979,9 @@ impl Memory {
         };
         let focus = self.focus_mut();
         focus.focus_direction = direction;
+        // Ordered dispatch supplies only currently eligible focusable widgets,
+        // including controls that were blocked when first registered this pass.
+        focus.focus_widgets_cache.clone_from(rects);
         let next = focus.find_widget_in_direction(rects);
         focus.reset_focus();
         if let Some(id) = next {
@@ -1000,12 +1005,15 @@ impl Memory {
     pub fn request_focus(&mut self, id: Id) {
         let focus = self.focus_mut();
         focus.focused_widget = Some(focus.widget(id));
+        focus.focus_revision = focus.focus_revision.wrapping_add(1);
         self.interrupt_ime();
     }
 
     /// Defer focus until the next pass so an already rendered widget sees `gained_focus`.
     pub(crate) fn request_focus_next_frame(&mut self, id: Id) {
-        self.focus_mut().id_next_frame = Some(id);
+        let focus = self.focus_mut();
+        focus.id_next_frame = Some(id);
+        focus.focus_revision = focus.focus_revision.wrapping_add(1);
         self.interrupt_ime();
     }
 
@@ -1016,6 +1024,7 @@ impl Memory {
         let focus = self.focus_mut();
         if focus.focused() == Some(id) {
             focus.focused_widget = None;
+            focus.focus_revision = focus.focus_revision.wrapping_add(1);
         }
     }
 
@@ -1028,12 +1037,15 @@ impl Memory {
         focus.policy_seen.remove(&id);
         if focus.focused() == Some(id) {
             focus.focused_widget = None;
+            focus.focus_revision = focus.focus_revision.wrapping_add(1);
         }
     }
 
     /// Move keyboard focus in a specific direction.
     pub fn move_focus(&mut self, direction: FocusDirection) {
-        self.focus_mut().focus_direction = direction;
+        let focus = self.focus_mut();
+        focus.focus_direction = direction;
+        focus.focus_revision = focus.focus_revision.wrapping_add(1);
     }
 
     /// Returns true if
@@ -1093,7 +1105,11 @@ impl Memory {
     pub fn set_modal_layer(&mut self, layer_id: LayerId) {
         if let Some(current) = self.focus().and_then(|f| f.top_modal_layer_current_frame)
             && matches!(
-                self.areas().compare_order(layer_id, current),
+                if self.options.ordered_input {
+                    self.areas().compare_order_current(layer_id, current)
+                } else {
+                    self.areas().compare_order(layer_id, current)
+                },
                 core::cmp::Ordering::Less
             )
         {
@@ -1124,7 +1140,13 @@ impl Memory {
     /// Stop editing the active [`TextEdit`](crate::TextEdit) (if any).
     #[inline(always)]
     pub fn stop_text_input(&mut self) {
-        self.focus_mut().focused_widget = None;
+        let focus = self.focus_mut();
+        focus.focused_widget = None;
+        focus.focus_revision = focus.focus_revision.wrapping_add(1);
+    }
+
+    pub(crate) fn focus_revision(&self) -> u64 {
+        self.focus().map_or(0, |focus| focus.focus_revision)
     }
 
     /// Forget window positions, sizes etc.
@@ -1364,20 +1386,20 @@ impl Areas {
         }
     }
 
+    pub(crate) fn order_current(&self) -> Vec<LayerId> {
+        let mut order = self.order.clone();
+        Self::sort_order(&mut order, &self.wants_to_be_on_top, &self.sublayers);
+        order
+    }
+
     pub(crate) fn compare_order_current(&self, a: LayerId, b: LayerId) -> core::cmp::Ordering {
-        a.order
-            .cmp(&b.order)
-            .then_with(|| {
-                self.wants_to_be_on_top
-                    .contains(&a)
-                    .cmp(&self.wants_to_be_on_top.contains(&b))
-            })
-            .then_with(|| {
-                self.order
-                    .iter()
-                    .position(|layer| *layer == a)
-                    .cmp(&self.order.iter().position(|layer| *layer == b))
-            })
+        let order = self.order_current();
+        a.order.cmp(&b.order).then_with(|| {
+            order
+                .iter()
+                .position(|layer| *layer == a)
+                .cmp(&order.iter().position(|layer| *layer == b))
+        })
     }
 
     /// Set the state of the area of the given layer for this pass.
@@ -1515,26 +1537,17 @@ impl Areas {
         self.parent_layer(*layer).is_some()
     }
 
-    pub(crate) fn end_pass(&mut self) {
-        let Self {
-            visible_areas_last_frame,
-            visible_areas_current_frame,
-            order,
-            wants_to_be_on_top,
-            sublayers,
-            ..
-        } = self;
-
-        core::mem::swap(visible_areas_last_frame, visible_areas_current_frame);
-        visible_areas_current_frame.clear();
-
+    fn sort_order(
+        order: &mut Vec<LayerId>,
+        wants_to_be_on_top: &HashSet<LayerId>,
+        sublayers: &ahash::HashMap<LayerId, HashSet<LayerId>>,
+    ) {
         order.sort_by_key(|layer| (layer.order, wants_to_be_on_top.contains(layer)));
-        wants_to_be_on_top.clear();
 
         // For all layers with sublayers, put the sublayers directly after the parent layer:
         // (it doesn't matter in which order we replace parents with their children)
         #[expect(clippy::iter_over_hash_type)]
-        for (parent, children) in core::mem::take(sublayers) {
+        for (&parent, children) in sublayers {
             let mut moved_layers = vec![parent]; // parent first…
 
             order.retain(|l| {
@@ -1550,6 +1563,24 @@ impl Areas {
             };
             order.splice(parent_pos..=parent_pos, moved_layers); // replace the parent with itself and its children
         }
+    }
+
+    pub(crate) fn end_pass(&mut self) {
+        let Self {
+            visible_areas_last_frame,
+            visible_areas_current_frame,
+            order,
+            wants_to_be_on_top,
+            sublayers,
+            ..
+        } = self;
+
+        core::mem::swap(visible_areas_last_frame, visible_areas_current_frame);
+        visible_areas_current_frame.clear();
+
+        Self::sort_order(order, wants_to_be_on_top, sublayers);
+        wants_to_be_on_top.clear();
+        sublayers.clear();
 
         self.order_map = self
             .order

@@ -40,9 +40,12 @@ requires every application viewport callback to complete the explicit phases:
    This phase must only lay out controls, register policies and discover geometry.
    Apply business actions only in the event phase. Widget responses do not report
    activations during registration.
-3. Call `ctx.next_input_event()` until it returns `None`. Each result contains one
-   event and its authoritative target ID. Run the target's widget handler against
-   its registered rectangle; it sees that event in `InputState.events`. Apply
+3. Call `ctx.next_input_event()` until it returns `None`. Each result contains an
+   explicit `InputTrigger` and its authoritative target ID. An `Event { index,
+   event }` trigger carries one original event and its position in the stream
+   left by plugins; the handler sees that event in `InputState.events`. A `Time`
+   trigger delivers native long-touch or drag transitions with an empty event
+   stream. Run the target's widget handler against its registered rectangle. Apply
    resulting application state changes before requesting another event. Untargeted
    events still reach the host through the returned event, including navigation
    already handled by the dispatcher and application/platform events.
@@ -58,9 +61,17 @@ pass or a second retained widget tree. Registration and targeted handling may
 still perform local widget layout; this is a migration cost, not a claim of
 zero additional work. No performance advantage is claimed.
 
+The dispatcher advances frame time once before processing the raw batch. Any
+resulting interaction transitions receive `InputTrigger::Time` handling first,
+including on frames with no raw events. Each affected owner is offered one handling
+opportunity, subject to current visibility, enablement and modal eligibility.
+Time triggers do not invent pointer events or consume a raw-event index. The final
+paint suppresses their action flags just as it suppresses raw-event activations.
+
 `RawInput.events` stays available for observation in each phase. The live
 `InputState.events` stream is empty during layout/paint and contains only the
-current event during handling. Plugin `input_hook` and `on_begin_pass` retain
+current event during raw-event handling; time handling has no synthetic event.
+Plugin `input_hook` and `on_begin_pass` retain
 normal ordering and see the incoming batch. A plugin's deliberate consumption in
 `on_begin_pass` is honored. At `on_end_pass`, original raw events and final aggregate
 pointer/key state are retained, while the consumed event stream stays empty.
@@ -81,6 +92,11 @@ must be renewed every pass. Current focus setters can update the owner's policy
 without waiting for a previous-frame focus record. Stock TextEdit registers its
 own policy in ordered mode. Tab, Shift+Tab, directional navigation, Escape and
 AccessKit focus requests run in event order against current eligible controls.
+Registration keeps a blocked control's policy available if a modal closes later
+in the same pass. Directional navigation uses the newly eligible rectangles.
+`SurrenderFocusOn` preserves its configured press, completed-click or never
+semantics. A newer host focus decision during a press/release sequence takes
+precedence over surrender on that release, including in stock TextEdit handlers.
 
 For controls such as Slider, register rail and thumb independently, then call
 `ctx.set_input_owner(rail_id, thumb_id)`. They must be in the same layer, and
@@ -128,7 +144,9 @@ rectangle, then paint after dispatch. Selection, copy, undo, synthetic preedit /
 commit, first-focus arrows and focus interruption are regression-tested. A
 composition is bound to the viewport's focus owner and interruption generation;
 a terminal event from an interrupted composition is observable but cannot edit a
-new focus owner. Terminal commit or empty preedit clears that binding. Raw IME
+new focus owner. An empty preedit retains the previous owner for a following
+commit, including across frames; commit clears that binding. A new nonempty
+preedit after the clear starts a new binding for the current owner. Raw IME
 contains no independent native session ID, so native integrations must preserve
 the platform's ordered composition/termination sequence.
 

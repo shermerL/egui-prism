@@ -185,7 +185,11 @@ fn plugins_observe_original_batch_and_final_aggregate_state() {
         |ui| {
             ui.interact(rect(0), id(0), Sense::click());
         },
-        |_, event| routed.push(event.event),
+        |_, event| {
+            if let egui::InputTrigger::Event { event, .. } = event.trigger {
+                routed.push(event);
+            }
+        },
     )
     .drop_without_applying_deltas();
     let observer = observer.lock();
@@ -371,7 +375,9 @@ fn plugin_consumption_is_respected_without_deleting_raw_events() {
         |_| {},
         |ui, event| {
             assert_eq!(ui.input(|i| i.raw.events.clone()), events);
-            routed.push(event.event);
+            if let egui::InputTrigger::Event { event, .. } = event.trigger {
+                routed.push(event);
+            };
         },
     )
     .drop_without_applying_deltas();
@@ -473,7 +479,13 @@ fn disabling_between_press_and_release_cancels_in_the_same_batch() {
             ui.interact(rect(0), id(0), Sense::drag());
         },
         |ui, event| {
-            if matches!(event.event, Event::PointerButton { pressed: true, .. }) {
+            if matches!(
+                event.trigger,
+                egui::InputTrigger::Event {
+                    event: Event::PointerButton { pressed: true, .. },
+                    ..
+                }
+            ) {
                 ctx.input_layout(|| {
                     ui.add_enabled_ui(false, |ui| {
                         ui.interact(rect(0), id(0), Sense::drag());

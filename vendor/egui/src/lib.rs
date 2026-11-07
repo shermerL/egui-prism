@@ -488,7 +488,7 @@ pub use self::{
         menu::{self, MenuBar},
         modal, panel, scroll_area,
     },
-    context::{Context, RepaintCause, RequestRepaintInfo, RoutedInput},
+    context::{Context, InputTrigger, RepaintCause, RequestRepaintInfo, RoutedInput},
     data::{
         Key, ScreenshotCallback,
         input::{

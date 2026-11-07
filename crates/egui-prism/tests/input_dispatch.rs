@@ -60,9 +60,12 @@ fn one_pass_arrow_tab_arrow() {
             }
             while let Some(e) = ctx.next_input_event() {
                 if matches!(
-                    e.event,
-                    Event::Key {
-                        key: Key::ArrowRight,
+                    e.trigger,
+                    egui::InputTrigger::Event {
+                        event: Event::Key {
+                            key: Key::ArrowRight,
+                            ..
+                        },
                         ..
                     }
                 ) && let Some(n) = (0..2).find(|&n| e.target == Some(id(n)))
@@ -182,7 +185,13 @@ fn modal_open_replace_close_then_background_in_one_pass() {
         ui.interact(rect(0), id(0), Sense::click());
         ui.interact(rect(1), id(1), Sense::click());
         while let Some(e) = ctx.next_input_event() {
-            if matches!(e.event, Event::PointerButton { pressed: false, .. }) {
+            if matches!(
+                e.trigger,
+                egui::InputTrigger::Event {
+                    event: Event::PointerButton { pressed: false, .. },
+                    ..
+                }
+            ) {
                 targets.push(e.target);
                 match state {
                     0 => {

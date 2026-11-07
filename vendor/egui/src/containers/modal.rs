@@ -106,15 +106,29 @@ impl Modal {
             frame,
         } = self;
 
-        let is_top_modal = ctx.memory_mut(|mem| {
-            mem.set_modal_layer(area.layer());
-            mem.top_modal_layer() == Some(area.layer())
-        });
+        let ordered = ctx.options(|o| o.ordered_input);
+        let layer = area.layer();
+        let mut is_top_modal = if ordered {
+            false
+        } else {
+            ctx.memory_mut(|mem| {
+                mem.set_modal_layer(layer);
+                mem.top_modal_layer() == Some(layer)
+            })
+        };
         let any_popup_open = crate::Popup::is_any_open(ctx);
         let InnerResponse {
             inner: (inner, backdrop_response),
             response,
         } = area.show(ctx, |ui| {
+            if ordered {
+                // Area::begin has now applied this pass's placement and raising.
+                // Establish the barrier before registering the modal contents.
+                is_top_modal = ctx.memory_mut(|mem| {
+                    mem.set_modal_layer(layer);
+                    mem.top_modal_layer() == Some(layer)
+                });
+            }
             let bg_rect = ui.ctx().content_rect();
             let bg_sense = Sense::CLICK | Sense::DRAG;
             let mut backdrop = ui.new_child(UiBuilder::new().sense(bg_sense).max_rect(bg_rect));

@@ -1,7 +1,7 @@
 #![warn(missing_docs)] // Let's keep `Context` well-documented.
 
 mod input_dispatch;
-pub use input_dispatch::RoutedInput;
+pub use input_dispatch::{InputTrigger, RoutedInput};
 
 use alloc::{borrow::Cow, sync::Arc};
 use core::{cell::RefCell, panic::Location, time::Duration};

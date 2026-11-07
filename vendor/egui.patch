@@ -280,12 +280,10 @@ diff --git a/src/containers/modal.rs b/src/containers/modal.rs
  pub struct Modal {
      pub area: Area,
      pub backdrop_color: Color32,
-@@ -71,6 +72,30 @@
-     pub fn area(mut self, area: Area) -> Self {
-         self.area = area;
+@@ -73,6 +74,30 @@
          self
-+    }
-+
+     }
+ 
 +    /// Register the modal's measured layout before dispatching its first input event.
 +    ///
 +    /// Requires ordered input. The content closure is layout-only and may run twice
@@ -308,9 +306,45 @@ diff --git a/src/containers/modal.rs b/src/containers/modal.rs
 +            }
 +            self.show(ctx, content)
 +        })
-     }
- 
++    }
++
      /// Show the modal.
+     pub fn show<T>(self, ctx: &Context, content: impl FnOnce(&mut Ui) -> T) -> ModalResponse<T> {
+         let Self {
+@@ -81,15 +106,29 @@
+             frame,
+         } = self;
+ 
+-        let is_top_modal = ctx.memory_mut(|mem| {
+-            mem.set_modal_layer(area.layer());
+-            mem.top_modal_layer() == Some(area.layer())
+-        });
++        let ordered = ctx.options(|o| o.ordered_input);
++        let layer = area.layer();
++        let mut is_top_modal = if ordered {
++            false
++        } else {
++            ctx.memory_mut(|mem| {
++                mem.set_modal_layer(layer);
++                mem.top_modal_layer() == Some(layer)
++            })
++        };
+         let any_popup_open = crate::Popup::is_any_open(ctx);
+         let InnerResponse {
+             inner: (inner, backdrop_response),
+             response,
+         } = area.show(ctx, |ui| {
++            if ordered {
++                // Area::begin has now applied this pass's placement and raising.
++                // Establish the barrier before registering the modal contents.
++                is_top_modal = ctx.memory_mut(|mem| {
++                    mem.set_modal_layer(layer);
++                    mem.top_modal_layer() == Some(layer)
++                });
++            }
+             let bg_rect = ui.ctx().content_rect();
+             let bg_sense = Sense::CLICK | Sense::DRAG;
+             let mut backdrop = ui.new_child(UiBuilder::new().sense(bg_sense).max_rect(bg_rect));
 diff --git a/src/context.rs b/src/context.rs
 --- a/src/context.rs
 +++ b/src/context.rs
@@ -318,7 +352,7 @@ diff --git a/src/context.rs b/src/context.rs
  #![warn(missing_docs)] // Let's keep `Context` well-documented.
 +
 +mod input_dispatch;
-+pub use input_dispatch::RoutedInput;
++pub use input_dispatch::{InputTrigger, RoutedInput};
  
  use alloc::{borrow::Cow, sync::Arc};
  use core::{cell::RefCell, panic::Location, time::Duration};
@@ -484,7 +518,7 @@ diff --git a/src/context/input_dispatch.rs b/src/context/input_dispatch.rs
 new file mode 100644
 --- /dev/null
 +++ b/src/context/input_dispatch.rs
-@@ -0,0 +1,645 @@
+@@ -0,0 +1,745 @@
 +use super::*;
 +use crate::{Event, InputState, Key, RawInput};
 +
@@ -494,15 +528,22 @@ new file mode 100644
 +    aggregate: Option<InputState>,
 +    // The active composition can outlive a pass; the focus generation invalidates
 +    // late terminal events after a host interruption or focus transfer.
-+    composition: Option<(Id, u64)>,
++    composition: Option<Composition>,
++    press_focus_revision: Option<u64>,
 +    events: Option<alloc::vec::IntoIter<Event>>,
 +    header: Option<RawInput>,
 +    index: usize,
++    timed_targets: alloc::vec::IntoIter<Id>,
 +    owners: IdMap<Id>,
 +    rounding: IdMap<f32>,
 +    paint_before: Option<crate::layers::GraphicLayers>,
 +    pub(super) finished: bool,
 +    pub(super) in_event: bool,
++}
++struct Composition {
++    owner: Id,
++    generation: u64,
++    cleared: bool,
 +}
 +impl DispatchState {
 +    pub(super) fn owner(&self, id: Id) -> Id {
@@ -510,21 +551,34 @@ new file mode 100644
 +    }
 +    pub(super) fn begin(&mut self, input: &InputState, enabled: bool) {
 +        *self = Self {
-+            composition: enabled.then_some(self.composition).flatten(),
++            composition: enabled.then(|| self.composition.take()).flatten(),
++            press_focus_revision: enabled.then_some(self.press_focus_revision).flatten(),
 +            previous: enabled.then(|| input.clone()),
 +            ..Default::default()
 +        };
 +    }
 +}
-+/// One input event and the widget selected by authoritative current-pass routing.
++/// What caused an ordered handler to run.
++#[derive(Clone, Debug)]
++pub enum InputTrigger {
++    /// An original event left by beginning-of-pass plugins.
++    Event {
++        /// Index in that remaining event stream.
++        index: usize,
++        /// The original event, unchanged.
++        event: Event,
++    },
++    /// Frame time advanced, producing a long touch or drag transition without a raw event.
++    Time,
++}
++
++/// An input trigger and the widget selected by authoritative current-pass routing.
 +#[derive(Clone, Debug)]
 +pub struct RoutedInput {
-+    /// Index in the event stream left by beginning-of-pass plugins.
-+    pub index: usize,
-+    /// Target widget, if the event has a recipient.
++    /// Target widget, if the trigger has a recipient.
 +    pub target: Option<Id>,
-+    /// The original event.
-+    pub event: Event,
++    /// The original event or an explicit time-driven handling opportunity.
++    pub trigger: InputTrigger,
 +}
 +impl Context {
 +    /// Start the explicit current-pass input phase before registering controls.
@@ -730,7 +784,7 @@ new file mode 100644
 +            ctx.memory.remove_input_modal_layer(layer);
 +        });
 +    }
-+    /// Dispatch the next event after current geometry has been registered.
++    /// Dispatch the next raw event or time-driven interaction against current geometry.
 +    pub fn next_input_event(&self) -> Option<RoutedInput> {
 +        self.write(|ctx| {
 +            assert!(
@@ -753,9 +807,11 @@ new file mode 100644
 +            let event = viewport
 +                .dispatch
 +                .events
-+                .as_mut()
++                .as_ref()
 +                .expect("begin_input initializes the event cursor")
-+                .next();
++                .as_slice()
++                .first()
++                .cloned();
 +            if matches!(event, Some(Event::WindowFocused(false))) {
 +                ctx.memory.interrupt_ime();
 +            }
@@ -794,6 +850,64 @@ new file mode 100644
 +            {
 +                ctx.memory.surrender_focus(id);
 +            }
++            if let Some(previous) = viewport.dispatch.previous.take() {
++                // Advance the clock once, before the raw batch. This preserves
++                // time-driven pointer transitions even when there are no events.
++                let original_raw = core::mem::take(&mut viewport.input.raw);
++                let header = viewport
++                    .dispatch
++                    .header
++                    .as_ref()
++                    .expect("begin_input saves the frame header")
++                    .clone();
++                viewport.input = previous.begin_pass(
++                    header,
++                    true,
++                    viewport.input.pixels_per_point,
++                    ctx.memory.options.input_options,
++                );
++                viewport.input.raw = original_raw;
++                let (_, hits) = current_hits(viewport, &ctx.memory);
++                viewport.hits = hits;
++                viewport.interact_widgets = crate::interaction::interact(
++                    &viewport.interact_widgets,
++                    &viewport.this_pass.widgets,
++                    &viewport.hits,
++                    &viewport.input,
++                    ctx.memory.interaction_mut(),
++                );
++                let mut targets = Vec::new();
++                for target in [
++                    viewport.interact_widgets.long_touched,
++                    viewport.interact_widgets.drag_started,
++                    viewport.interact_widgets.drag_stopped,
++                ]
++                .into_iter()
++                .flatten()
++                {
++                    if !targets.contains(&target) {
++                        targets.push(target);
++                    }
++                }
++                viewport.dispatch.timed_targets = targets.into_iter();
++            }
++            for target in viewport.dispatch.timed_targets.by_ref() {
++                if viewport.this_pass.widgets.get(target).is_some_and(|w| {
++                    w.enabled && w.visible && ctx.memory.allows_interaction(w.layer_id)
++                }) {
++                    viewport.dispatch.in_event = true;
++                    return Some(RoutedInput {
++                        target: Some(target),
++                        trigger: InputTrigger::Time,
++                    });
++                }
++            }
++            let event = viewport
++                .dispatch
++                .events
++                .as_mut()
++                .expect("begin_input initializes the event cursor")
++                .next();
 +            let Some(event) = event else {
 +                let (_, hits) = current_hits(viewport, &ctx.memory);
 +                viewport.hits = hits;
@@ -842,18 +956,11 @@ new file mode 100644
 +                .expect("begin_input saves the frame header")
 +                .clone();
 +            raw.events = vec![event.clone()];
-+            if index > 0 {
-+                raw.predicted_dt = 0.;
-+                raw.dropped_files.clear();
-+            }
++            // Time and frame metadata were already advanced by the explicit time step.
++            raw.predicted_dt = 0.;
++            raw.dropped_files.clear();
 +            let pixels_per_point = viewport.input.pixels_per_point;
-+            // Layout needs this frame's viewport metadata. Start the ordered
-+            // state transition from the prior input only when an event arrives.
-+            let previous = viewport
-+                .dispatch
-+                .previous
-+                .take()
-+                .unwrap_or_else(|| core::mem::take(&mut viewport.input));
++            let previous = core::mem::take(&mut viewport.input);
 +            viewport.input = previous.begin_pass(
 +                raw,
 +                true,
@@ -926,23 +1033,33 @@ new file mode 100644
 +            if let Event::Ime(ime) = &event {
 +                match ime {
 +                    crate::ImeEvent::Preedit { text, .. }
-+                        if !text.is_empty() && viewport.dispatch.composition.is_none() =>
++                        if !text.is_empty()
++                            && viewport
++                                .dispatch
++                                .composition
++                                .as_ref()
++                                .is_none_or(|c| c.cleared) =>
 +                    {
-+                        viewport.dispatch.composition = ctx
-+                            .memory
-+                            .focused()
-+                            .map(|id| (id, ctx.memory.ime_generation()));
++                        viewport.dispatch.composition =
++                            ctx.memory.focused().map(|owner| Composition {
++                                owner,
++                                generation: ctx.memory.ime_generation(),
++                                cleared: false,
++                            });
 +                    }
 +                    _ => {}
 +                }
-+                if let Some((owner, generation)) = viewport.dispatch.composition {
-+                    target = (ctx.memory.focused() == Some(owner)
-+                        && generation == ctx.memory.ime_generation())
-+                    .then_some(owner);
++                if let Some(composition) = &mut viewport.dispatch.composition {
++                    target = (ctx.memory.focused() == Some(composition.owner)
++                        && composition.generation == ctx.memory.ime_generation())
++                    .then_some(composition.owner);
++                    // winit may clear the preedit before committing, even across frames.
++                    // Keep the old owner until that commit or the next composition starts.
++                    if matches!(ime, crate::ImeEvent::Preedit { text, .. } if text.is_empty()) {
++                        composition.cleared = true;
++                    }
 +                }
-+                if matches!(ime, crate::ImeEvent::Commit(_))
-+                    || matches!(ime, crate::ImeEvent::Preedit { text, .. } if text.is_empty())
-+                {
++                if matches!(ime, crate::ImeEvent::Commit(_)) {
 +                    viewport.dispatch.composition = None;
 +                }
 +            }
@@ -1017,30 +1134,46 @@ new file mode 100644
 +                    }
 +                }
 +            }
++            let should_surrender = match ctx.memory.options.input_options.surrender_focus_on {
++                crate::SurrenderFocusOn::Presses => viewport.input.pointer.any_pressed(),
++                crate::SurrenderFocusOn::Clicks => {
++                    viewport.input.pointer.any_click()
++                        && viewport
++                            .dispatch
++                            .press_focus_revision
++                            .is_none_or(|revision| revision == ctx.memory.focus_revision())
++                }
++                crate::SurrenderFocusOn::Never => false,
++            };
++            if should_surrender
++                && let Some(id) = ctx.memory.focused()
++                && !viewport.interact_widgets.hovered.contains(&id)
++            {
++                ctx.memory.surrender_focus(id);
++            }
 +            if let Event::PointerButton {
 +                pressed: true,
 +                button: crate::PointerButton::Primary,
 +                ..
 +            } = event
++                && let Some(target) = target
++                && viewport
++                    .this_pass
++                    .widgets
++                    .get(target)
++                    .is_some_and(|w| w.sense.is_focusable())
++                && !ctx.memory.has_focus(target)
 +            {
-+                if let Some(target) = target {
-+                    if viewport
-+                        .this_pass
-+                        .widgets
-+                        .get(target)
-+                        .is_some_and(|w| w.sense.is_focusable())
-+                        && !ctx.memory.has_focus(target)
-+                    {
-+                        ctx.memory.request_focus(target);
-+                    }
-+                } else if let Some(id) = ctx.memory.focused() {
-+                    ctx.memory.surrender_focus(id);
-+                }
++                ctx.memory.request_focus(target);
++            }
++            if matches!(event, Event::PointerButton { pressed: true, .. }) {
++                viewport.dispatch.press_focus_revision = Some(ctx.memory.focus_revision());
++            } else if !viewport.input.pointer.any_down() || cancelled {
++                viewport.dispatch.press_focus_revision = None;
 +            }
 +            Some(RoutedInput {
-+                index,
 +                target,
-+                event,
++                trigger: InputTrigger::Event { index, event },
 +            })
 +        })
 +    }
@@ -1053,7 +1186,8 @@ new file mode 100644
 +        .layer_ids()
 +        .filter(|layer| memory.areas().is_interactable(*layer) && memory.allows_interaction(*layer))
 +        .collect();
-+    layers.sort_by(|&a, &b| memory.areas().compare_order_current(a, b));
++    let order = memory.areas().order_current();
++    layers.sort_by_key(|layer| (layer.order, order.iter().position(|entry| entry == layer)));
 +    let mut hits = viewport
 +        .input
 +        .pointer
@@ -1176,7 +1310,7 @@ diff --git a/src/lib.rs b/src/lib.rs
          modal, panel, scroll_area,
      },
 -    context::{Context, RepaintCause, RequestRepaintInfo},
-+    context::{Context, RepaintCause, RequestRepaintInfo, RoutedInput},
++    context::{Context, InputTrigger, RepaintCause, RequestRepaintInfo, RoutedInput},
      data::{
          Key, ScreenshotCallback,
          input::{
@@ -1343,7 +1477,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
              dark_style, // covered above
              light_style,
              theme_preference,
-@@ -535,6 +539,12 @@
+@@ -535,6 +539,14 @@
  
      /// A cache of widget IDs that are interested in focus with their corresponding rectangles.
      focus_widgets_cache: IdMap<Rect>,
@@ -1353,10 +1487,12 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
 +    policy_seen: crate::IdSet,
 +    filter_written_this_pass: Option<Id>,
 +    ime_generation: u64,
++    // Distinguish a newer host focus decision from an unrelated IME interruption.
++    focus_revision: u64,
  }
  
  /// The widget with focus.
-@@ -544,15 +554,6 @@
+@@ -544,15 +556,6 @@
      pub filter: EventFilter,
  }
  
@@ -1372,7 +1508,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
  impl InteractionState {
      /// Are we currently clicking or dragging an egui widget?
      pub fn is_using_pointer(&self) -> bool {
-@@ -561,16 +562,35 @@
+@@ -561,16 +564,35 @@
  }
  
  impl Focus {
@@ -1410,7 +1546,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
          }
          let event_filter = self.focused_widget.map(|w| w.filter).unwrap_or_default();
  
-@@ -626,7 +646,7 @@
+@@ -626,7 +648,7 @@
                  .copied()
          });
          if let Some(id) = newly_focused {
@@ -1419,7 +1555,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
              self.give_to_next = false;
              self.reset_focus();
          }
-@@ -636,7 +656,7 @@
+@@ -636,7 +658,7 @@
          if self.focus_direction.is_cardinal()
              && let Some(found_widget) = self.find_widget_in_direction(used_ids)
          {
@@ -1428,7 +1564,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
          }
  
          if let Some(focused_widget) = self.focused_widget {
-@@ -649,6 +669,15 @@
+@@ -649,6 +671,15 @@
              }
          }
  
@@ -1444,7 +1580,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
          self.top_modal_layer = self.top_modal_layer_current_frame.take();
      }
  
-@@ -663,7 +692,7 @@
+@@ -663,7 +694,7 @@
              .or_insert(Rect::EVERYTHING);
  
          if self.give_to_next && !self.had_focus_last_frame(id) {
@@ -1453,7 +1589,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
              self.give_to_next = false;
          } else if self.focused() == Some(id) {
              if self.focus_direction == FocusDirection::Next {
-@@ -679,14 +708,14 @@
+@@ -679,14 +710,14 @@
              && !self.give_to_next
          {
              // nothing has focus and the user pressed tab - give focus to the first widgets that wants it:
@@ -1470,7 +1606,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
              self.reset_focus();
          }
  
-@@ -791,6 +820,8 @@
+@@ -791,6 +822,8 @@
  
          // Cleanup
          self.interactions.retain(|id, _| viewports.contains(id));
@@ -1479,7 +1615,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
          self.areas.retain(|id, _| viewports.contains(id));
          self.popups.retain(|id, _| viewports.contains(id));
  
-@@ -805,7 +836,7 @@
+@@ -805,7 +838,7 @@
          self.focus
              .entry(self.viewport_id)
              .or_default()
@@ -1488,13 +1624,13 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
      }
  
      pub(crate) fn end_pass(&mut self, used_ids: &IdMap<Rect>) {
-@@ -899,6 +930,21 @@
+@@ -899,6 +932,21 @@
          self.focus()?.focused()
      }
  
 +    /// Register a live widget's navigation policy for this viewport and pass.
 +    pub fn register_focus_policy(&mut self, id: Id, layer: LayerId, filter: EventFilter) {
-+        if !self.allows_interaction(layer) {
++        if !self.options.ordered_input && !self.allows_interaction(layer) {
 +            return;
 +        }
 +        let focus = self.focus_mut();
@@ -1510,7 +1646,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
      /// Set an event filter for a widget.
      ///
      /// This allows you to control whether the widget will loose focus
-@@ -906,13 +952,44 @@
+@@ -906,13 +954,47 @@
      ///
      /// You must first give focus to the widget before calling this.
      pub fn set_focus_lock_filter(&mut self, id: Id, event_filter: EventFilter) {
@@ -1546,6 +1682,9 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
 +        };
 +        let focus = self.focus_mut();
 +        focus.focus_direction = direction;
++        // Ordered dispatch supplies only currently eligible focusable widgets,
++        // including controls that were blocked when first registered this pass.
++        focus.focus_widgets_cache.clone_from(rects);
 +        let next = focus.find_widget_in_direction(rects);
 +        focus.reset_focus();
 +        if let Some(id) = next {
@@ -1562,17 +1701,35 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
      }
  
      /// Give keyboard focus to a specific widget.
-@@ -921,7 +998,8 @@
+@@ -921,13 +1003,17 @@
      /// Calling this will interrupt IME composition.
      #[inline(always)]
      pub fn request_focus(&mut self, id: Id) {
 -        self.focus_mut().focused_widget = Some(FocusWidget::new(id));
 +        let focus = self.focus_mut();
 +        focus.focused_widget = Some(focus.widget(id));
++        focus.focus_revision = focus.focus_revision.wrapping_add(1);
          self.interrupt_ime();
      }
  
-@@ -946,6 +1024,8 @@
+     /// Defer focus until the next pass so an already rendered widget sees `gained_focus`.
+     pub(crate) fn request_focus_next_frame(&mut self, id: Id) {
+-        self.focus_mut().id_next_frame = Some(id);
++        let focus = self.focus_mut();
++        focus.id_next_frame = Some(id);
++        focus.focus_revision = focus.focus_revision.wrapping_add(1);
+         self.interrupt_ime();
+     }
+ 
+@@ -938,6 +1024,7 @@
+         let focus = self.focus_mut();
+         if focus.focused() == Some(id) {
+             focus.focused_widget = None;
++            focus.focus_revision = focus.focus_revision.wrapping_add(1);
+         }
+     }
+ 
+@@ -946,14 +1033,19 @@
      pub fn ignore_focus(&mut self, id: Id) {
          let focus = self.focus_mut();
          focus.focus_widgets_cache.remove(&id);
@@ -1580,8 +1737,20 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
 +        focus.policy_seen.remove(&id);
          if focus.focused() == Some(id) {
              focus.focused_widget = None;
++            focus.focus_revision = focus.focus_revision.wrapping_add(1);
          }
-@@ -961,8 +1041,13 @@
+     }
+ 
+     /// Move keyboard focus in a specific direction.
+     pub fn move_focus(&mut self, direction: FocusDirection) {
+-        self.focus_mut().focus_direction = direction;
++        let focus = self.focus_mut();
++        focus.focus_direction = direction;
++        focus.focus_revision = focus.focus_revision.wrapping_add(1);
+     }
+ 
+     /// Returns true if
+@@ -961,8 +1053,13 @@
      /// - there is no modal layer
      pub fn is_above_modal_layer(&self, layer_id: LayerId) -> bool {
          if let Some(modal_layer) = self.focus().and_then(|f| f.top_modal_layer) {
@@ -1596,7 +1765,20 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
                  core::cmp::Ordering::Equal | core::cmp::Ordering::Greater
              )
          } else {
-@@ -1016,6 +1101,19 @@
+@@ -1008,7 +1105,11 @@
+     pub fn set_modal_layer(&mut self, layer_id: LayerId) {
+         if let Some(current) = self.focus().and_then(|f| f.top_modal_layer_current_frame)
+             && matches!(
+-                self.areas().compare_order(layer_id, current),
++                if self.options.ordered_input {
++                    self.areas().compare_order_current(layer_id, current)
++                } else {
++                    self.areas().compare_order(layer_id, current)
++                },
+                 core::cmp::Ordering::Less
+             )
+         {
+@@ -1016,6 +1117,19 @@
          }
  
          self.focus_mut().set_modal_layer(layer_id);
@@ -1616,7 +1798,22 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
      }
  
      /// Get the top modal layer (from the previous frame).
-@@ -1077,6 +1175,12 @@
+@@ -1026,7 +1140,13 @@
+     /// Stop editing the active [`TextEdit`](crate::TextEdit) (if any).
+     #[inline(always)]
+     pub fn stop_text_input(&mut self) {
+-        self.focus_mut().focused_widget = None;
++        let focus = self.focus_mut();
++        focus.focused_widget = None;
++        focus.focus_revision = focus.focus_revision.wrapping_add(1);
++    }
++
++    pub(crate) fn focus_revision(&self) -> u64 {
++        self.focus().map_or(0, |focus| focus.focus_revision)
+     }
+ 
+     /// Forget window positions, sizes etc.
+@@ -1077,6 +1197,12 @@
      /// Interrupt the current IME composition, if any.
      pub fn interrupt_ime(&mut self) {
          self.requested_interrupt_ime = true;
@@ -1629,30 +1826,88 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
      }
  
      pub(crate) fn should_interrupt_ime(&self) -> bool {
-@@ -1258,6 +1362,22 @@
+@@ -1258,6 +1384,22 @@
              core::cmp::Ordering::Equal => self.order_map.get(&a).cmp(&self.order_map.get(&b)),
              cmp => cmp,
          }
 +    }
 +
++    pub(crate) fn order_current(&self) -> Vec<LayerId> {
++        let mut order = self.order.clone();
++        Self::sort_order(&mut order, &self.wants_to_be_on_top, &self.sublayers);
++        order
++    }
++
 +    pub(crate) fn compare_order_current(&self, a: LayerId, b: LayerId) -> core::cmp::Ordering {
-+        a.order
-+            .cmp(&b.order)
-+            .then_with(|| {
-+                self.wants_to_be_on_top
-+                    .contains(&a)
-+                    .cmp(&self.wants_to_be_on_top.contains(&b))
-+            })
-+            .then_with(|| {
-+                self.order
-+                    .iter()
-+                    .position(|layer| *layer == a)
-+                    .cmp(&self.order.iter().position(|layer| *layer == b))
-+            })
++        let order = self.order_current();
++        a.order.cmp(&b.order).then_with(|| {
++            order
++                .iter()
++                .position(|layer| *layer == a)
++                .cmp(&order.iter().position(|layer| *layer == b))
++        })
      }
  
      /// Set the state of the area of the given layer for this pass.
-@@ -1466,21 +1586,21 @@
+@@ -1395,26 +1537,17 @@
+         self.parent_layer(*layer).is_some()
+     }
+ 
+-    pub(crate) fn end_pass(&mut self) {
+-        let Self {
+-            visible_areas_last_frame,
+-            visible_areas_current_frame,
+-            order,
+-            wants_to_be_on_top,
+-            sublayers,
+-            ..
+-        } = self;
+-
+-        core::mem::swap(visible_areas_last_frame, visible_areas_current_frame);
+-        visible_areas_current_frame.clear();
+-
++    fn sort_order(
++        order: &mut Vec<LayerId>,
++        wants_to_be_on_top: &HashSet<LayerId>,
++        sublayers: &ahash::HashMap<LayerId, HashSet<LayerId>>,
++    ) {
+         order.sort_by_key(|layer| (layer.order, wants_to_be_on_top.contains(layer)));
+-        wants_to_be_on_top.clear();
+ 
+         // For all layers with sublayers, put the sublayers directly after the parent layer:
+         // (it doesn't matter in which order we replace parents with their children)
+         #[expect(clippy::iter_over_hash_type)]
+-        for (parent, children) in core::mem::take(sublayers) {
++        for (&parent, children) in sublayers {
+             let mut moved_layers = vec![parent]; // parent first…
+ 
+             order.retain(|l| {
+@@ -1430,6 +1563,24 @@
+             };
+             order.splice(parent_pos..=parent_pos, moved_layers); // replace the parent with itself and its children
+         }
++    }
++
++    pub(crate) fn end_pass(&mut self) {
++        let Self {
++            visible_areas_last_frame,
++            visible_areas_current_frame,
++            order,
++            wants_to_be_on_top,
++            sublayers,
++            ..
++        } = self;
++
++        core::mem::swap(visible_areas_last_frame, visible_areas_current_frame);
++        visible_areas_current_frame.clear();
++
++        Self::sort_order(order, wants_to_be_on_top, sublayers);
++        wants_to_be_on_top.clear();
++        sublayers.clear();
+ 
+         self.order_map = self
+             .order
+@@ -1466,21 +1617,21 @@
  
      // Frame N-1
      {
@@ -1679,7 +1934,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
          assert_eq!(focus.id_two_frames_ago, Some(a));
          assert_eq!(focus.id_previous_frame, Some(b));
          assert!(lost_focus_check(&focus, a), "`A` lost_focus must fire");
-@@ -1489,7 +1609,7 @@
+@@ -1489,7 +1640,7 @@
  
      // Frame N+2
      {
@@ -1688,7 +1943,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
          assert!(
              !lost_focus_check(&focus, a),
              "A's lost_focus must stop firing once the two-frame window passes",
-@@ -1582,3 +1702,6 @@
+@@ -1582,3 +1733,6 @@
      let (inside, _) = run_pass(false);
      assert_ne!(inside, Some(layer_id), "gone once no longer registered");
  }
@@ -1763,3 +2018,16 @@ diff --git a/src/widgets/text_edit/builder.rs b/src/widgets/text_edit/builder.rs
          let owns_ime_events = ui.memory(|mem| mem.owns_ime_events(id));
          if !owns_ime_events {
              state.cursor_purpose = TextEditCursorPurpose::Selection;
+@@ -878,7 +881,11 @@
+             );
+ 
+             if did_interact || response.clicked() {
+-                ui.memory_mut(|mem| mem.request_focus(response.id));
++                // Ordered dispatch owns focus on press. A captured release or drag
++                // must not undo a newer host focus transfer or surrender.
++                if !ui.ctx().options(|o| o.ordered_input) {
++                    ui.memory_mut(|mem| mem.request_focus(response.id));
++                }
+                 state.cursor_purpose = TextEditCursorPurpose::Selection;
+ 
+                 state.last_interaction_time = ui.input(|i| i.time);

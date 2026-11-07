@@ -7,15 +7,22 @@ pub(super) struct DispatchState {
     aggregate: Option<InputState>,
     // The active composition can outlive a pass; the focus generation invalidates
     // late terminal events after a host interruption or focus transfer.
-    composition: Option<(Id, u64)>,
+    composition: Option<Composition>,
+    press_focus_revision: Option<u64>,
     events: Option<alloc::vec::IntoIter<Event>>,
     header: Option<RawInput>,
     index: usize,
+    timed_targets: alloc::vec::IntoIter<Id>,
     owners: IdMap<Id>,
     rounding: IdMap<f32>,
     paint_before: Option<crate::layers::GraphicLayers>,
     pub(super) finished: bool,
     pub(super) in_event: bool,
+}
+struct Composition {
+    owner: Id,
+    generation: u64,
+    cleared: bool,
 }
 impl DispatchState {
     pub(super) fn owner(&self, id: Id) -> Id {
@@ -23,21 +30,34 @@ impl DispatchState {
     }
     pub(super) fn begin(&mut self, input: &InputState, enabled: bool) {
         *self = Self {
-            composition: enabled.then_some(self.composition).flatten(),
+            composition: enabled.then(|| self.composition.take()).flatten(),
+            press_focus_revision: enabled.then_some(self.press_focus_revision).flatten(),
             previous: enabled.then(|| input.clone()),
             ..Default::default()
         };
     }
 }
-/// One input event and the widget selected by authoritative current-pass routing.
+/// What caused an ordered handler to run.
+#[derive(Clone, Debug)]
+pub enum InputTrigger {
+    /// An original event left by beginning-of-pass plugins.
+    Event {
+        /// Index in that remaining event stream.
+        index: usize,
+        /// The original event, unchanged.
+        event: Event,
+    },
+    /// Frame time advanced, producing a long touch or drag transition without a raw event.
+    Time,
+}
+
+/// An input trigger and the widget selected by authoritative current-pass routing.
 #[derive(Clone, Debug)]
 pub struct RoutedInput {
-    /// Index in the event stream left by beginning-of-pass plugins.
-    pub index: usize,
-    /// Target widget, if the event has a recipient.
+    /// Target widget, if the trigger has a recipient.
     pub target: Option<Id>,
-    /// The original event.
-    pub event: Event,
+    /// The original event or an explicit time-driven handling opportunity.
+    pub trigger: InputTrigger,
 }
 impl Context {
     /// Start the explicit current-pass input phase before registering controls.
@@ -243,7 +263,7 @@ impl Context {
             ctx.memory.remove_input_modal_layer(layer);
         });
     }
-    /// Dispatch the next event after current geometry has been registered.
+    /// Dispatch the next raw event or time-driven interaction against current geometry.
     pub fn next_input_event(&self) -> Option<RoutedInput> {
         self.write(|ctx| {
             assert!(
@@ -266,9 +286,11 @@ impl Context {
             let event = viewport
                 .dispatch
                 .events
-                .as_mut()
+                .as_ref()
                 .expect("begin_input initializes the event cursor")
-                .next();
+                .as_slice()
+                .first()
+                .cloned();
             if matches!(event, Some(Event::WindowFocused(false))) {
                 ctx.memory.interrupt_ime();
             }
@@ -307,6 +329,64 @@ impl Context {
             {
                 ctx.memory.surrender_focus(id);
             }
+            if let Some(previous) = viewport.dispatch.previous.take() {
+                // Advance the clock once, before the raw batch. This preserves
+                // time-driven pointer transitions even when there are no events.
+                let original_raw = core::mem::take(&mut viewport.input.raw);
+                let header = viewport
+                    .dispatch
+                    .header
+                    .as_ref()
+                    .expect("begin_input saves the frame header")
+                    .clone();
+                viewport.input = previous.begin_pass(
+                    header,
+                    true,
+                    viewport.input.pixels_per_point,
+                    ctx.memory.options.input_options,
+                );
+                viewport.input.raw = original_raw;
+                let (_, hits) = current_hits(viewport, &ctx.memory);
+                viewport.hits = hits;
+                viewport.interact_widgets = crate::interaction::interact(
+                    &viewport.interact_widgets,
+                    &viewport.this_pass.widgets,
+                    &viewport.hits,
+                    &viewport.input,
+                    ctx.memory.interaction_mut(),
+                );
+                let mut targets = Vec::new();
+                for target in [
+                    viewport.interact_widgets.long_touched,
+                    viewport.interact_widgets.drag_started,
+                    viewport.interact_widgets.drag_stopped,
+                ]
+                .into_iter()
+                .flatten()
+                {
+                    if !targets.contains(&target) {
+                        targets.push(target);
+                    }
+                }
+                viewport.dispatch.timed_targets = targets.into_iter();
+            }
+            for target in viewport.dispatch.timed_targets.by_ref() {
+                if viewport.this_pass.widgets.get(target).is_some_and(|w| {
+                    w.enabled && w.visible && ctx.memory.allows_interaction(w.layer_id)
+                }) {
+                    viewport.dispatch.in_event = true;
+                    return Some(RoutedInput {
+                        target: Some(target),
+                        trigger: InputTrigger::Time,
+                    });
+                }
+            }
+            let event = viewport
+                .dispatch
+                .events
+                .as_mut()
+                .expect("begin_input initializes the event cursor")
+                .next();
             let Some(event) = event else {
                 let (_, hits) = current_hits(viewport, &ctx.memory);
                 viewport.hits = hits;
@@ -355,18 +435,11 @@ impl Context {
                 .expect("begin_input saves the frame header")
                 .clone();
             raw.events = vec![event.clone()];
-            if index > 0 {
-                raw.predicted_dt = 0.;
-                raw.dropped_files.clear();
-            }
+            // Time and frame metadata were already advanced by the explicit time step.
+            raw.predicted_dt = 0.;
+            raw.dropped_files.clear();
             let pixels_per_point = viewport.input.pixels_per_point;
-            // Layout needs this frame's viewport metadata. Start the ordered
-            // state transition from the prior input only when an event arrives.
-            let previous = viewport
-                .dispatch
-                .previous
-                .take()
-                .unwrap_or_else(|| core::mem::take(&mut viewport.input));
+            let previous = core::mem::take(&mut viewport.input);
             viewport.input = previous.begin_pass(
                 raw,
                 true,
@@ -439,23 +512,33 @@ impl Context {
             if let Event::Ime(ime) = &event {
                 match ime {
                     crate::ImeEvent::Preedit { text, .. }
-                        if !text.is_empty() && viewport.dispatch.composition.is_none() =>
+                        if !text.is_empty()
+                            && viewport
+                                .dispatch
+                                .composition
+                                .as_ref()
+                                .is_none_or(|c| c.cleared) =>
                     {
-                        viewport.dispatch.composition = ctx
-                            .memory
-                            .focused()
-                            .map(|id| (id, ctx.memory.ime_generation()));
+                        viewport.dispatch.composition =
+                            ctx.memory.focused().map(|owner| Composition {
+                                owner,
+                                generation: ctx.memory.ime_generation(),
+                                cleared: false,
+                            });
                     }
                     _ => {}
                 }
-                if let Some((owner, generation)) = viewport.dispatch.composition {
-                    target = (ctx.memory.focused() == Some(owner)
-                        && generation == ctx.memory.ime_generation())
-                    .then_some(owner);
+                if let Some(composition) = &mut viewport.dispatch.composition {
+                    target = (ctx.memory.focused() == Some(composition.owner)
+                        && composition.generation == ctx.memory.ime_generation())
+                    .then_some(composition.owner);
+                    // winit may clear the preedit before committing, even across frames.
+                    // Keep the old owner until that commit or the next composition starts.
+                    if matches!(ime, crate::ImeEvent::Preedit { text, .. } if text.is_empty()) {
+                        composition.cleared = true;
+                    }
                 }
-                if matches!(ime, crate::ImeEvent::Commit(_))
-                    || matches!(ime, crate::ImeEvent::Preedit { text, .. } if text.is_empty())
-                {
+                if matches!(ime, crate::ImeEvent::Commit(_)) {
                     viewport.dispatch.composition = None;
                 }
             }
@@ -530,30 +613,46 @@ impl Context {
                     }
                 }
             }
+            let should_surrender = match ctx.memory.options.input_options.surrender_focus_on {
+                crate::SurrenderFocusOn::Presses => viewport.input.pointer.any_pressed(),
+                crate::SurrenderFocusOn::Clicks => {
+                    viewport.input.pointer.any_click()
+                        && viewport
+                            .dispatch
+                            .press_focus_revision
+                            .is_none_or(|revision| revision == ctx.memory.focus_revision())
+                }
+                crate::SurrenderFocusOn::Never => false,
+            };
+            if should_surrender
+                && let Some(id) = ctx.memory.focused()
+                && !viewport.interact_widgets.hovered.contains(&id)
+            {
+                ctx.memory.surrender_focus(id);
+            }
             if let Event::PointerButton {
                 pressed: true,
                 button: crate::PointerButton::Primary,
                 ..
             } = event
+                && let Some(target) = target
+                && viewport
+                    .this_pass
+                    .widgets
+                    .get(target)
+                    .is_some_and(|w| w.sense.is_focusable())
+                && !ctx.memory.has_focus(target)
             {
-                if let Some(target) = target {
-                    if viewport
-                        .this_pass
-                        .widgets
-                        .get(target)
-                        .is_some_and(|w| w.sense.is_focusable())
-                        && !ctx.memory.has_focus(target)
-                    {
-                        ctx.memory.request_focus(target);
-                    }
-                } else if let Some(id) = ctx.memory.focused() {
-                    ctx.memory.surrender_focus(id);
-                }
+                ctx.memory.request_focus(target);
+            }
+            if matches!(event, Event::PointerButton { pressed: true, .. }) {
+                viewport.dispatch.press_focus_revision = Some(ctx.memory.focus_revision());
+            } else if !viewport.input.pointer.any_down() || cancelled {
+                viewport.dispatch.press_focus_revision = None;
             }
             Some(RoutedInput {
-                index,
                 target,
-                event,
+                trigger: InputTrigger::Event { index, event },
             })
         })
     }
@@ -566,7 +665,8 @@ fn current_hits(viewport: &ViewportState, memory: &Memory) -> (Vec<LayerId>, Wid
         .layer_ids()
         .filter(|layer| memory.areas().is_interactable(*layer) && memory.allows_interaction(*layer))
         .collect();
-    layers.sort_by(|&a, &b| memory.areas().compare_order_current(a, b));
+    let order = memory.areas().order_current();
+    layers.sort_by_key(|layer| (layer.order, order.iter().position(|entry| entry == layer)));
     let mut hits = viewport
         .input
         .pointer

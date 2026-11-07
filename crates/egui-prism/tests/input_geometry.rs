@@ -54,7 +54,13 @@ fn composite_rail_and_round_thumb_do_not_swallow_empty_corners() {
             ctx.set_input_rounding(id(1), 3.0);
             ctx.set_input_rounding(id(0), 8.0);
             while let Some(e) = ctx.next_input_event() {
-                if matches!(e.event, Event::PointerButton { pressed: false, .. }) {
+                if matches!(
+                    e.trigger,
+                    egui::InputTrigger::Event {
+                        event: Event::PointerButton { pressed: false, .. },
+                        ..
+                    }
+                ) {
                     targets.push(e.target);
                 }
             }
@@ -99,7 +105,13 @@ fn transformed_clipped_hit_and_same_layer_blocker() {
                 Sense::click(),
             );
             while let Some(e) = ctx.next_input_event() {
-                if matches!(e.event, Event::PointerButton { pressed: false, .. }) {
+                if matches!(
+                    e.trigger,
+                    egui::InputTrigger::Event {
+                        event: Event::PointerButton { pressed: false, .. },
+                        ..
+                    }
+                ) {
                     targets.push(e.target);
                 }
             }
@@ -127,7 +139,13 @@ fn composite_capture_release_does_not_reclaim_host_focus() {
         ctx.set_input_owner(id(1), id(0));
         while let Some(e) = ctx.next_input_event() {
             assert_eq!(e.target, Some(id(0)));
-            if matches!(e.event, Event::PointerButton { pressed: true, .. }) {
+            if matches!(
+                e.trigger,
+                egui::InputTrigger::Event {
+                    event: Event::PointerButton { pressed: true, .. },
+                    ..
+                }
+            ) {
                 assert_eq!(ctx.memory(|m| m.focused()), Some(id(0)));
                 ctx.memory_mut(|m| m.request_focus(id(2)));
             } else {
@@ -163,8 +181,11 @@ fn release_in_a_rounded_corner_cancels_click_but_reaches_capture_owner() {
                 let response = ui.interact(bounds, id(0), Sense::click());
                 clicks += usize::from(response.clicked());
                 releases += usize::from(matches!(
-                    event.event,
-                    Event::PointerButton { pressed: false, .. }
+                    event.trigger,
+                    egui::InputTrigger::Event {
+                        event: Event::PointerButton { pressed: false, .. },
+                        ..
+                    }
                 ));
             }
         }
@@ -186,7 +207,13 @@ fn removing_composite_owner_removes_its_parts_without_touching_other_focus() {
         ui.interact(bounds.translate(vec2(0.0, 100.0)), id(2), Sense::click());
         ctx.set_input_owner(id(1), id(0));
         while let Some(event) = ctx.next_input_event() {
-            if matches!(event.event, Event::PointerButton { pressed: true, .. }) {
+            if matches!(
+                event.trigger,
+                egui::InputTrigger::Event {
+                    event: Event::PointerButton { pressed: true, .. },
+                    ..
+                }
+            ) {
                 ctx.memory_mut(|m| m.request_focus(id(2)));
                 ctx.remove_input_widget(id(0));
             } else {
@@ -211,7 +238,13 @@ fn button_click_wins_over_a_containing_drag_candidate() {
         ui.interact(container, id(1), Sense::drag());
         ui.interact(button, id(0), Sense::click());
         while let Some(event) = ctx.next_input_event() {
-            if matches!(event.event, Event::PointerButton { pressed: false, .. }) {
+            if matches!(
+                event.trigger,
+                egui::InputTrigger::Event {
+                    event: Event::PointerButton { pressed: false, .. },
+                    ..
+                }
+            ) {
                 releases.push(event.target);
             }
             if event.target == Some(id(0)) {

@@ -881,7 +881,11 @@ impl<'t> TextEdit<'t> {
             );
 
             if did_interact || response.clicked() {
-                ui.memory_mut(|mem| mem.request_focus(response.id));
+                // Ordered dispatch owns focus on press. A captured release or drag
+                // must not undo a newer host focus transfer or surrender.
+                if !ui.ctx().options(|o| o.ordered_input) {
+                    ui.memory_mut(|mem| mem.request_focus(response.id));
+                }
                 state.cursor_purpose = TextEditCursorPurpose::Selection;
 
                 state.last_interaction_time = ui.input(|i| i.time);
