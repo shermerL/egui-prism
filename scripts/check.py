@@ -5,6 +5,7 @@ import argparse
 import os
 from pathlib import Path
 import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -25,11 +26,18 @@ def main():
         run("quest", "check")
         run("nixfmt", "--check", "flake.nix")
         run("actionlint")
-        run("python3", "scripts/check_reference.py")
+        run(sys.executable, "scripts/check_egui_source.py")
+        run(sys.executable, "scripts/check_reference.py")
         run("npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund", "--prefix", "reference")
         run("npm", "run", "build", "--prefix", "reference")
     if not options.policy_only:
         run("cargo", "fmt", "--all", "--", "--check")
+        run("cargo", "fmt", "--manifest-path", "vendor/egui/Cargo.toml", "--", "--check")
+        run("cargo", "fmt", "--manifest-path", "tests/input-consumer/Cargo.toml", "--", "--check")
+        run(sys.executable, "scripts/check_egui_lints.py")
+        run("cargo", "test", "--manifest-path", "vendor/egui/Cargo.toml", "--locked", "--lib", "--features", "serde", "--target-dir", "target/vendor-egui")
+        run(sys.executable, "scripts/check_input_consumer.py")
+        run("cargo", "run", "--locked", "-p", "egui-prism", "--example", "ordered_input")
         run("cargo", "check", "-p", "egui-prism", "--locked", "--no-default-features")
         run("cargo", "clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings")
         run("cargo", "test", "--workspace", "--locked")
