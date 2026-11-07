@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Compositing } from "./compositing";
 import { createRoot } from "react-dom/client";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -27,4 +28,4 @@ function App() {
  <section className="flex gap-4"><Select><SelectTrigger className="w-48"><SelectValue placeholder="Choose an option" /></SelectTrigger><SelectContent><SelectItem value="one">Option one</SelectItem><SelectItem value="two">Option two</SelectItem></SelectContent></Select><Dialog><DialogTrigger asChild><Button variant="outline">Open dialog</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Reference dialog</DialogTitle><DialogDescription>Compare popup geometry, focus and animation.</DialogDescription></DialogHeader></DialogContent></Dialog></section>
  </div></main>;
 }
-createRoot(document.getElementById("root")!).render(<App/>);
+createRoot(document.getElementById("root")!).render(location.search.includes("compositing") ? <Compositing/> : <App/>);
