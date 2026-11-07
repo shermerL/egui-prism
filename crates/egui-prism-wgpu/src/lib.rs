@@ -10,7 +10,7 @@ use egui_prism::{
     egui::{
         self, Rect,
         emath::TSTransform,
-        epaint::{Mesh, Primitive},
+        epaint::{ClippedShape, Mesh, Primitive},
     },
 };
 pub use egui_wgpu;
@@ -89,13 +89,14 @@ impl Host {
     }
     /// Borrow current uploaded bindings and replace isolated groups with images.
     ///
-    /// Call after all texture uploads. The renderer must belong to this device.
+    /// Pass untessellated egui output after all texture uploads so transforms retain
+    /// their pixel-rounding phase. The renderer must belong to this device.
     /// Retain caller texture handles through submission. The returned frame removes
     /// only its own temporary registrations on drop, including preparation errors.
     pub fn prepare_frame<'a>(
         &'a mut self,
         renderer: &'a mut egui_wgpu::Renderer,
-        jobs: Vec<egui::ClippedPrimitive>,
+        shapes: Vec<ClippedShape>,
         screen: ScreenDescriptor,
     ) -> Result<Frame<'a>, Error> {
         self.check()?;
@@ -108,15 +109,34 @@ impl Host {
         let mut frame = Frame {
             host: self,
             renderer,
-            jobs: Vec::with_capacity(jobs.len()),
+            jobs: Vec::with_capacity(shapes.len()),
             screen,
             registered: Vec::new(),
             passes: Vec::new(),
             used: 0,
             encoded: false,
         };
-        for mut job in jobs {
-            if let Primitive::Callback(callback) = &job.primitive
+        let context = frame.host.context.clone();
+        let ppp = frame.screen.pixels_per_point;
+        let screen_rect = Rect::from_min_size(
+            egui::Pos2::ZERO,
+            egui::vec2(
+                frame.screen.size_in_pixels[0] as f32,
+                frame.screen.size_in_pixels[1] as f32,
+            ) / ppp,
+        );
+        let mut pending = Vec::new();
+        let mut remaining = shapes.into_iter().rev().collect::<Vec<_>>();
+        while let Some(shape) = remaining.pop() {
+            if let egui::Shape::Vec(children) = shape.shape {
+                remaining.extend(children.into_iter().rev().map(|child| ClippedShape {
+                    clip_rect: shape.clip_rect,
+                    shape: child,
+                    transform_after_tessellation: shape.transform_after_tessellation,
+                }));
+                continue;
+            }
+            if let egui::Shape::Callback(callback) = &shape.shape
                 && let Some(submission) = callback.callback.downcast_ref::<Submission>()
             {
                 let Some(alive) = submission.alive.upgrade() else {
@@ -130,40 +150,47 @@ impl Host {
                 }
                 let bounds = submission.group.bounds();
                 let scale = callback.rect.width() / bounds.width();
-                if !scale.is_finite() || scale <= 0.0 {
+                let transforms = Transforms {
+                    before: TSTransform::new(
+                        callback.rect.min.to_vec2() - bounds.min.to_vec2() * scale,
+                        scale,
+                    ),
+                    after: shape.transform_after_tessellation,
+                };
+                if !transforms.before.is_valid()
+                    || !transforms.after.is_valid()
+                    || !transforms.before.translation.is_finite()
+                    || !transforms.after.translation.is_finite()
+                    || scale <= 0.0
+                    || transforms.after.scaling <= 0.0
+                {
                     return Err(failure("invalid callback transform"));
                 }
-                let transform = TSTransform::new(
-                    callback.rect.min.to_vec2() - bounds.min.to_vec2() * scale,
-                    scale,
-                );
-                let ppp = frame.screen.pixels_per_point;
-                let screen_rect = Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::vec2(
-                        frame.screen.size_in_pixels[0] as f32,
-                        frame.screen.size_in_pixels[1] as f32,
-                    ) / ppp,
-                );
                 if let Some((index, rect)) = frame.group(
-                    &frame.host.context.clone(),
+                    &context,
                     &submission.group,
-                    transform,
-                    job.clip_rect.intersect(screen_rect),
+                    transforms,
+                    shape.clip_rect.intersect(screen_rect),
                 )? {
+                    frame
+                        .jobs
+                        .extend(context.tessellate(std::mem::take(&mut pending), ppp));
                     let mut mesh = Mesh::with_texture(frame.registered[index]);
                     mesh.add_rect_with_uv(
                         rect,
                         unit_uv(),
                         egui::Color32::WHITE.gamma_multiply(submission.group.opacity()),
                     );
-                    job.primitive = Primitive::Mesh(mesh);
-                } else {
-                    continue;
+                    frame.jobs.push(egui::ClippedPrimitive {
+                        clip_rect: shape.clip_rect,
+                        primitive: Primitive::Mesh(mesh),
+                    });
                 }
+            } else {
+                pending.push(shape);
             }
-            frame.jobs.push(job);
         }
+        frame.jobs.extend(context.tessellate(pending, ppp));
         Ok(frame)
     }
 }
@@ -174,6 +201,19 @@ impl Drop for Host {
 }
 fn unit_uv() -> Rect {
     Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0))
+}
+#[derive(Clone, Copy)]
+struct Transforms {
+    before: TSTransform,
+    after: TSTransform,
+}
+impl Transforms {
+    fn shape(self, mut shape: ClippedShape) -> ClippedShape {
+        shape.transform(self.before);
+        shape.clip_rect = self.after * shape.clip_rect;
+        shape.transform_after_tessellation = self.after * shape.transform_after_tessellation;
+        shape
+    }
 }
 struct Pass {
     target: usize,
@@ -195,10 +235,10 @@ impl Frame<'_> {
         &mut self,
         context: &egui::Context,
         group: &Group,
-        transform: TSTransform,
+        transforms: Transforms,
         inherited: Rect,
     ) -> Result<Option<(usize, Rect)>, Error> {
-        let clip = (transform * group.bounds()).intersect(inherited);
+        let clip = (transforms.after * transforms.before * group.bounds()).intersect(inherited);
         if !clip.is_positive() || group.opacity() == 0.0 {
             return Ok(None);
         }
@@ -231,8 +271,7 @@ impl Frame<'_> {
         for item in group.items() {
             match item {
                 Item::Shape(shape) => {
-                    let mut shape = shape.clone();
-                    shape.transform(transform);
+                    let shape = transforms.shape(shape.clone());
                     for primitive in context.tessellate(vec![shape], ppp) {
                         let Primitive::Mesh(mesh) = primitive.primitive else {
                             unreachable!("core rejects callbacks")
@@ -263,7 +302,7 @@ impl Frame<'_> {
                 }
                 Item::Group(child) => {
                     if let Some((child_index, child_rect)) =
-                        self.group(context, child, transform, clip)?
+                        self.group(context, child, transforms, clip)?
                     {
                         let id = self.registered[child_index];
                         let binding = self

@@ -41,10 +41,11 @@ not part of this integration contract.
 
 For each frame:
 
-1. Run the UI and tessellate the final egui shapes.
+1. Run the UI and retain its untessellated `FullOutput::shapes`.
 2. Upload every current texture delta, including all deltas for an image and font
    atlas growth, to the same egui renderer.
-3. Call `prepare_frame` with the final paint jobs and physical screen descriptor.
+3. Call `prepare_frame` with those shapes and the physical screen descriptor.
+   The adapter preserves transforms before and after pixel rounding during tessellation.
 4. Call `Frame::encode` with the host's main encoder. This prepares ordinary
    egui-wgpu callbacks, then encodes the group's offscreen passes.
 5. Start the host's final render pass and call `Frame::render`.
@@ -56,9 +57,9 @@ For each frame:
 # use egui_prism_wgpu::{Host, egui_wgpu::{self, wgpu}};
 # fn render(compositor: &mut Host, mut renderer: egui_wgpu::Renderer,
 #     queue: &wgpu::Queue, mut encoder: wgpu::CommandEncoder,
-#     paint_jobs: Vec<egui::ClippedPrimitive>, screen: egui_wgpu::ScreenDescriptor,
+#     shapes: Vec<egui::epaint::ClippedShape>, screen: egui_wgpu::ScreenDescriptor,
 #     descriptor: wgpu::RenderPassDescriptor<'_>) -> Result<(), egui_prism::compositing::Error> {
-let mut frame = compositor.prepare_frame(&mut renderer, paint_jobs, screen)?;
+let mut frame = compositor.prepare_frame(&mut renderer, shapes, screen)?;
 let commands = frame.encode(&queue, &mut encoder)?;
 {
     let mut pass = encoder.begin_render_pass(&descriptor).forget_lifetime();
@@ -111,8 +112,9 @@ inside groups are rejected because their drawing and resource contracts cannot
 be inferred. Missing host or texture bindings are explicit errors; there is no
 fixed-background or primitive-opacity fallback.
 
-Preparation uses the final callback rectangle and clip after egui's layer
-transforms. Positive uniform scale and translation apply to group contents and
+Preparation reads the callback rectangle, clip and post-rounding transform from
+egui's untessellated output. The two transform stages remain separate so text and
+fine strokes follow the same pixel rounding as ordinary egui shapes. Positive uniform scale and translation apply to group contents and
 clips together. Targets cover the visible pixel-aligned extent and respect the
 device's texture size limit. Each live group has a target; the pool reuses exact
 sizes across frames and shrinks to the current frame's needs. Nested groups are
@@ -130,7 +132,9 @@ it does not promise seamless restoration of caller GPU state.
 
 The Gallery owns one root window. A custom multi-viewport host must route each
 frame to the correct device/renderer/viewport and preserve the same ordering.
-The core does not own native windows, event loops or device-loss callbacks.
+The Gallery processes OS close requests in an immediate UI pass, including
+`CancelClose`, without waiting for a redraw or surface acquisition. The core
+does not own native windows, event loops or device-loss callbacks.
 The adapter and core both retain the workspace's unsafe-code prohibition.
 
 Stock eframe does not expose the required after-upload preparation point. This
@@ -160,6 +164,7 @@ or release/deployment follows from building the reference page.
 
 CI explicitly runs the GPU contract test on Linux Mesa software Vulkan; an
 unavailable adapter fails the check. It covers current-frame image producers,
-temporary registration cleanup and installation revocation. This headless
+temporary registration cleanup, installation revocation and ordinary-versus-group
+pixel comparisons for fractional post-rounding transforms at two densities. This headless
 software backend is regression coverage, not desktop or physical GPU acceptance.
 The documentation examples compile as consumer doctests of the adapter crate.

@@ -95,8 +95,7 @@ impl ApplicationHandler<Wake> for App {
                 runtime.window.request_redraw();
             }
             WindowEvent::CloseRequested => {
-                runtime.close_requested = true;
-                runtime.window.request_redraw();
+                runtime.close(event_loop);
             }
             _ => {
                 if response.repaint {
@@ -131,7 +130,6 @@ struct Runtime {
     capture: Option<egui_wgpu::capture::CaptureState>,
     surface: wgpu::Surface<'static>,
     instance: wgpu::Instance,
-    close_requested: bool,
     reconfigure: bool,
     config: wgpu::SurfaceConfiguration,
     device: wgpu::Device,
@@ -230,7 +228,6 @@ impl Runtime {
             capture: None,
             surface,
             instance,
-            close_requested: false,
             reconfigure: false,
             config,
             device,
@@ -240,15 +237,81 @@ impl Runtime {
             window,
         })
     }
+    // Closing must run even when Wayland has withheld the next frame callback.
+    fn close(&mut self, event_loop: &ActiveEventLoop) {
+        let (mut output, actions, close) = self.update(event_loop, true);
+        for id in output.textures_delta.free.drain() {
+            self.renderer.free_texture(&id);
+        }
+        output.textures_delta.clear();
+        if close {
+            event_loop.exit();
+        } else {
+            // This UI pass did not paint. Preserve captures for the next painted pass.
+            for action in actions {
+                if let egui_winit::ActionRequested::Screenshot(callback) = action {
+                    self.context
+                        .send_viewport_cmd(egui::ViewportCommand::Screenshot(callback));
+                }
+            }
+            self.window.request_redraw();
+        }
+    }
+    fn update(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        close_requested: bool,
+    ) -> (egui::FullOutput, Vec<egui_winit::ActionRequested>, bool) {
+        let mut raw = self.input.take_egui_input(&self.window);
+        egui_winit::update_viewport_info(
+            raw.viewports.entry(egui::ViewportId::ROOT).or_default(),
+            &self.context,
+            &self.window,
+            false,
+        );
+        if close_requested {
+            raw.viewports
+                .entry(egui::ViewportId::ROOT)
+                .or_default()
+                .events
+                .push(egui::ViewportEvent::Close);
+        }
+
+        let mut output = self
+            .context
+            .run_ui(raw, |ui| self.gallery.ui(ui, &self.device));
+        self.input.handle_platform_output_with_event_loop(
+            &self.window,
+            event_loop,
+            std::mem::take(&mut output.platform_output),
+        );
+        let mut actions = Vec::new();
+        let mut close = false;
+        if let Some(viewport) = output.viewport_output.remove(&egui::ViewportId::ROOT) {
+            let mut info = self.context.input(|i| i.viewport().clone());
+            close = should_close(&info, &viewport.commands);
+            egui_winit::process_viewport_commands(
+                &self.context,
+                &mut info,
+                viewport.commands,
+                &self.window,
+                &mut actions,
+            );
+        }
+        for (id, deltas) in output.textures_delta.set.drain() {
+            for delta in deltas {
+                self.renderer
+                    .update_texture(&self.device, &self.queue, id, &delta);
+            }
+        }
+        (output, actions, close)
+    }
     fn paint(&mut self, event_loop: &ActiveEventLoop) -> Result<Option<Instant>> {
         if let Some(error) = self.gpu_error.lock().expect("GPU error lock").clone() {
             return Err(error.into());
         }
         let size = self.window.inner_size();
         if size.width == 0 || size.height == 0 {
-            if self.close_requested {
-                event_loop.exit();
-            }
             return Ok(None);
         }
         if self.reconfigure || self.config.width != size.width || self.config.height != size.height
@@ -281,56 +344,13 @@ impl Runtime {
                 return Ok(Some(Instant::now() + std::time::Duration::from_millis(50)));
             }
             wgpu::CurrentSurfaceTexture::Occluded => {
-                if self.close_requested {
-                    event_loop.exit();
-                }
                 return Ok(None);
             }
             wgpu::CurrentSurfaceTexture::Validation => {
                 return Err("surface validation failed".into());
             }
         };
-        let mut raw = self.input.take_egui_input(&self.window);
-        egui_winit::update_viewport_info(
-            raw.viewports.entry(egui::ViewportId::ROOT).or_default(),
-            &self.context,
-            &self.window,
-            false,
-        );
-        if self.close_requested {
-            raw.viewports
-                .entry(egui::ViewportId::ROOT)
-                .or_default()
-                .events
-                .push(egui::ViewportEvent::Close);
-            self.close_requested = false;
-        }
-
-        let mut output = self
-            .context
-            .run_ui(raw, |ui| self.gallery.ui(ui, &self.device));
-        self.input.handle_platform_output_with_event_loop(
-            &self.window,
-            event_loop,
-            output.platform_output,
-        );
-        let mut actions = Vec::new();
-        let mut close = false;
-        if let Some(viewport) = output.viewport_output.remove(&egui::ViewportId::ROOT) {
-            let mut info = self.context.input(|i| i.viewport().clone());
-            let cancel = viewport
-                .commands
-                .iter()
-                .any(|command| matches!(command, egui::ViewportCommand::CancelClose));
-            egui_winit::process_viewport_commands(
-                &self.context,
-                &mut info,
-                viewport.commands,
-                &self.window,
-                &mut actions,
-            );
-            close = !cancel && info.close_requested();
-        }
+        let (mut output, actions, close) = self.update(event_loop, false);
         let screenshots = actions
             .into_iter()
             .filter_map(|action| match action {
@@ -338,15 +358,6 @@ impl Runtime {
                 _ => None,
             })
             .collect::<Vec<_>>();
-        let jobs = self
-            .context
-            .tessellate(output.shapes, output.pixels_per_point);
-        for (id, deltas) in output.textures_delta.set.drain() {
-            for delta in deltas {
-                self.renderer
-                    .update_texture(&self.device, &self.queue, id, &delta);
-            }
-        }
         let free = output.textures_delta.free.drain().collect::<Vec<_>>();
         output.textures_delta.clear();
         let rendered = (|| -> Result<()> {
@@ -357,7 +368,7 @@ impl Runtime {
             let mut frame =
                 self.gallery
                     .compositor
-                    .prepare_frame(&mut self.renderer, jobs, screen)?;
+                    .prepare_frame(&mut self.renderer, output.shapes, screen)?;
             let mut encoder = self.device.create_command_encoder(&Default::default());
             let commands = frame.encode(&self.queue, &mut encoder)?;
             if !screenshots.is_empty() {
@@ -433,5 +444,48 @@ impl Runtime {
             event_loop.exit();
         }
         Ok(None)
+    }
+}
+
+fn should_close(info: &egui::ViewportInfo, commands: &[egui::ViewportCommand]) -> bool {
+    !commands
+        .iter()
+        .any(|command| matches!(command, egui::ViewportCommand::CancelClose))
+        && (info.close_requested()
+            || commands
+                .iter()
+                .any(|command| matches!(command, egui::ViewportCommand::Close)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn close_decisions_run_without_a_surface_or_redraw() {
+        let context = egui::Context::default();
+        for (os_close, command, expected) in [
+            (true, None, true),
+            (true, Some(egui::ViewportCommand::CancelClose), false),
+            (false, None, false),
+            (false, Some(egui::ViewportCommand::Close), true),
+        ] {
+            let mut raw = egui::RawInput::default();
+            if os_close {
+                raw.viewports
+                    .entry(egui::ViewportId::ROOT)
+                    .or_default()
+                    .events
+                    .push(egui::ViewportEvent::Close);
+            }
+            let mut output = context.run_ui(raw, |ui| {
+                if let Some(command) = command.clone() {
+                    ui.ctx().send_viewport_cmd(command);
+                }
+            });
+            let info = context.input(|input| input.viewport().clone());
+            let commands = &output.viewport_output[&egui::ViewportId::ROOT].commands;
+            assert_eq!(should_close(&info, commands), expected);
+            output.textures_delta.clear();
+        }
     }
 }
