@@ -210,7 +210,10 @@ suppresses input responses while registering the changed structure and restores
 the active event afterward. Use `ctx.remove_input_widget(id)` for a removed control (including its bound
 parts), or `ctx.remove_input_layer(layer)` when closing or replacing a layer,
 before dispatching another event; it removes registered
-geometry and clears that layer's focus/capture. The host owns modal state and
+geometry and clears that layer's focus/capture. Explicit layer removal also revokes
+its current and prior-pass Area visibility, so a closed Area cannot block later
+wheel input. Stored Area geometry and order remain reusable; normal registration
+restores visibility. The host owns modal state and
 chooses whether to restore an older modal or host focus.
 
 A new automatically sized modal needs measurement before its first target can

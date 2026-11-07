@@ -1001,7 +1001,7 @@ diff --git a/src/context/input_dispatch.rs b/src/context/input_dispatch.rs
 new file mode 100644
 --- /dev/null
 +++ b/src/context/input_dispatch.rs
-@@ -0,0 +1,842 @@
+@@ -0,0 +1,843 @@
 +use super::*;
 +use crate::{Event, InputState, Key, RawInput};
 +
@@ -1271,6 +1271,7 @@ new file mode 100644
 +            let ids = v.this_pass.widgets.remove_layer(layer);
 +            forget_input_widgets(v, &mut ctx.memory, ids);
 +            ctx.memory.remove_input_modal_layer(layer);
++            ctx.memory.areas_mut().hide_layer(layer);
 +        });
 +    }
 +    /// Dispatch the next raw event or time-driven interaction against current geometry.
@@ -2544,7 +2545,21 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
              if self.is_visible(layer)
                  && let Some(state) = self.areas.get(&layer.id)
              {
-@@ -1395,26 +1551,17 @@
+@@ -1304,6 +1460,13 @@
+             }
+         }
+         None
++    }
++
++    pub(crate) fn hide_layer(&mut self, layer_id: LayerId) {
++        // Containment accepts either visibility set. Revoke both on explicit
++        // close, retaining geometry/order for normal Area registration to reuse.
++        self.visible_areas_last_frame.remove(&layer_id);
++        self.visible_areas_current_frame.remove(&layer_id);
+     }
+ 
+     pub fn visible_last_frame(&self, layer_id: &LayerId) -> bool {
+@@ -1395,26 +1558,17 @@
          self.parent_layer(*layer).is_some()
      }
  
@@ -2577,7 +2592,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
              let mut moved_layers = vec![parent]; // parent first…
  
              order.retain(|l| {
-@@ -1430,6 +1577,24 @@
+@@ -1430,6 +1584,24 @@
              };
              order.splice(parent_pos..=parent_pos, moved_layers); // replace the parent with itself and its children
          }
@@ -2602,7 +2617,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
  
          self.order_map = self
              .order
-@@ -1466,21 +1631,21 @@
+@@ -1466,21 +1638,21 @@
  
      // Frame N-1
      {
@@ -2629,7 +2644,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
          assert_eq!(focus.id_two_frames_ago, Some(a));
          assert_eq!(focus.id_previous_frame, Some(b));
          assert!(lost_focus_check(&focus, a), "`A` lost_focus must fire");
-@@ -1489,7 +1654,7 @@
+@@ -1489,7 +1661,7 @@
  
      // Frame N+2
      {
@@ -2638,7 +2653,7 @@ diff --git a/src/memory/mod.rs b/src/memory/mod.rs
          assert!(
              !lost_focus_check(&focus, a),
              "A's lost_focus must stop firing once the two-frame window passes",
-@@ -1582,3 +1747,6 @@
+@@ -1582,3 +1754,6 @@
      let (inside, _) = run_pass(false);
      assert_ne!(inside, Some(layer_id), "gone once no longer registered");
  }

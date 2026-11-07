@@ -267,6 +267,7 @@ impl Context {
             let ids = v.this_pass.widgets.remove_layer(layer);
             forget_input_widgets(v, &mut ctx.memory, ids);
             ctx.memory.remove_input_modal_layer(layer);
+            ctx.memory.areas_mut().hide_layer(layer);
         });
     }
     /// Dispatch the next raw event or time-driven interaction against current geometry.

@@ -1011,7 +1011,10 @@ fn public_state_roundtrip_preserves_same_instance_consumption() {
     }
 }
 
-fn overlapping_scroll_areas(ctx: &Context, layout_order: [usize; 2]) -> [f32; 2] {
+fn overlapping_scroll_areas(
+    ctx: &Context,
+    layout_order: impl IntoIterator<Item = usize>,
+) -> [f32; 2] {
     let mut offsets = [0.; 2];
     for n in layout_order {
         egui::Area::new(Id::unique(("wheel-area", n)))
@@ -1096,5 +1099,114 @@ fn ordered_wheel_uses_same_batch_area_promotion() {
                 "layout order {layout_order:?}, ordered {ordered}"
             );
         }
+    }
+}
+
+#[test]
+fn closing_area_revokes_wheel_occlusion_until_reregistered() {
+    for remaining_modal in [false, true] {
+        let ctx = Context::default();
+        ctx.options_mut(|o| {
+            o.ordered_input = true;
+            o.max_passes = 1.try_into().unwrap();
+        });
+        let closed_layer =
+            egui::LayerId::new(egui::Order::Middle, Id::unique(("wheel-area", 1_usize)));
+        let modal = egui::Modal::new(Id::unique("remaining-modal"));
+        for frame in 0..3 {
+            ctx.run_ui(
+                RawInput {
+                    time: Some(frame as f64 / 60.),
+                    events: vec![Event::PointerMoved(egui::pos2(70., 30.))],
+                    ..Default::default()
+                },
+                |_| {
+                    ctx.begin_input();
+                    overlapping_scroll_areas(&ctx, [0, 1]);
+                    if remaining_modal {
+                        modal.clone().register(&ctx, |ui| ui.label("Still modal"));
+                    }
+                    while ctx.next_input_event().is_some() {}
+                },
+            )
+            .drop_without_applying_deltas();
+        }
+        let saved_rect = egui::AreaState::load(&ctx, closed_layer.id).unwrap().rect();
+        let mut observations = Vec::new();
+        let mut visible_after_close = true;
+        ctx.run_ui(
+            RawInput {
+                time: Some(3. / 60.),
+                events: vec![
+                    Event::Text("close".into()),
+                    wheel(-4., egui::MouseWheelSource::Wheel),
+                    Event::Text("reopen".into()),
+                    wheel(-4., egui::MouseWheelSource::Wheel),
+                ],
+                ..Default::default()
+            },
+            |_| {
+                ctx.begin_input();
+                overlapping_scroll_areas(&ctx, [0, 1]);
+                if remaining_modal {
+                    modal.clone().register(&ctx, |ui| ui.label("Still modal"));
+                }
+                let mut open = true;
+                while let Some(event) = ctx.next_input_event() {
+                    match event.trigger {
+                        InputTrigger::Event {
+                            event: Event::Text(ref text),
+                            ..
+                        } if text == "close" => {
+                            open = false;
+                            ctx.remove_input_layer(closed_layer);
+                            visible_after_close =
+                                ctx.memory(|m| m.areas().is_visible(&closed_layer));
+                            assert_eq!(
+                                egui::AreaState::load(&ctx, closed_layer.id).unwrap().rect(),
+                                saved_rect
+                            );
+                            assert!(
+                                ctx.memory(|m| m.layer_ids().any(|layer| layer == closed_layer))
+                            );
+                        }
+                        InputTrigger::Event {
+                            event: Event::Text(_),
+                            ..
+                        } => {
+                            open = true;
+                            ctx.input_layout(|| overlapping_scroll_areas(&ctx, [0, 1]));
+                            assert!(ctx.memory(|m| m.areas().is_visible(&closed_layer)));
+                        }
+                        InputTrigger::Event {
+                            event: Event::MouseWheel { .. },
+                            ..
+                        } => {
+                            let offsets = if open {
+                                overlapping_scroll_areas(&ctx, [0, 1])
+                            } else {
+                                overlapping_scroll_areas(&ctx, [0])
+                            };
+                            observations.push(offsets);
+                        }
+                        _ => {}
+                    }
+                }
+            },
+        )
+        .drop_without_applying_deltas();
+        assert_eq!(
+            observations,
+            if remaining_modal {
+                vec![[0., 0.], [0., 0.]]
+            } else {
+                vec![[4., 0.], [4., 4.]]
+            },
+            "remaining modal: {remaining_modal}"
+        );
+        assert!(
+            !visible_after_close,
+            "explicit close revokes current and prior-pass visibility"
+        );
     }
 }

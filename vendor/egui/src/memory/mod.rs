@@ -1462,6 +1462,13 @@ impl Areas {
         None
     }
 
+    pub(crate) fn hide_layer(&mut self, layer_id: LayerId) {
+        // Containment accepts either visibility set. Revoke both on explicit
+        // close, retaining geometry/order for normal Area registration to reuse.
+        self.visible_areas_last_frame.remove(&layer_id);
+        self.visible_areas_current_frame.remove(&layer_id);
+    }
+
     pub fn visible_last_frame(&self, layer_id: &LayerId) -> bool {
         self.visible_areas_last_frame.contains(layer_id)
     }
