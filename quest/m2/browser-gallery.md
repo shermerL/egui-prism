@@ -1,4 +1,4 @@
-# [M] Build and validate the first Pages gallery
+# [M] Build and validate a browser gallery
 
 ## Goal
 
@@ -7,8 +7,10 @@ with theme/state examples, reproducible build identity, and usage documentation.
 
 ## Plan
 
-M1 owns the first site. Start with Button/Input and themes; add other components
-as their quests finish. Build below /egui-prism/ with explicit WebGL support,
+This existing task is deferred from M1 while native macOS, Windows and Linux take
+priority. Browser support may be omitted if its complexity is excessive. If
+selected later, start with accepted components and themes. Build below
+/egui-prism/ with explicit, verified backend and browser requirements,
 readable loading/failure states, source and version links, licenses, and compiling
 Rust examples. Planned components must not look available.
 
@@ -28,4 +30,8 @@ Do not publish approximate components as accepted shadcn implementations.
 
 ## Required
 
-- [Strict shadcn parity for existing components](/quest/m1/shadcn-parity/README.md)
+- [Build and validate the native gallery](/quest/m1/native-gallery.md)
+
+## Waiting
+
+- Maintainer: select browser delivery after reviewing native results and a concrete browser cost/capability assessment; recommend keeping it deferred until then. Automation can measure compatibility and maintenance cost, but deciding whether the library should support browsers is a product choice.

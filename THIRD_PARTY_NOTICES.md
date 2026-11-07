@@ -60,6 +60,12 @@ DEALINGS IN THE SOFTWARE.
 
 ## egui and eframe
 
+The controlled egui input source is vendored from the official 0.37.0 crate.
+Its checksum and patch inventory are in `vendor/README.md`; both upstream MIT
+and Apache-2.0 license texts from the official tag are included in `vendor/egui`.
+Official platform and
+renderer integration crates are not modified.
+
 Source: https://github.com/emilk/egui/tree/0.37.0
 
 Copyright (c) 2018-2021 Emil Ernerfeldt <emil.ernerfeldt@gmail.com>

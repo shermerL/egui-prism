@@ -1,6 +1,6 @@
 [package]
 name = "egui-prism-gallery"
-description = "Native and WebAssembly engineering gallery for egui-prism"
+description = "Native engineering gallery for egui-prism"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,12 +10,13 @@ publish = false
 
 [dependencies]
 egui-prism.workspace = true
-eframe.workspace = true
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = "=0.2.129"
-wasm-bindgen-futures = "=0.4.79"
-web-sys = { version = "=0.3.106", features = ["Window", "Document", "Element", "HtmlCanvasElement", "console"] }
+egui = { workspace = true, features = ["default_fonts"] }
+egui-prism-wgpu = { path = "../crates/egui-prism-wgpu" }
+egui-wgpu = { version = "=0.37.0", default-features = false, features = ["capture"] }
+egui-winit = { version = "=0.37.0", default-features = false, features = ["clipboard", "links", "wayland", "x11"] }
+wgpu = { version = "=30.0.0", default-features = false, features = ["std", "wgsl", "metal", "dx12", "vulkan"] }
+winit = { version = "=0.30.13", default-features = false, features = ["rwh_06", "wayland", "x11"] }
+pollster = "=0.4.0"
 
 [lints]
 workspace = true

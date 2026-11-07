@@ -29,3 +29,6 @@ ten steps. This is reference evidence, not Rust component acceptance.
 The `/?sliders` fixture isolates Slider comparisons with 448, 200, 20 and 16 CSS-pixel
 rails, matching ranges and steps, light/dark themes, disabled states and 100/150%
 scales. Its explicit 16-pixel minimum matches the Rust intrinsic thumb footprint.
+Open `/?compositing` for real CSS group-opacity samples over multiple backgrounds,
+opaque/translucent images, clipping, nested opacity, 100%/150% scale, and all pinned
+Button roles. This fixture does not alter the pinned source components.

@@ -1,0 +1,21 @@
+[package]
+name = "egui-prism-wgpu"
+description = "Host-owned native wgpu group compositing for egui-prism"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+egui-prism.workspace = true
+egui-wgpu = { version = "=0.37.0", default-features = false }
+bytemuck = "=1.25.2"
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+egui-wgpu = { version = "=0.37.0", default-features = false, features = ["capture"] }
+wgpu = { version = "=30.0.0", default-features = false, features = ["std", "wgsl", "metal", "dx12", "vulkan"] }
+pollster = "=0.4.0"
