@@ -19,8 +19,8 @@ window, clipboard, IME, link, Wayland and X11 integration.
 The Gallery owns the rendering loop and selects Metal on macOS, DX12 on Windows
 and Vulkan on Linux. Browser product packaging is outside this phase's required
 checks; the local pinned CSS reference remains part of design validation.
-The locked Nix shell still contains historical web tooling, but it is not used by
-the required native pipeline.
+The replaced Trunk entry point and its asset checker are removed. Browser
+delivery must establish a supported host and build pipeline in its own Quest.
 
 The Nix shell exposes Apple Silicon macOS, x86_64 Linux and ARM64 Linux.
 Portable Cargo checks run separately in the three-OS CI matrix, including Windows
@@ -52,8 +52,7 @@ retained in `THIRD_PARTY_NOTICES.md`, copied alongside native CI artifacts. The
 project adds no separate CJK font or image bundle.
 
 Sources: [egui 0.37.0](https://github.com/emilk/egui/tree/0.37.0),
-[Trunk configuration](https://trunk-rs.github.io/trunk/guide/configuration/index.html),
-[Quest setup](https://github.com/moq-dev/quest/blob/19a2438cd80cf968dddfbf664570a2c8b9a254bf/SETUP.md).
+[Quest setup](https://github.com/shermerL/quest/blob/19a2438cd80cf968dddfbf664570a2c8b9a254bf/SETUP.md).
 
 ## Validation boundaries
 

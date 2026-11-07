@@ -28,8 +28,6 @@
             packages = [
               quest.packages.${system}.default
               pkgs.rustup
-              pkgs.trunk
-              pkgs.wasm-bindgen-cli
               pkgs.nodejs_24
               pkgs.python3
               pkgs.nixfmt

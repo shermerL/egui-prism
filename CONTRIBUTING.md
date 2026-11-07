@@ -15,7 +15,7 @@ quest init
 quest context
 ```
 
-The locked shell supplies Quest, rustup, Trunk, wasm-bindgen, Python, and lint
+The locked shell supplies Quest, rustup, Node.js, Python, and lint
 utilities. Rustup installs the exact toolchain declared in
 `rust-toolchain.toml` on first use, without changing the global default Rust
 toolchain. See [tool provenance](docs/toolchain.md) for versions and limits.
@@ -71,7 +71,7 @@ A ready PR is a candidate for maintainer review, not an instruction to merge.
 The maintainer selects which reviewed changes may land; releases and the first
 Pages deployment are separate decisions.
 
-PR CI has read-only permissions, skips drafts, and uploads native artifacts for each OS.
+PR CI has read-only permissions, includes drafts, and uploads native artifacts for each OS.
 It contains no deployment job. Keep private notes and raw review logs out of
 public changes.
 
