@@ -1,21 +1,42 @@
 # Buttons
 
-`button::Button` and `button::IconButton` borrow a `Theme` for one frame and return
-an ordinary `egui::Response`. Applications own actions, values, theme selection,
-images, and texture lifetime. The library adds no window, renderer, or icon font.
+`button::Button` and `button::IconButton` borrow a `Theme` for one frame.
+`show(ui)` returns a `ButtonOutput` containing the interaction `response` and an
+optional unfaded `drawing`. The caller submits that drawing with `paint`, using
+an installed [compositing host](compositing.md). Applications own actions, values,
+theme selection, images, and texture lifetime. The core library depends only on
+egui; the native adapter is provided by `egui-prism-wgpu`.
 
 ```rust
 use egui_prism::{button::{Button, ButtonRole, ButtonSize}, theme::Theme};
 
-fn actions(ui: &mut egui_prism::egui::Ui, theme: &Theme, can_save: bool) -> bool {
-    ui.add_enabled(
-        can_save,
+fn actions(ui: &mut egui_prism::egui::Ui, theme: &Theme, can_save: bool)
+    -> Result<bool, egui_prism::compositing::Error>
+{
+    // Retain actual parent opacity before egui applies its disabled fade.
+    let painter = ui.painter().clone();
+    let output = ui.add_enabled_ui(can_save, |ui| {
         Button::new(theme, "Save")
             .role(ButtonRole::Primary)
-            .size(ButtonSize::Medium),
-    ).clicked()
+            .size(ButtonSize::Medium)
+            .show(ui)
+    }).inner;
+    Ok(output.paint(&painter)?.clicked())
 }
 ```
+
+The submission painter must use the same context, layer and coordinates. Capture
+it before the first disabled ancestor and pass it through to nested callers;
+cloning an already disabled painter cannot recover its original parent opacity.
+A button's disabled opacity is applied once to the complete drawing, including
+text, images, border, shadow and focus ring. Child clips remain attached to the
+primitives and also intersect the submission painter's clip. Hidden UI returns
+no drawing. A visible drawing without an installed host returns an error.
+
+When overlapping sibling buttons share a parent opacity, consume their `drawing`
+values as `compositing::Item::Group` children of one parent `Group`, then submit
+that parent once. Do not apply the same parent opacity both to the parent Group
+and its Painter. Keep outputs local to the current frame.
 
 Use `Button::icon(image)` for a leading image and label. Use
 `IconButton::new(theme, image, "Accessible action name")` for an image-only action.
@@ -26,7 +47,12 @@ This metadata does not establish screen-reader acceptance on a particular host.
 Images use the host's egui image sources and loaders. Untinted white images follow
 the state foreground; explicitly colored images retain their tint. Keep texture
 handles alive in the caller. A missing image loader or expired texture is not
-replaced by a bundled font or hidden resource manager.
+replaced by a bundled font or hidden resource manager. Ready images retain UVs,
+tint, background, corner radius and rotation (rotation and rounded corners are
+mutually exclusive). While an asynchronous image is pending, its icon box stays
+empty; `Image::show_loading_spinner` does not affect this component. Loader
+failures show an error glyph. The loader remains responsible for repainting when
+loading completes.
 
 The built-in themes use the [pinned shadcn reference](shadcn-parity.md).
 Install the bundled Geist fonts with `theme::install_fonts` and apply the theme
@@ -60,9 +86,8 @@ a horizontal scroll area. The Gallery demonstrates both.
 Hover colors and focus rings transition over 150 ms with the reference easing.
 A pointer press preserves the hover appearance. Keyboard focus adds a three-point
 outer ring; pointer focus does not. `.invalid(true)` changes the Outline border
-and the focus-ring color and exposes invalid metadata. Use `ui.add_enabled(false,
-...)` or a disabled parent UI for buttons that emit no clicks.
-Styles and opacity are restored for subsequent host widgets.
+and the focus-ring color and exposes invalid metadata. Use a disabled UI scope for buttons that emit no clicks, retaining the parent
+Painter as shown above. Drawing does not mutate the UI's styles or opacity.
 
 Enter activates on keydown; Space activates once on keyup after a focused keydown.
 Losing focus or disabling the button cancels the pending Space activation.
@@ -81,7 +106,11 @@ boxes now use the table above instead of scaling `Theme::metrics.control_height`
 and `control_padding`. Labels no longer wrap or grow the control vertically.
 Replace layouts that depended on automatic wrapping with an explicit scrolling
 container or shorter action text. Space-based actions now occur on release.
-The constructors, role/size builders and `Response` handling remain unchanged.
+`Button` and `IconButton` no longer implement `egui::Widget`. Replace
+`ui.add(button)` with `button.show(ui).paint(ui.painter())?`; replace
+`ui.add_enabled(enabled, button)` with the disabled-scope example above. Install
+the compositing host before submission. Constructors, role/size builders and
+`Response` action handling remain unchanged.
 
 The Gallery Buttons case displays roles, sizes, invalid/disabled states, labels,
 icons and independent activation counts in both themes. See the
@@ -93,12 +122,13 @@ and screenshots do not establish assistive-technology acceptance.
 
 ## Remaining parity work
 
-Disabled painting currently applies 50% opacity to each primitive. This differs
-from the reference's group opacity where text, images, fill and shadow overlap.
-The real native and browser comparisons exposed the difference; per-shape alpha
-tests do not establish final compositing parity. Integrating the shared host
-compositor and validating arbitrary parent backgrounds and translucent images
-remain required before this component is accepted as strictly matching shadcn.
+Disabled drawing now uses the shared host compositor. The GPU regression renders
+actual Button output over light and dark colored backgrounds, comparing it with
+ordinary unfaded primitives followed by one framebuffer blend. It covers primary,
+outline and destructive roles, translucent icons overlapping fills, labels,
+clipping, parent opacity and 1x/1.5x scale. Run the native-adapter test documented
+in [compositing](compositing.md); CPU shape tests alone do not establish pixels.
+Native observation and remaining platform acceptance are reported in the PR.
 
 The pinned egui focus API cannot install a focus filter on the pass that first
 acquires focus. If Escape or an arrow arrives in the immediately following frame,

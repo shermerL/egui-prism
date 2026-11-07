@@ -15,13 +15,14 @@ meaningful behavior/geometry regressions, independent and GitHub review, and CI.
 Do not mark complete from passing compilation or the previous tests alone.
 
 The role/size implementation and input regressions are present, but the Quest is
-not complete. Real native and browser comparison found that disabled content
-fades each overlapping primitive separately instead of compositing the button
-once at 50% opacity. Integrate the shared host-compositing capability when it is
-available; keep the core renderer-independent and do not approximate the backdrop
-with a theme color. Validate final pixels on arbitrary parent backgrounds,
-translucent images and overlapping shadows, then repeat native/browser acceptance,
-independent review, latest-head GitHub reviews and CI before completing this Quest.
+not complete. Button and IconButton now return their response and an unfaded Group
+through `show`, and the caller submits it with a Painter captured before disabled
+scopes. This replaces per-primitive fading with shared host compositing, keeping
+the core renderer-independent. Real Button GPU regressions cover colored parent
+backgrounds, translucent image/text overlap, clipping and parent opacity.
+Repeat native/reference acceptance, independent review, latest-head GitHub reviews
+and CI before completing this Quest; automated pixels alone are not full parity
+acceptance.
 
 Also close the focus-acquisition gap: egui cannot install a focus filter on the
 pass that acquires focus, so immediate Escape/arrow input can navigate away.

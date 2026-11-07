@@ -1,7 +1,11 @@
 //! Reference-shaped buttons that leave actions and resources with the caller.
 
-use crate::{egui, theme::Theme};
-use egui::{Color32, Image, Response, Stroke, Ui, Widget, WidgetText};
+use crate::{
+    compositing::{self, Error, Group, Item},
+    egui,
+    theme::Theme,
+};
+use egui::{Color32, Image, Response, Stroke, Ui, WidgetText};
 
 /// The visual importance of an action, chosen by its caller.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -37,18 +41,21 @@ pub enum ButtonSize {
 
 /// A text action with an optional leading image and a caller-owned theme.
 ///
-/// Use `ui.add_enabled(false, button)` to disable activation. Give reorderable
+/// Use a disabled UI scope to disable activation, retaining its parent painter before
+/// disabling. Give reorderable
 /// instances stable UI scopes, and handle `Response::clicked()` in the caller.
 ///
 /// ```
 /// use egui_prism::{button::{Button, ButtonRole}, egui, theme::Theme};
 /// let theme = Theme::light();
 /// egui::__run_test_ui(|ui| {
-///     let response = ui.add(Button::new(&theme, "Save").role(ButtonRole::Primary));
+///     let output = Button::new(&theme, "Save").role(ButtonRole::Primary).show(ui);
+///     let response = output.response;
+///     // Submit output.drawing through the installed compositor in a real host.
 ///     if response.clicked() { /* application action */ }
 /// });
 /// ```
-#[must_use = "Add the button to a Ui with ui.add(button)"]
+#[must_use = "call show and submit the returned drawing"]
 pub struct Button<'theme, 'a> {
     theme: &'theme Theme,
     text: Option<WidgetText>,
@@ -95,7 +102,7 @@ impl<'theme, 'a> Button<'theme, 'a> {
         self
     }
 
-    fn show(self, ui: &mut Ui, icon_name: Option<&str>) -> Response {
+    fn draw(self, ui: &mut Ui, icon_name: Option<&str>) -> ButtonOutput {
         let (height, padding, icon_padding, gap, icon_size) = match self.size {
             ButtonSize::ExtraSmall => (24.0, 8.0, 6.0, 4.0, 12.0),
             ButtonSize::Small => (32.0, 12.0, 10.0, 6.0, 16.0),
@@ -319,18 +326,11 @@ impl<'theme, 'a> Button<'theme, 'a> {
             ui.ctx().request_repaint();
         }
         ui.data_mut(|data| data.insert_temp(state_id, state));
-        if ui.is_rect_visible(rect.expand(4.0)) {
-            let previous_opacity = ui.painter().opacity();
-            let disabled_alpha = ui.visuals().disabled_alpha();
-            let inherited_opacity = if !response.enabled() && disabled_alpha > 0.0 {
-                previous_opacity / disabled_alpha
-            } else {
-                previous_opacity
-            };
-            ui.set_opacity(inherited_opacity * paint.opacity);
+        let drawing = if ui.is_rect_visible(rect.expand(4.0)) {
             let radius = self.theme.metrics.corner_radius;
+            let mut shapes = Vec::new();
             if self.role == ButtonRole::Outline {
-                ui.painter().add(
+                shapes.push(egui::Shape::from(
                     egui::Shadow {
                         offset: [0, 1],
                         blur: 2,
@@ -338,63 +338,156 @@ impl<'theme, 'a> Button<'theme, 'a> {
                         color: Color32::from_black_alpha(13),
                     }
                     .as_shape(rect, radius),
-                );
+                ));
             }
             if paint.ring_width > 0.0 {
-                ui.painter().rect_stroke(
+                shapes.push(egui::Shape::rect_stroke(
                     rect,
                     radius,
                     Stroke::new(paint.ring_width, paint.ring),
                     egui::StrokeKind::Outside,
-                );
+                ));
             }
-            ui.painter().rect(
+            shapes.push(egui::Shape::from(egui::epaint::RectShape::new(
                 rect,
                 radius,
                 paint.fill,
                 Stroke::new(border_width, paint.border),
                 egui::StrokeKind::Inside,
-            );
+            )));
             let mut x = rect.center().x - content_width / 2.0;
             if let Some(mut image) = self.image {
                 if image.image_options().tint == Color32::WHITE {
                     image = image.tint(paint.foreground);
                 }
-                image.paint_at(
-                    ui,
-                    egui::Rect::from_min_size(
-                        egui::pos2(x, rect.center().y - icon_size / 2.0),
-                        egui::Vec2::splat(icon_size),
-                    ),
+                let image_rect = egui::Rect::from_min_size(
+                    egui::pos2(x, rect.center().y - icon_size / 2.0),
+                    egui::Vec2::splat(icon_size),
                 );
+                shapes.extend(image_shapes(ui, &image, image_rect));
                 x += icon_size + gap;
             }
             if let Some(galley) = galley {
                 let position = egui::pos2(x, rect.center().y - galley.size().y / 2.0)
                     - galley.rect.min.to_vec2();
-                ui.painter()
-                    .galley(position, galley.clone(), paint.foreground);
+                shapes.push(egui::Shape::galley(
+                    position,
+                    galley.clone(),
+                    paint.foreground,
+                ));
                 if self.role == ButtonRole::Link && hovered {
                     for row in &galley.rows {
                         if let Some(glyph) = row.glyphs.first() {
                             let y = position.y + row.pos.y + glyph.pos.y + 4.0;
-                            ui.painter().line_segment(
+                            shapes.push(egui::Shape::line_segment(
                                 [egui::pos2(x, y), egui::pos2(x + row.size.x, y)],
                                 Stroke::new(1.0, paint.foreground),
-                            );
+                            ));
                         }
                     }
                 }
             }
-            ui.set_opacity(previous_opacity);
-        }
-        response
+            let bounds = shapes.iter().fold(rect, |bounds, shape| {
+                bounds.union(shape.visual_bounding_rect())
+            });
+            let items = shapes
+                .into_iter()
+                .map(|shape| Item::Shape(egui::epaint::ClippedShape::new(ui.clip_rect(), shape)))
+                .collect();
+            Some(Group::new(bounds, paint.opacity, items).expect("valid button drawing"))
+        } else {
+            None
+        };
+        ButtonOutput { response, drawing }
+    }
+
+    /// Lay out the button and return its response and unfaded drawing for this frame.
+    pub fn show(self, ui: &mut Ui) -> ButtonOutput {
+        self.draw(ui, None)
     }
 }
 
-impl Widget for Button<'_, '_> {
-    fn ui(self, ui: &mut Ui) -> Response {
-        self.show(ui, None)
+/// A button response and drawing submitted by the caller in the current frame.
+#[must_use = "submit the drawing with paint or include it in a parent Group"]
+pub struct ButtonOutput {
+    /// The interaction response, consumed by the caller's action logic.
+    pub response: Response,
+    /// The unfaded group, absent when the button is not visible.
+    pub drawing: Option<Group>,
+}
+impl ButtonOutput {
+    /// Submit with a same-layer painter captured before entering a disabled scope.
+    ///
+    /// The painter supplies actual parent opacity; egui's disabled fade must not
+    /// already be included. Keep referenced textures alive through host submission.
+    /// For overlapping siblings, put their drawings in a parent `Group` instead.
+    pub fn paint(self, painter: &egui::Painter) -> Result<Response, Error> {
+        assert_eq!(
+            &self.response.ctx,
+            painter.ctx(),
+            "button painter must use the same context"
+        );
+        assert_eq!(
+            self.response.layer_id,
+            painter.layer_id(),
+            "button painter must use the same layer"
+        );
+        if let Some(group) = self.drawing {
+            compositing::paint(painter, group)?;
+        }
+        Ok(self.response)
+    }
+}
+
+// Build image primitives without passing through a painter that may already be faded.
+fn image_shapes(ui: &Ui, image: &Image<'_>, rect: egui::Rect) -> Vec<egui::Shape> {
+    use egui::emath::GuiRounding as _;
+    let rect = rect.round_to_pixels(ui.pixels_per_point());
+    match image.load_for_size(ui.ctx(), rect.size()) {
+        Ok(egui::load::TexturePoll::Ready { texture }) => {
+            let options = image.image_options();
+            let mut shapes = Vec::new();
+            if options.bg_fill != Color32::TRANSPARENT {
+                shapes.push(egui::Shape::rect_filled(
+                    rect,
+                    options.corner_radius,
+                    options.bg_fill,
+                ));
+            }
+            if let Some((rotation, origin)) = options.rotation {
+                assert_eq!(
+                    options.corner_radius,
+                    egui::CornerRadius::ZERO,
+                    "rotated button images cannot also have rounded corners"
+                );
+                let mut mesh = egui::Mesh::with_texture(texture.id);
+                mesh.add_rect_with_uv(rect, options.uv, options.tint);
+                mesh.rotate(rotation, rect.min + origin * rect.size());
+                shapes.push(egui::Shape::mesh(mesh));
+            } else {
+                shapes.push(egui::Shape::from(
+                    egui::epaint::RectShape::filled(rect, options.corner_radius, options.tint)
+                        .with_texture(texture.id, options.uv),
+                ));
+            }
+            shapes
+        }
+        Ok(egui::load::TexturePoll::Pending { .. }) => {
+            // The host owns asynchronous loaders and requests repaint when an image arrives.
+            Vec::new()
+        }
+        Err(_) => {
+            let galley = ui.painter().layout_no_wrap(
+                "⚠".into(),
+                egui::TextStyle::Body.resolve(ui.style()),
+                ui.visuals().error_fg_color,
+            );
+            vec![egui::Shape::galley(
+                rect.center() - galley.size() * 0.5,
+                galley,
+                ui.visuals().error_fg_color,
+            )]
+        }
     }
 }
 
@@ -409,10 +502,10 @@ impl Widget for Button<'_, '_> {
 /// egui::__run_test_ui(|ui| {
 ///     // The application supplies and retains the real texture in production.
 ///     let image = (egui::TextureId::User(1), egui::vec2(16.0, 16.0));
-///     let _response = ui.add(IconButton::new(&theme, image, "Add item"));
+///     let _output = IconButton::new(&theme, image, "Add item").show(ui);
 /// });
 /// ```
-#[must_use = "Add the icon button to a Ui with ui.add(button)"]
+#[must_use = "call show and submit the returned drawing"]
 pub struct IconButton<'theme, 'a> {
     button: Button<'theme, 'a>,
     name: String,
@@ -458,10 +551,12 @@ impl<'theme, 'a> IconButton<'theme, 'a> {
     }
 }
 
-impl Widget for IconButton<'_, '_> {
-    fn ui(self, ui: &mut Ui) -> Response {
-        let response = self.button.show(ui, Some(&self.name));
-        response.on_hover_text(self.name)
+impl IconButton<'_, '_> {
+    /// Lay out the icon action and return its response and drawing for this frame.
+    pub fn show(self, ui: &mut Ui) -> ButtonOutput {
+        let mut output = self.button.draw(ui, Some(&self.name));
+        output.response = output.response.on_hover_text(self.name);
+        output
     }
 }
 

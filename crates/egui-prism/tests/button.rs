@@ -7,7 +7,7 @@ use egui_prism::{
 };
 
 struct Harness {
-    context: egui::Context,
+    context: TestContext,
     theme: Theme,
     time: f64,
     enabled: bool,
@@ -26,7 +26,7 @@ struct Harness {
 impl Harness {
     fn new() -> Self {
         Self {
-            context: egui::Context::default(),
+            context: TestContext::default(),
             theme: Theme::light(),
             time: 0.0,
             enabled: true,
@@ -66,24 +66,24 @@ impl Harness {
                                 egui::TextureId::User(1),
                                 egui::vec2(16.0, 16.0),
                             ));
-                            ui.add_enabled(
-                                self.enabled,
+                            show_enabled(ui, self.enabled, |ui| {
                                 IconButton::new(&self.theme, image, format!("Action {index}"))
-                                    .size(self.size),
-                            )
+                                    .size(self.size)
+                                    .show(ui)
+                            })
                         } else {
                             let label = if self.long {
                                 "A deliberately long action label that keeps its intrinsic width"
                             } else {
                                 "Activate"
                             };
-                            ui.add_enabled(
-                                self.enabled,
+                            show_enabled(ui, self.enabled, |ui| {
                                 Button::new(&self.theme, label)
                                     .size(self.size)
                                     .role(self.role)
-                                    .invalid(self.invalid),
-                            )
+                                    .invalid(self.invalid)
+                                    .show(ui)
+                            })
                         };
                         if response.clicked() {
                             self.counts[index] += 1;
@@ -240,7 +240,7 @@ fn reference_sizes_are_fixed_and_long_text_does_not_wrap() {
 #[test]
 fn button_roles_do_not_leak_style_into_the_host() {
     for theme in [Theme::light(), Theme::dark()] {
-        egui::__run_test_ui(|ui| {
+        test_ui(|ui| {
             let original = ui.style().clone();
             for role in [
                 ButtonRole::Primary,
@@ -250,7 +250,11 @@ fn button_roles_do_not_leak_style_into_the_host() {
                 ButtonRole::Destructive,
                 ButtonRole::Link,
             ] {
-                ui.add(Button::new(&theme, "Action").role(role));
+                Button::new(&theme, "Action")
+                    .role(role)
+                    .show(ui)
+                    .paint(ui.painter())
+                    .expect("button compositor");
                 assert_eq!(ui.style().as_ref(), original.as_ref());
             }
         });
@@ -267,13 +271,16 @@ fn icon_rejects_an_empty_accessible_name() {
 
 #[test]
 fn explicitly_tinted_images_preserve_their_rendered_color() {
-    let context = egui::Context::default();
+    let context = TestContext::default();
     let theme = Theme::dark();
     for _ in 0..2 {
         let output = context.run_ui(egui::RawInput::default(), |ui| {
             let image = egui::Image::new((egui::TextureId::User(42), egui::vec2(16.0, 16.0)))
                 .tint(egui::Color32::RED);
-            ui.add(IconButton::new(&theme, image, "Red action"));
+            IconButton::new(&theme, image, "Red action")
+                .show(ui)
+                .paint(ui.painter())
+                .expect("button compositor");
         });
         let primitives = context.tessellate(output.shapes.clone(), output.pixels_per_point);
         let colors: Vec<_> = primitives
@@ -318,7 +325,7 @@ fn labels_use_the_host_button_font_and_keep_explicit_formatting() {
         }
     }
     for (override_style, expected) in [(None, 24.0), (Some(egui::TextStyle::Heading), 28.0)] {
-        let context = egui::Context::default();
+        let context = TestContext::default();
         let theme = Theme::light();
         let output = context.run_ui(egui::RawInput::default(), |ui| {
             ui.style_mut()
@@ -328,11 +335,14 @@ fn labels_use_the_host_button_font_and_keep_explicit_formatting() {
                 .text_styles
                 .insert(egui::TextStyle::Heading, egui::FontId::proportional(28.0));
             ui.style_mut().override_text_style = override_style.clone();
-            ui.add(Button::new(&theme, "Host button font"));
-            ui.add(Button::new(
-                &theme,
-                egui::RichText::new("Explicit font").size(30.0),
-            ));
+            Button::new(&theme, "Host button font")
+                .show(ui)
+                .paint(ui.painter())
+                .expect("button compositor");
+            Button::new(&theme, egui::RichText::new("Explicit font").size(30.0))
+                .show(ui)
+                .paint(ui.painter())
+                .expect("button compositor");
         });
         let mut sizes = Vec::new();
         for clipped in &output.shapes {
@@ -460,26 +470,27 @@ fn disabled_buttons_use_half_opacity_and_do_not_change_host_opacity() {
         h.enabled = false;
         h.frame(vec![]);
         let r = h.frame(vec![]);
+        assert_eq!(h.context.groups.lock().unwrap()[0].opacity(), 0.5);
         let shape = rect_shapes(&h.shapes)
             .into_iter()
             .find(|s| s.rect == r[0].rect)
             .unwrap();
-        assert_eq!(
-            shape.fill,
-            h.theme.colors.primary.background.gamma_multiply(0.5)
-        );
+        assert_eq!(shape.fill, h.theme.colors.primary.background);
     }
-    egui::__run_test_ui(|ui| {
+    test_ui(|ui| {
         ui.set_opacity(0.7);
         let before = ui.opacity();
-        ui.add(Button::new(&Theme::light(), "Action"));
+        Button::new(&Theme::light(), "Action")
+            .show(ui)
+            .paint(ui.painter())
+            .expect("button compositor");
         assert_eq!(ui.opacity(), before);
     });
 }
 
 #[test]
 fn reference_padding_gap_and_icon_geometry_do_not_follow_source_texture_size() {
-    let context = egui::Context::default();
+    let context = TestContext::default();
     let theme = Theme::light();
     egui_prism::theme::install_fonts(&context, egui::FontDefinitions::default());
     context.all_styles_mut(|style| theme.apply(style));
@@ -491,14 +502,24 @@ fn reference_padding_gap_and_icon_geometry_do_not_follow_source_texture_size() {
             (ButtonSize::Medium, 16.0, 12.0, 8.0, 16.0),
             (ButtonSize::Large, 24.0, 16.0, 8.0, 16.0),
         ] {
-            let text = ui.add(Button::new(&theme, "Action").size(size));
-            let outline = ui.add(
-                Button::new(&theme, "Action")
-                    .size(size)
-                    .role(ButtonRole::Outline),
-            );
+            let text = Button::new(&theme, "Action")
+                .size(size)
+                .show(ui)
+                .paint(ui.painter())
+                .expect("button compositor");
+            let outline = Button::new(&theme, "Action")
+                .size(size)
+                .role(ButtonRole::Outline)
+                .show(ui)
+                .paint(ui.painter())
+                .expect("button compositor");
             let image = (egui::TextureId::User(9), egui::vec2(128.0, 64.0));
-            let icon = ui.add(Button::new(&theme, "Action").size(size).icon(image));
+            let icon = Button::new(&theme, "Action")
+                .size(size)
+                .icon(image)
+                .show(ui)
+                .paint(ui.painter())
+                .expect("button compositor");
             observed.push((
                 outline.rect.width() - text.rect.width(),
                 icon.rect.width() - text.rect.width(),
@@ -529,7 +550,7 @@ fn reference_padding_gap_and_icon_geometry_do_not_follow_source_texture_size() {
 
 #[test]
 fn justified_layout_does_not_expand_the_button_hit_target() {
-    let context = egui::Context::default();
+    let context = TestContext::default();
     let theme = Theme::light();
     let mut clicked = false;
     let mut button_rect = egui::Rect::NOTHING;
@@ -562,7 +583,10 @@ fn justified_layout_does_not_expand_the_button_hit_target() {
             },
             |ui| {
                 ui.vertical_centered_justified(|ui| {
-                    let response = ui.add(Button::new(&theme, "Action"));
+                    let response = Button::new(&theme, "Action")
+                        .show(ui)
+                        .paint(ui.painter())
+                        .expect("button compositor");
                     button_rect = response.rect;
                     clicked |= response.clicked();
                 });
@@ -595,15 +619,21 @@ fn restored_instance_cancels_an_old_space_press() {
 
 #[test]
 fn inherited_text_color_does_not_replace_semantics_or_explicit_rich_text() {
-    let context = egui::Context::default();
+    let context = TestContext::default();
     let theme = Theme::light();
     let output = context.run_ui(egui::RawInput::default(), |ui| {
         ui.visuals_mut().override_text_color = Some(egui::Color32::BLACK);
-        ui.add(Button::new(&theme, "Semantic"));
-        ui.add(Button::new(
+        Button::new(&theme, "Semantic")
+            .show(ui)
+            .paint(ui.painter())
+            .expect("button compositor");
+        Button::new(
             &theme,
             egui::RichText::new("Explicit").color(egui::Color32::RED),
-        ));
+        )
+        .show(ui)
+        .paint(ui.painter())
+        .expect("button compositor");
         assert_eq!(ui.visuals().override_text_color, Some(egui::Color32::BLACK));
     });
     let colors: Vec<_> = output
@@ -639,7 +669,7 @@ fn tab_traversal_survives_a_later_filtered_key_in_the_same_frame() {
 
 #[test]
 fn caller_can_release_button_focus_while_handling_escape() {
-    let context = egui::Context::default();
+    let context = TestContext::default();
     let theme = Theme::light();
     let mut id = None;
     for events in [
@@ -658,10 +688,165 @@ fn caller_can_release_button_focus_while_handling_escape() {
                     if ui.input(|input| input.key_pressed(egui::Key::Escape)) {
                         ui.memory_mut(|memory| memory.surrender_focus(id.unwrap()));
                     }
-                    id = Some(ui.add(Button::new(&theme, "Action")).id);
+                    id = Some(
+                        Button::new(&theme, "Action")
+                            .show(ui)
+                            .paint(ui.painter())
+                            .expect("button compositor")
+                            .id,
+                    );
                 },
             )
             .drop_without_applying_deltas();
     }
     assert_eq!(context.memory(|memory| memory.focused()), None);
+}
+
+fn show_enabled(
+    ui: &mut egui::Ui,
+    enabled: bool,
+    show: impl FnOnce(&mut egui::Ui) -> egui_prism::button::ButtonOutput,
+) -> egui::Response {
+    let painter = ui.painter().clone();
+    ui.add_enabled_ui(enabled, show)
+        .inner
+        .paint(&painter)
+        .expect("button compositor")
+}
+
+// Inspect the actual unfaded Group contents for layout/input contracts; GPU tests
+// separately verify final opacity and overlapping pixels.
+struct TestContext {
+    context: egui::Context,
+    groups: std::sync::Arc<std::sync::Mutex<Vec<egui_prism::compositing::Group>>>,
+    _installation: egui_prism::compositing::Installation,
+}
+impl Default for TestContext {
+    fn default() -> Self {
+        let context = egui::Context::default();
+        let groups = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let installation = egui_prism::compositing::install(
+            &context,
+            std::sync::Arc::new(GroupRecorder(groups.clone())),
+        )
+        .unwrap();
+        Self {
+            context,
+            groups,
+            _installation: installation,
+        }
+    }
+}
+impl std::ops::Deref for TestContext {
+    type Target = egui::Context;
+    fn deref(&self) -> &Self::Target {
+        &self.context
+    }
+}
+struct GroupRecorder(std::sync::Arc<std::sync::Mutex<Vec<egui_prism::compositing::Group>>>);
+impl egui_prism::compositing::Backend for GroupRecorder {
+    fn callback(
+        &self,
+        _: &egui::Context,
+        group: egui_prism::compositing::Group,
+    ) -> Result<egui::PaintCallback, egui_prism::compositing::Error> {
+        self.0.lock().unwrap().push(group.clone());
+        Ok(egui::PaintCallback {
+            rect: group.bounds(),
+            callback: std::sync::Arc::new(group),
+        })
+    }
+}
+impl TestContext {
+    fn run_ui(&self, input: egui::RawInput, ui: impl FnMut(&mut egui::Ui)) -> egui::FullOutput {
+        self.groups.lock().unwrap().clear();
+        let mut output = self.context.run_ui(input, ui);
+        output.shapes = output
+            .shapes
+            .into_iter()
+            .flat_map(|shape| {
+                if let egui::Shape::Callback(callback) = &shape.shape {
+                    let group = callback
+                        .callback
+                        .downcast_ref::<egui_prism::compositing::Group>()
+                        .unwrap();
+                    group
+                        .items()
+                        .iter()
+                        .map(|item| match item {
+                            egui_prism::compositing::Item::Shape(shape) => shape.clone(),
+                            egui_prism::compositing::Item::Group(_) => {
+                                panic!("button output contains only primitives")
+                            }
+                        })
+                        .collect()
+                } else {
+                    vec![shape]
+                }
+            })
+            .collect();
+        output
+    }
+}
+fn test_ui(ui: impl FnMut(&mut egui::Ui)) {
+    TestContext::default()
+        .run_ui(egui::RawInput::default(), ui)
+        .drop_without_applying_deltas();
+}
+
+#[test]
+fn disabled_scopes_keep_parent_opacity_and_child_clipping() {
+    for parent in [0.0, 0.4, 1.0] {
+        for disabled_alpha in [0.0, 0.3, 1.0] {
+            let context = TestContext::default();
+            context
+                .run_ui(egui::RawInput::default(), |ui| {
+                    ui.set_opacity(parent);
+                    let painter = ui.painter().clone();
+                    ui.visuals_mut().disabled_alpha = disabled_alpha;
+                    ui.disable();
+                    ui.disable();
+                    // Changing style after disable must not change the parent opacity.
+                    ui.visuals_mut().disabled_alpha = 0.7;
+                    let clip = egui::Rect::from_min_size(ui.cursor().min, egui::vec2(30.0, 25.0));
+                    ui.set_clip_rect(clip);
+                    let output = Button::new(&Theme::light(), "Clipped").show(ui);
+                    let group = output.drawing.as_ref().unwrap();
+                    assert_eq!(group.opacity(), 0.5);
+                    for item in group.items() {
+                        let egui_prism::compositing::Item::Shape(shape) = item else {
+                            panic!()
+                        };
+                        assert_eq!(shape.clip_rect, clip);
+                    }
+                    output.paint(&painter).unwrap();
+                })
+                .drop_without_applying_deltas();
+            let groups = context.groups.lock().unwrap();
+            assert!((groups[0].opacity() - parent * 0.5).abs() < 0.0001);
+        }
+    }
+}
+
+#[test]
+fn hidden_buttons_cannot_be_restored_by_an_external_painter() {
+    let context = TestContext::default();
+    context
+        .run_ui(egui::RawInput::default(), |ui| {
+            let painter = ui.painter().clone();
+            ui.set_invisible();
+            let output = Button::new(&Theme::light(), "Hidden").show(ui);
+            assert!(output.drawing.is_none());
+            output.paint(&painter).unwrap();
+        })
+        .drop_without_applying_deltas();
+    assert!(context.groups.lock().unwrap().is_empty());
+}
+
+#[test]
+fn visible_buttons_require_a_live_compositor() {
+    egui::__run_test_ui(|ui| {
+        let output = Button::new(&Theme::light(), "No host").show(ui);
+        assert!(output.paint(ui.painter()).is_err());
+    });
 }
