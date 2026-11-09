@@ -56,6 +56,17 @@ requires every application viewport callback to complete the explicit phases:
    hover, pointer-held appearance and keyboard focus remain available. Do not
    execute a second business-input path from aggregate pointer state during paint.
 
+The native Gallery uses these phases within its existing single `run_ui`. It
+keeps actual response IDs, local control layout and measured scroll shells for the
+current pass. A page, theme or width change refreshes the corresponding layout.
+Scroll updates and editor changes refresh the affected case before the next event.
+Compositor result collection and restart belong to the update, and screenshot
+requests use the final drawing geometry.
+
+A future popup consumer can inspect the raw release in this same loop, including
+an untargeted release. Commit an action only if its live response is enabled and
+contains the pointer.
+
 A compiling host example is in
 [`ordered_input.rs`](../crates/egui-prism/examples/ordered_input.rs). It demonstrates
 registered geometry, ordered actions and final paint without a second whole-UI
