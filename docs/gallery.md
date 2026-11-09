@@ -1,6 +1,6 @@
 # Acceptance gallery
 
-The native and WebGL 2 builds use the same Rust gallery and library. The gallery
+The native macOS, Windows and Linux hosts use the same Rust gallery and library. The gallery
 demonstrates the theme API, Prism buttons and text inputs, and standard egui harness controls.
 Other Prism widgets are planned. A harness check is not a component acceptance result.
 
@@ -9,18 +9,15 @@ Other Prism widgets are planned. A harness check is not a component acceptance r
 ```sh
 nix develop --command cargo run --locked -p egui-prism-gallery
 nix develop --command quest gate python3 scripts/check.py
-python3 -m http.server 8080 --bind 127.0.0.1 --directory dist
 ```
 
-Open `http://localhost:8080/egui-prism/` for the release browser bundle. Refresh
-that subpath directly. The page should replace its loading status with the canvas;
-startup or module/resource failures should leave a readable error. Check the
-browser console for errors. The bundle contains its own license and third-party
-notices, linked from the gallery footer. Native links point to the source repository.
+The native host uses Metal on macOS, DX12 on Windows and Vulkan on Linux.
+Initialization and device failures are reported by the native process. The pinned
+CSS reference runs separately; browser product deployment is deferred.
 
 The footer reports the development package version, renderer, and debug/release
 build kind. Local builds say `local development`; CI sets `EGUI_PRISM_BUILD_ID`
-to its full workflow commit SHA, embedding that ID in both artifacts. An artifact
+to its full workflow commit SHA, embedding that ID in native artifacts. An artifact
 built for a PR may identify GitHub's test merge commit rather than the branch tip.
 No release or Pages deployment is performed by these commands or CI.
 
@@ -38,8 +35,8 @@ Theme and case changes preserve caller text, checkboxes, and action counts.
 | Layout | The same instances and IDs with long wrapping action labels |
 
 Use `320pt content` to constrain the content without resizing the host, and the
-100%/150% scale controls to exercise zoom. The host window or browser can also be
-resized. The native default viewport is 720 by 480 logical points. A fixed content
+100%/150% scale controls to exercise zoom. The host window can also be
+resized. The native default viewport is 960 by 900 logical points. A fixed content
 width is not a simulation of another device's DPI, font rasterization, or input.
 
 For a screenshot and manual interaction pass:
@@ -55,12 +52,12 @@ For a screenshot and manual interaction pass:
    identities. Both instances appear only once in each frame.
 6. In Layout, enable narrow content and 150% scale. Long action labels should wrap;
    scroll to the second instance and footer. Return to 100% and full width.
-7. Capture the actual window or browser with the platform screenshot tool in each
+7. Capture the actual window with the platform screenshot tool in each
    theme, including focused/selected text and a constrained layout. Keep screenshot
    observations separate from synthetic-input test output, and redact unrelated UI
    before sharing captures.
-8. For the browser, reload the configured subpath and check rendering, resources,
-   license links, and console errors. Test failure messages separately from success.
+8. Test native copy/paste, IME composition and cancellation, focus loss, resize,
+   minimize/restore and close on each OS. Record Linux X11/Wayland separately.
 
 ## Automated coverage
 
@@ -74,11 +71,19 @@ Explicit UI scopes keep automatic child IDs stable when instances move.
 
 Run these through the standard check command. They establish behavior of the
 current egui harness and provide a pattern for future public Prism widget tests.
-They do not establish native/browser input delivery, IME composition, screen-reader
+They do not establish native input delivery, IME composition, screen-reader
 integration, touch, or another operating system's behavior. Actual GUI checks and
-the tested browser are reported in each PR. Other browsers, Windows/Linux GUI,
+the tested OS/backend are reported in each PR. Unobserved Windows/Linux GUI,
 CJK font coverage, IME, assistive technology, and a full DPI matrix remain open.
 
 The Checkboxes case tests box/label clicks, keyboard toggles, disabled editing,
 independent values after reordering, and long-label layout. Change counters must
 advance once per activation and stay unchanged while idle or disabled.
+The Switches case checks track/label activation, keyboard focus, explicit value
+changes, disabled state, independent instances, and wrapped-label layout.
+
+The Sliders case checks two ranges and step sizes, pointer/keyboard edits,
+disabled values, reordering, and wrapped labels above constrained rails.
+The Compositing case independently checks group opacity. Run the automatic
+final-framebuffer matrix with `--compositing-check`; see
+[host compositing](compositing.md) for resource and ordering contracts.

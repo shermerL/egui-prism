@@ -63,13 +63,25 @@ impl<'theme, 'value> TextInput<'theme, 'value> {
     }
 }
 
-impl egui::Widget for TextInput<'_, '_> {
-    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
+/// Editor and visible text sources from one layout, for explicit host routing.
+pub struct TextInputOutput {
+    /// The editor's interaction response.
+    pub response: egui::Response,
+    /// The visible label registered in the same layout.
+    pub label: egui::Response,
+    /// The optional caller-provided error text source.
+    pub error: Option<egui::Response>,
+}
+impl TextInput<'_, '_> {
+    /// Lay out the editor and expose its text sources for host-owned removal.
+    pub fn show(self, ui: &mut egui::Ui) -> TextInputOutput {
         let id = self
             .id
             .unwrap_or_else(|| ui.next_auto_id().with("text-input"));
         ui.vertical(|ui| {
             self.theme.apply(ui.style_mut());
+            ui.visuals_mut().selection.bg_fill = self.theme.colors.selection.background;
+            ui.visuals_mut().selection.stroke.color = self.theme.colors.selection.foreground;
             if self.error.is_some() {
                 // Keep selection's paired foreground and focus outline intact.
                 let error_color = self.theme.colors.destructive.background;
@@ -86,8 +98,29 @@ impl egui::Widget for TextInput<'_, '_> {
                         .desired_width(ui.available_width()),
                 )
                 .labelled_by(label.id);
-            if let Some(error) = self.error {
-                ui.label(
+            // Selection foreground and focus outlines are separate shadcn tokens.
+            // egui's default editor uses selection.stroke for both.
+            if response.has_focus() && ui.is_enabled() {
+                let color = if self.error.is_some() {
+                    self.theme.colors.destructive.background
+                } else {
+                    self.theme.colors.ring
+                };
+                ui.painter().rect_stroke(
+                    response.rect,
+                    self.theme.metrics.corner_radius,
+                    egui::Stroke::new(3.0, color.gamma_multiply(0.5)),
+                    egui::StrokeKind::Outside,
+                );
+                ui.painter().rect_stroke(
+                    response.rect,
+                    self.theme.metrics.corner_radius,
+                    egui::Stroke::new(1.0, color),
+                    egui::StrokeKind::Inside,
+                );
+            }
+            let error = if let Some(error) = self.error {
+                let error_response = ui.label(
                     egui::RichText::new(&error)
                         .small()
                         .color(self.theme.colors.destructive.background),
@@ -96,9 +129,22 @@ impl egui::Widget for TextInput<'_, '_> {
                     node.set_description(error);
                     node.set_invalid(egui::accesskit::Invalid::True);
                 });
+                Some(error_response)
+            } else {
+                None
+            };
+            TextInputOutput {
+                response,
+                label,
+                error,
             }
-            response
         })
         .inner
+    }
+}
+
+impl egui::Widget for TextInput<'_, '_> {
+    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
+        self.show(ui).response
     }
 }

@@ -1,24 +1,51 @@
-//! Shared native and browser acceptance gallery for the component library.
+//! Native acceptance gallery for the component library.
+
+mod native;
 
 mod buttons;
 mod checkboxes;
+mod compositing;
+mod input;
 mod interaction;
+mod sliders;
+mod switches;
 mod text_inputs;
 
 use egui_prism::{egui, theme::Theme};
+use input::{Control, Layout, LocalUi, PageLayout, Phase};
 use interaction::InteractionCase;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Case {
     Theme,
     Buttons,
     Inputs,
     Checkboxes,
+    Sliders,
+    Switches,
     Interaction,
     Layout,
+    Compositing,
+}
+impl Case {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Theme => "Theme",
+            Self::Buttons => "Buttons",
+            Self::Inputs => "Inputs",
+            Self::Checkboxes => "Checkboxes",
+            Self::Sliders => "Sliders",
+            Self::Switches => "Switches",
+            Self::Interaction => "Interaction",
+            Self::Layout => "Layout",
+            Self::Compositing => "Compositing",
+        }
+    }
 }
 
 struct Gallery {
+    compositor: egui_prism_wgpu::Host,
+    compositing: compositing::CompositingCase,
     dark: bool,
     case: Case,
     narrow: bool,
@@ -26,21 +53,38 @@ struct Gallery {
     buttons: buttons::ButtonCase,
     inputs: text_inputs::InputCase,
     checkboxes: checkboxes::CheckboxCase,
+    sliders: sliders::SliderCase,
+    switches: switches::SwitchCase,
 }
 
 impl Gallery {
-    fn new(context: &egui::Context) -> Self {
+    fn new(
+        context: &egui::Context,
+        device: &wgpu::Device,
+    ) -> Result<Self, egui_prism::compositing::Error> {
+        context.options_mut(|options| options.ordered_input = true);
+        let compositor = egui_prism_wgpu::Host::new(context, device)?;
+        let automatic = std::env::args().any(|arg| arg == "--compositing-check");
+        egui_prism::theme::install_fonts(context, egui::FontDefinitions::default());
         let gallery = Self {
+            compositor,
+            compositing: compositing::CompositingCase::new(context, automatic),
             dark: false,
-            case: Case::Theme,
+            case: if automatic {
+                Case::Compositing
+            } else {
+                Case::Theme
+            },
             narrow: false,
             interaction: InteractionCase::default(),
             buttons: buttons::ButtonCase::new(context),
             inputs: text_inputs::InputCase::default(),
             checkboxes: checkboxes::CheckboxCase::default(),
+            sliders: sliders::SliderCase::default(),
+            switches: switches::SwitchCase::default(),
         };
         gallery.apply_theme(context);
-        gallery
+        Ok(gallery)
     }
 
     fn theme(&self) -> Theme {
@@ -60,89 +104,311 @@ impl Gallery {
         });
         context.all_styles_mut(|style| theme.apply(style));
     }
-}
 
-impl eframe::App for Gallery {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let theme = self.theme();
-        egui::CentralPanel::default()
-            .frame(egui::Frame::central_panel(ui.style()).inner_margin(theme.metrics.page_margin))
-            .show(ui, |ui| {
-                ui.heading("egui-prism");
-                ui.label("Available: themes, buttons, text inputs, and checkboxes. Other widgets are planned.");
-                ui.horizontal_wrapped(|ui| {
-                    ui.selectable_value(&mut self.case, Case::Theme, "Theme");
-                    ui.selectable_value(&mut self.case, Case::Buttons, "Buttons");
-                    ui.selectable_value(&mut self.case, Case::Inputs, "Inputs");
-                    ui.selectable_value(&mut self.case, Case::Checkboxes, "Checkboxes");
-                    ui.selectable_value(&mut self.case, Case::Interaction, "Interaction");
-                    ui.selectable_value(&mut self.case, Case::Layout, "Layout");
-                });
-                let old_dark = self.dark;
-                ui.horizontal_wrapped(|ui| {
-                    ui.selectable_value(&mut self.dark, false, "Light");
-                    ui.selectable_value(&mut self.dark, true, "Dark");
-                    ui.checkbox(&mut self.narrow, "320pt content");
-                    ui.label("Scale:");
-                    for (factor, label) in [(1.0, "100%"), (1.5, "150%")] {
-                        if ui.selectable_label(ui.ctx().zoom_factor() == factor, label).clicked() {
-                            ui.ctx().set_zoom_factor(factor);
-                        }
+    fn ui(&mut self, ui: &mut egui::Ui, device: &wgpu::Device) {
+        let context = ui.ctx().clone();
+        self.compositor.check().expect("compositing host failure");
+
+        // Lifecycle work is not part of registration or targeted widget replay.
+        self.compositing.begin_update();
+        let restart = self.compositing.take_restart_request();
+
+        context.begin_input();
+        let root = LocalUi::named(ui, ui.make_persistent_id("gallery-root"));
+        let mut page = self.layout(
+            &mut root.open(&context),
+            Phase::Register,
+            sliders::Live::default(),
+        );
+
+        let mut focus = context.memory(|memory| memory.focused());
+        while let Some(event) = context.next_input_event() {
+            // Navigation has already run. Observe loss now, not just at the end
+            // of the batch: focus may leave and return before Space is released.
+            page.cancel_interactions();
+            let old_page = (self.case, self.dark, self.narrow);
+
+            let scrolled = input::scroll_opportunity(&event) && page.body.scroll_event(&context);
+
+            let handled = event.target.and_then(|id| {
+                let entry = page.entry(id)?;
+                let control = entry.control.clone();
+                let response = if let Some(button) = &entry.button {
+                    let response = button.handle(&event);
+                    if response.clicked()
+                        && let Control::Button(control) = control
+                    {
+                        self.buttons.activated(control);
                     }
-                });
-                if self.dark != old_dark {
-                    self.apply_theme(ui.ctx());
-                    ui.ctx().request_repaint();
-                }
-                ui.separator();
-                egui::ScrollArea::vertical().id_salt("gallery-content").show(ui, |ui| {
-                    if self.narrow { ui.set_max_width(ui.available_width().min(320.0)); }
-                    match self.case {
-                        Case::Theme => {
-                            ui.heading("Semantic palette");
-                            show_palette(ui, &theme);
-                            let _ = ui.selectable_label(true, "Selected foreground");
-                            ui.label("Opaque disabled tokens are paired colors. Standard egui disabled controls use opacity.");
-                        }
-                        Case::Buttons => self.buttons.show(ui, &theme),
-                        Case::Inputs => self.inputs.show(ui, &theme),
-                        Case::Checkboxes => self.checkboxes.show(ui, &theme),
-                        Case::Interaction | Case::Layout => {
-                            ui.heading("Harness controls (egui)");
-                            ui.label("Activate with the pointer or Tab and Enter. Counts change once per activation and remain still while idle.");
-                            ui.horizontal_wrapped(|ui| {
-                                ui.checkbox(&mut self.interaction.disabled, "Disable actions");
-                                ui.checkbox(&mut self.interaction.reversed, "Reverse instances");
-                            });
-                            if self.case == Case::Layout {
-                                ui.label("Long labels use the same values and stable IDs as the interaction case. Try narrow content and 150% scale, then scroll to the second instance.");
-                            }
-                            let responses = self.interaction.show(ui, self.case == Case::Layout);
-                            if responses.iter().any(egui::Response::has_focus) {
-                                ui.small("An action has keyboard focus.");
-                            }
-                        }
+                    response
+                } else if let Some(registration) = &entry.switch {
+                    let Control::Switch(control) = control else {
+                        unreachable!("Switch registration control");
+                    };
+                    self.switches.handle(control, registration, &event)
+                } else if let Control::Page(page) = control {
+                    let response = context.read_response(id).expect("registered page tab");
+                    if response.clicked() {
+                        self.case = page;
                     }
-                    ui.separator();
-                    ui.small(format!("Development v{} · {} · {}", env!("CARGO_PKG_VERSION"),
-                        if cfg!(target_arch = "wasm32") { "WebGL 2" } else { "native OpenGL" },
-                        if cfg!(debug_assertions) { "debug" } else { "release" }));
-                    ui.small(format!("Build: {}", option_env!("EGUI_PRISM_BUILD_ID").unwrap_or("local development")));
-                    ui.horizontal_wrapped(|ui| {
-                        ui.hyperlink_to("Source", "https://github.com/shermerL/egui-prism");
-                        ui.hyperlink_to("MIT license", if cfg!(target_arch = "wasm32") {
-                            "/egui-prism/LICENSE"
-                        } else { "https://github.com/shermerL/egui-prism/blob/main/LICENSE" });
-                        ui.hyperlink_to("Third-party notices", if cfg!(target_arch = "wasm32") {
-                            "/egui-prism/THIRD_PARTY_NOTICES.md"
-                        } else { "https://github.com/shermerL/egui-prism/blob/main/THIRD_PARTY_NOTICES.md" });
-                    });
-                });
+                    response
+                } else if let Control::Slider(slider) = control {
+                    self.sliders.handle(
+                        &mut entry.open(&context),
+                        slider,
+                        &page.body.slider_live,
+                        &event,
+                    )
+                } else {
+                    self.control(&mut entry.open(&context), &control).response
+                };
+                Some((control, response))
             });
+
+            page.cancel_interactions();
+
+            let global = old_page != (self.case, self.dark, self.narrow);
+            let next_focus = context.memory(|memory| memory.focused());
+            let focus_changed = focus != next_focus;
+            focus = next_focus;
+            if self.dark != old_page.1 {
+                self.apply_theme(&context);
+                context.request_repaint();
+            }
+
+            if global {
+                context.input_layout(|| {
+                    // Re-capture the root style after a theme change.
+                    let mut root_ui = root.open(&context);
+                    root_ui.set_style(context.global_style());
+                    let next = self.layout(&mut root_ui, Phase::Register, sliders::Live::default());
+                    page.retire(&context, &next);
+                    page = next;
+                });
+            } else if scrolled
+                || handled
+                    .as_ref()
+                    .is_some_and(|(control, response)| control.changes_layout(response))
+            {
+                context.input_layout(|| {
+                    let next = self.body(
+                        &mut page.body_ui.open(&context),
+                        Phase::Register,
+                        sliders::Live::default(),
+                    );
+                    page.body.retire(&context, &next);
+                    page.body = next;
+                });
+            } else if handled
+                .as_ref()
+                .is_some_and(|(_, response)| response.changed() || response.clicked())
+                || focus_changed
+            {
+                context.input_layout(|| {
+                    page.body
+                        .refresh_statuses(&context, |ui, control| self.control(ui, control));
+                });
+            }
+
+            // Raw untargeted releases are deliberately still drained here.
+            // A future Select consumer would inspect that raw release and test
+            // its live response's enabled() AND contains_pointer() before commit.
+        }
+
+        page.cancel_interactions();
+
+        // Keep the revoked-host probe in the final graphics, not in a discarded
+        // registration/event list. Restart and screenshot lifecycle run once.
+        if restart {
+            self.restart_compositor(&context, device);
+        }
+
+        let mut root_ui = root.open(&context);
+        root_ui.set_style(context.global_style());
+        let _ = self.layout(&mut root_ui, Phase::Paint, page.body.slider_live);
+    }
+
+    fn restart_compositor(&mut self, context: &egui::Context, device: &wgpu::Device) {
+        let rect = egui::Rect::from_min_size(egui::pos2(4.0, 4.0), egui::vec2(8.0, 8.0));
+        let painter = egui::Painter::new(
+            context.clone(),
+            egui::LayerId::new(
+                egui::Order::Foreground,
+                egui::Id::unique("revoked-compositor"),
+            ),
+            rect,
+        );
+        let group = egui_prism::compositing::Group::new(
+            rect,
+            1.0,
+            vec![egui_prism::compositing::Item::Shape(
+                egui::epaint::ClippedShape::new(
+                    rect,
+                    egui::Shape::rect_filled(rect, 0, egui::Color32::RED),
+                ),
+            )],
+        )
+        .expect("stale callback probe");
+        egui_prism::compositing::paint(&painter, group).expect("old host");
+        self.compositor.invalidate();
+        self.compositor = egui_prism_wgpu::Host::new(context, device).expect("restart compositor");
+    }
+
+    fn widget(&mut self, ui: &mut egui::Ui, frame: &mut Layout, control: Control) {
+        frame.widget(ui, control.clone(), |ui| self.control(ui, &control));
+    }
+
+    fn layout(
+        &mut self,
+        ui: &mut egui::Ui,
+        phase: Phase,
+        slider_live: sliders::Live,
+    ) -> PageLayout {
+        let theme = self.theme();
+        let automatic = self.compositing.automatic();
+        let panel = if automatic {
+            egui::CentralPanel::default()
+        } else {
+            egui::CentralPanel::default().frame(
+                egui::Frame::central_panel(ui.style()).inner_margin(theme.metrics.page_margin),
+            )
+        };
+        panel
+            .show(ui, |ui| {
+                let mut chrome = Layout::new(phase);
+                if !automatic {
+                    chrome.track(ui.heading("egui-prism"));
+                    chrome.label(ui, "Parity correction in progress: reference tokens and Geist fonts; components await individual acceptance.");
+                    ui.horizontal_wrapped(|ui| {
+                        for case in [
+                            Case::Theme,
+                            Case::Compositing,
+                            Case::Buttons,
+                            Case::Inputs,
+                            Case::Checkboxes,
+                            Case::Sliders,
+                            Case::Switches,
+                            Case::Interaction,
+                            Case::Layout,
+                        ] {
+                            // Let the parent horizontal layout wrap the whole tab.
+                            let response = ui.selectable_label(self.case == case, case.name());
+                            chrome.bind_page(case, response);
+                        }
+                    });
+                    ui.horizontal_wrapped(|ui| {
+                        self.widget(ui, &mut chrome, Control::Dark(false));
+                        self.widget(ui, &mut chrome, Control::Dark(true));
+                        self.widget(ui, &mut chrome, Control::Narrow);
+                        chrome.label(ui, "Scale:");
+                        self.widget(ui, &mut chrome, Control::Zoom(1.0));
+                        self.widget(ui, &mut chrome, Control::Zoom(1.5));
+                    });
+                    chrome.track(ui.separator());
+                }
+
+                let body_ui = LocalUi::named(ui, ui.make_persistent_id("gallery-body"));
+                let mut child = body_ui.open(ui.ctx());
+                let body = self.body(&mut child, phase, slider_live);
+                ui.advance_cursor_after_rect(child.min_rect());
+                PageLayout {
+                    chrome,
+                    body,
+                    body_ui,
+                }
+            })
+            .inner
+    }
+
+    fn body(&mut self, ui: &mut egui::Ui, phase: Phase, mut slider_live: sliders::Live) -> Layout {
+        let theme = self.theme();
+        let mut frame = Layout::new(phase);
+        if self.compositing.automatic() {
+            self.compositing.show(ui, &theme, &mut frame);
+            return frame;
+        }
+
+        frame.scroll(ui, false, |ui, frame| {
+            if self.narrow {
+                ui.set_max_width(ui.available_width().min(320.0));
+            }
+            match self.case {
+                Case::Compositing => self.compositing.show(ui, &theme, frame),
+                Case::Theme => {
+                    frame.track(ui.heading("Semantic palette"));
+                    show_palette(ui, &theme, frame);
+                    self.widget(ui, frame, Control::Selected);
+                    frame.label(ui, "Opaque disabled tokens are paired colors. Standard egui disabled controls use opacity.");
+                }
+                Case::Buttons => self.buttons.show(ui, &theme, frame),
+                Case::Inputs => self.inputs.show(ui, &theme, frame),
+                Case::Checkboxes => self.checkboxes.show(ui, &theme, frame),
+                Case::Sliders => self.sliders.layout(ui, &theme, |case, ui, control| {
+                    frame.widget(ui, Control::Slider(control), |ui| {
+                        match phase {
+                            Phase::Register => case.register_control(ui, &theme, control, &mut slider_live),
+                            Phase::Paint => case.paint_control(ui, control, &mut slider_live),
+                        }.into()
+                    })
+                }),
+                Case::Switches => self.switches.show(ui, &theme, frame),
+                Case::Interaction | Case::Layout => {
+                    frame.track(ui.heading("Harness controls (egui)"));
+                    frame.label(ui, "Activate with the pointer or Tab and Enter. Counts change once per activation and remain still while idle.");
+                    ui.horizontal_wrapped(|ui| {
+                        for control in [
+                            interaction::Control::Disabled,
+                            interaction::Control::Reversed,
+                        ] {
+                            self.widget(ui, frame, Control::Interaction(control));
+                        }
+                    });
+                    if self.case == Case::Layout {
+                        frame.label(ui, "Long labels use the same values and stable IDs as the interaction case. Try narrow content and 150% scale, then scroll to the second instance.");
+                    }
+                    self.interaction.show_ordered(ui, self.case == Case::Layout, frame);
+                }
+            }
+
+            frame.track(ui.separator());
+            frame.track(ui.small(format!(
+                "Development v{} · {} · {}",
+                env!("CARGO_PKG_VERSION"),
+                if cfg!(target_os = "macos") {
+                    "wgpu Metal"
+                } else if cfg!(target_os = "windows") {
+                    "wgpu DX12"
+                } else {
+                    "wgpu Vulkan"
+                },
+                if cfg!(debug_assertions) { "debug" } else { "release" }
+            )));
+            frame.track(ui.small(format!(
+                "Build: {}",
+                option_env!("EGUI_PRISM_BUILD_ID").unwrap_or("local development")
+            )));
+            ui.horizontal_wrapped(|ui| {
+                for (label, url) in [
+                    ("Source", "https://github.com/shermerL/egui-prism"),
+                    (
+                        "MIT license",
+                        "https://github.com/shermerL/egui-prism/blob/main/LICENSE",
+                    ),
+                    (
+                        "Third-party notices",
+                        "https://github.com/shermerL/egui-prism/blob/main/THIRD_PARTY_NOTICES.md",
+                    ),
+                ] {
+                    self.widget(ui, frame, Control::Link(label, url));
+                }
+            });
+        });
+        frame.slider_live = slider_live;
+        frame
     }
 }
 
-fn show_palette(ui: &mut egui::Ui, theme: &Theme) {
+fn show_palette(ui: &mut egui::Ui, theme: &Theme, frame: &mut Layout) {
     let pairs = [
         ("Page", theme.colors.background),
         ("Surface", theme.colors.surface),
@@ -177,9 +443,11 @@ fn show_palette(ui: &mut egui::Ui, theme: &Theme) {
                     .corner_radius(theme.metrics.corner_radius)
                     .inner_margin(theme.metrics.container_margin)
                     .show(ui, |ui| {
-                        ui.add(
-                            egui::Label::new(egui::RichText::new(name).color(pair.foreground))
-                                .wrap_mode(egui::TextWrapMode::Extend),
+                        frame.track(
+                            ui.add(
+                                egui::Label::new(egui::RichText::new(name).color(pair.foreground))
+                                    .wrap_mode(egui::TextWrapMode::Extend),
+                            ),
                         );
                     });
                 if (index + 1) % columns == 0 {
@@ -189,61 +457,6 @@ fn show_palette(ui: &mut egui::Ui, theme: &Theme) {
         });
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-fn main() -> eframe::Result {
-    let options = eframe::NativeOptions {
-        renderer: eframe::Renderer::Glow,
-        viewport: egui::ViewportBuilder::default().with_inner_size([720.0, 480.0]),
-        ..Default::default()
-    };
-    eframe::run_native(
-        "egui-prism gallery",
-        options,
-        Box::new(|cc| Ok(Box::new(Gallery::new(&cc.egui_ctx)))),
-    )
-}
-
-#[cfg(target_arch = "wasm32")]
-fn main() {
-    wasm_bindgen_futures::spawn_local(async {
-        use wasm_bindgen::JsCast as _;
-
-        let document = web_sys::window()
-            .expect("The gallery requires a browser window")
-            .document()
-            .expect("The gallery requires a document");
-        let canvas = document
-            .get_element_by_id("gallery")
-            .expect("The gallery canvas is part of index.html")
-            .dyn_into::<web_sys::HtmlCanvasElement>()
-            .expect("The gallery element must be a canvas");
-        let runner = eframe::WebRunner::new();
-        let result = runner
-            .start(
-                canvas,
-                eframe::WebOptions {
-                    renderer: eframe::Renderer::Glow,
-                    webgl_context_option: eframe::WebGlContextOption::WebGl2,
-                    ..Default::default()
-                },
-                Box::new(|cc| Ok(Box::new(Gallery::new(&cc.egui_ctx)))),
-            )
-            .await;
-        match result {
-            Ok(()) => {
-                if let Some(status) = document.get_element_by_id("status") {
-                    status.remove();
-                }
-            }
-            Err(error) => {
-                runner.destroy();
-                web_sys::console::error_1(&error);
-                if let Some(status) = document.get_element_by_id("status") {
-                    status.set_text_content(Some(
-                        "The gallery could not start. WebGL 2 is required. See the browser console for details.",
-                    ));
-                }
-            }
-        }
-    });
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    native::run()
 }

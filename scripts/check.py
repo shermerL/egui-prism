@@ -1,42 +1,48 @@
 #!/usr/bin/env python3
-"""Run the same locked checks locally and in CI."""
+"""Run locked native checks and the pinned shadcn reference checks."""
 
 import argparse
 import os
 from pathlib import Path
 import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def run(*args, env=None):
+def run(*args):
     print("+ " + " ".join(args), flush=True)
-    subprocess.run(args, cwd=ROOT, check=True, env=env)
+    subprocess.run(args, cwd=ROOT, check=True)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--native-only", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--cargo-only", action="store_true")
+    mode.add_argument("--policy-only", action="store_true")
+    parser.add_argument("--native-only", action="store_true", help="Compatibility alias for the default checks")
     options = parser.parse_args()
-
-    run("quest", "check")
-    run("nixfmt", "--check", "flake.nix")
-    run("actionlint")
-    run("cargo", "fmt", "--all", "--", "--check")
-    run("cargo", "check", "-p", "egui-prism", "--locked", "--no-default-features")
-    run("cargo", "clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings")
-    run("cargo", "test", "--workspace", "--locked")
-    run("cargo", "doc", "--workspace", "--no-deps", "--locked")
-    run("cargo", "build", "--workspace", "--locked")
-    if not options.native_only:
-        run("cargo", "clippy", "--workspace", "--target", "wasm32-unknown-unknown", "--locked", "--", "-D", "warnings")
-        # Trunk 0.21 parses NO_COLOR as a boolean rather than the conventional
-        # nonempty string. Preserve its meaning only for this child process.
-        trunk_env = os.environ.copy()
-        if "NO_COLOR" in trunk_env:
-            trunk_env["NO_COLOR"] = "true" if trunk_env["NO_COLOR"] else "false"
-        run("trunk", "build", "--release", env=trunk_env)
-        run("python3", "scripts/check_web.py")
+    if not options.cargo_only:
+        run("quest", "check")
+        run("nixfmt", "--check", "flake.nix")
+        run("actionlint")
+        run(sys.executable, "scripts/check_egui_source.py")
+        run(sys.executable, "scripts/check_reference.py")
+        run("npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund", "--prefix", "reference")
+        run("npm", "run", "build", "--prefix", "reference")
+    if not options.policy_only:
+        run("cargo", "fmt", "--all", "--", "--check")
+        run("cargo", "fmt", "--manifest-path", "vendor/egui/Cargo.toml", "--", "--check")
+        run("cargo", "fmt", "--manifest-path", "tests/input-consumer/Cargo.toml", "--", "--check")
+        run(sys.executable, "scripts/check_egui_lints.py")
+        run("cargo", "test", "--manifest-path", "vendor/egui/Cargo.toml", "--locked", "--lib", "--features", "serde", "--target-dir", "target/vendor-egui")
+        run(sys.executable, "scripts/check_input_consumer.py")
+        run("cargo", "run", "--locked", "-p", "egui-prism", "--example", "ordered_input")
+        run("cargo", "check", "-p", "egui-prism", "--locked", "--no-default-features")
+        run("cargo", "clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings")
+        run("cargo", "test", "--workspace", "--locked")
+        run("cargo", "doc", "--workspace", "--no-deps", "--locked")
+        run("cargo", "build", "--workspace", "--locked")
 
 
 if __name__ == "__main__":

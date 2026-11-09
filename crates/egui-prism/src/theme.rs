@@ -20,6 +20,10 @@ pub struct Palette {
     pub surface: ColorPair,
     /// Subdued content and hover surfaces.
     pub muted: ColorPair,
+    /// Supporting actions and their content.
+    pub secondary: ColorPair,
+    /// Hovered surfaces and their content.
+    pub accent: ColorPair,
     /// The primary action and its content.
     pub primary: ColorPair,
     /// Selected text and selected controls.
@@ -32,6 +36,10 @@ pub struct Palette {
     pub focus: ColorPair,
     /// Decorative separators and resting outlines.
     pub border: Color32,
+    /// Input outlines and translucent dark input fills.
+    pub input: Color32,
+    /// The neutral focus ring before component-specific opacity is applied.
+    pub ring: Color32,
 }
 
 /// Shared logical-point measurements with separate page and container ownership.
@@ -45,7 +53,7 @@ pub struct Metrics {
     pub item_spacing: Vec2,
     /// Padding inside a control's background.
     pub control_padding: Vec2,
-    /// Baseline minimum control height, not a fixed content height.
+    /// Default button/input height; other components own their reference geometry.
     pub control_height: f32,
     /// Corner radius shared by controls and containers.
     pub corner_radius: CornerRadius,
@@ -57,9 +65,9 @@ impl Default for Metrics {
             page_margin: Margin::same(16),
             container_margin: Margin::same(12),
             item_spacing: vec2(8.0, 8.0),
-            control_padding: vec2(12.0, 6.0),
-            control_height: 32.0,
-            corner_radius: CornerRadius::same(6),
+            control_padding: vec2(16.0, 8.0),
+            control_height: 36.0,
+            corner_radius: CornerRadius::same(8),
         }
     }
 }
@@ -94,7 +102,7 @@ pub struct Theme {
     pub metrics: Metrics,
     /// Text sizes that preserve the host's font families.
     pub typography: Typography,
-    dark: bool,
+    pub(crate) dark: bool,
 }
 
 const fn pair(background: u32, foreground: u32) -> ColorPair {
@@ -107,20 +115,83 @@ const fn pair(background: u32, foreground: u32) -> ColorPair {
     }
 }
 
+/// Install Geist into the host's complete font definitions and transfer them to the context.
+pub fn install_fonts(context: &egui::Context, mut fonts: egui::FontDefinitions) {
+    for (name, bytes, family) in [
+        (
+            "prism-geist-mono",
+            include_bytes!("../fonts/GeistMono-Regular.ttf").as_slice(),
+            egui::FontFamily::Monospace,
+        ),
+        (
+            "prism-geist-regular",
+            include_bytes!("../fonts/Geist-Regular.ttf").as_slice(),
+            egui::FontFamily::Proportional,
+        ),
+        (
+            "prism-geist-medium",
+            include_bytes!("../fonts/Geist-Medium.ttf").as_slice(),
+            egui::FontFamily::Name("prism-geist-medium".into()),
+        ),
+        (
+            "prism-geist-semibold",
+            include_bytes!("../fonts/Geist-SemiBold.ttf").as_slice(),
+            egui::FontFamily::Name("prism-geist-semibold".into()),
+        ),
+    ] {
+        fonts
+            .font_data
+            .insert(name.into(), egui::FontData::from_static(bytes).into());
+        let chain = fonts.families.entry(family).or_default();
+        chain.retain(|entry| entry != name);
+        chain.insert(0, name.into());
+    }
+    // Weight-specific faces must retain the host's script and symbol fallbacks.
+    let fallbacks = fonts.families[&egui::FontFamily::Proportional].clone();
+    for name in ["prism-geist-medium", "prism-geist-semibold"] {
+        let chain = fonts
+            .families
+            .get_mut(&egui::FontFamily::Name(name.into()))
+            .unwrap();
+        for fallback in &fallbacks {
+            if !chain.contains(fallback) {
+                chain.push(fallback.clone());
+            }
+        }
+    }
+    context.set_fonts(fonts);
+    context.all_styles_mut(|style| {
+        for (text_style, family) in [
+            (TextStyle::Button, "prism-geist-medium"),
+            (TextStyle::Heading, "prism-geist-semibold"),
+        ] {
+            if let Some(font) = style.text_styles.get_mut(&text_style)
+                && font.family == egui::FontFamily::Proportional
+            {
+                font.family = egui::FontFamily::Name(family.into());
+            }
+        }
+    });
+}
+
 impl Theme {
     /// Create the built-in light theme.
     pub fn light() -> Self {
         Self {
             colors: Palette {
-                background: pair(0xfafafa, 0x18181b),
-                surface: pair(0xffffff, 0x18181b),
-                muted: pair(0xf4f4f5, 0x52525b),
-                primary: pair(0x18181b, 0xfafafa),
-                selection: pair(0xbfdbfe, 0x172554),
-                destructive: pair(0xb91c1c, 0xffffff),
-                disabled: pair(0xf4f4f5, 0x6b6b75),
-                focus: pair(0xdbeafe, 0x1e40af),
-                border: Color32::from_rgb(212, 212, 216),
+                background: pair(0xffffff, 0x000000),
+                surface: pair(0xffffff, 0x000000),
+                muted: pair(0xf5f5f5, 0x737373),
+                secondary: pair(0xf5f5f5, 0x171717),
+                accent: pair(0xf5f5f5, 0x171717),
+                primary: pair(0x000000, 0xfafafa),
+                selection: pair(0x000000, 0xffffff),
+                destructive: pair(0xe7000b, 0xffffff),
+                disabled: pair(0xf5f5f5, 0x737373),
+                focus: pair(0xf5f5f5, 0x171717),
+                border: Color32::from_gray(229),
+                input: Color32::from_gray(229),
+                ring: Color32::from_gray(161),
             },
             metrics: Metrics::default(),
             typography: Typography::default(),
@@ -132,15 +203,19 @@ impl Theme {
     pub fn dark() -> Self {
         Self {
             colors: Palette {
-                background: pair(0x09090b, 0xfafafa),
-                surface: pair(0x18181b, 0xfafafa),
-                muted: pair(0x27272a, 0xa1a1aa),
-                primary: pair(0xfafafa, 0x18181b),
-                selection: pair(0x1d4ed8, 0xffffff),
-                destructive: pair(0xfca5a5, 0x450a0a),
-                disabled: pair(0x27272a, 0xa1a1aa),
-                focus: pair(0x172554, 0xbfdbfe),
-                border: Color32::from_rgb(63, 63, 70),
+                background: pair(0x0a0a0a, 0xfafafa),
+                surface: pair(0x171717, 0xfafafa),
+                muted: pair(0x262626, 0xa1a1a1),
+                secondary: pair(0x262626, 0xfafafa),
+                accent: pair(0x404040, 0xfafafa),
+                primary: pair(0xe5e5e5, 0x171717),
+                selection: pair(0xe5e5e5, 0x171717),
+                destructive: pair(0xff6467, 0xffffff),
+                disabled: pair(0x262626, 0xa1a1a1),
+                focus: pair(0x262626, 0xfafafa),
+                border: Color32::from_white_alpha(26),
+                input: Color32::from_white_alpha(38),
+                ring: Color32::from_gray(115),
             },
             metrics: Metrics::default(),
             typography: Typography::default(),
@@ -178,8 +253,10 @@ impl Theme {
         visuals.code_bg_color = colors.muted.background;
         visuals.hyperlink_color = colors.focus.foreground;
         visuals.error_fg_color = colors.destructive.background;
-        visuals.selection.bg_fill = colors.selection.background;
-        visuals.selection.stroke = Stroke::new(1.0, colors.selection.foreground);
+        // Ordinary egui editors share selection foreground with their focus border.
+        // Prism TextInput overrides the selection pair and paints its own border.
+        visuals.selection.bg_fill = colors.focus.background;
+        visuals.selection.stroke = Stroke::new(1.0, colors.focus.foreground);
         visuals.text_cursor.stroke = Stroke::new(1.5, colors.surface.foreground);
         visuals.ime_composition.active_underline_stroke = Stroke::new(1.5, colors.focus.foreground);
         visuals.ime_composition.inactive_underline_stroke =

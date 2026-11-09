@@ -1,1 +1,3 @@
 quest/** merge=quest
+# Unified diffs represent an empty context line with one space.
+vendor/egui.patch whitespace=-blank-at-eol
