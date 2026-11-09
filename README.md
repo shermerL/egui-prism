@@ -9,7 +9,7 @@ Rust for native and web applications. [shadcn/ui](https://ui.shadcn.com/docs)
 defines the component appearance, geometry, states, and interaction contract.
 egui-prism implements that contract in Rust, with native macOS, Windows and Linux as the primary targets.
 
-The library workspace and native engineering gallery are in development. Semantic light/dark themes, Button, IconButton, TextInput, Checkbox, Switch, Slider, and Select have initial implementations undergoing strict shadcn parity correction. The gallery distinguishes Prism components from standard egui harness controls; other widgets are planned. There is no published crate or live component gallery yet.
+The library workspace and native engineering gallery are in development. Semantic light/dark themes, Button, IconButton, TextInput, Checkbox, Switch, Slider, Select, and Dialog have initial implementations undergoing strict shadcn parity correction. The gallery distinguishes Prism components from standard egui harness controls; other widgets are planned. There is no published crate or live component gallery yet.
 
 Browser deployment is deferred and does not block native component acceptance.
 
@@ -50,6 +50,8 @@ See [switches](docs/switches.md) for controlled boolean changes and interaction.
 See [sliders](docs/sliders.md) for range, step, geometry, and caller-owned values.
 See [selects](docs/selects.md) for controlled option values, frame-local registration,
 ordered popup input, and the native Gallery cases.
+See [dialogs](docs/dialogs.md) for controlled modal state, neutral dismissal,
+scoped content and explicit drawing groups.
 
 ## shadcn parity
 

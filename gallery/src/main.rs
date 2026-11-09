@@ -5,6 +5,7 @@ mod native;
 mod buttons;
 mod checkboxes;
 mod compositing;
+mod dialogs;
 mod input;
 mod interaction;
 mod selects;
@@ -25,6 +26,7 @@ enum Case {
     Sliders,
     Switches,
     Selects,
+    Dialogs,
     Interaction,
     Layout,
     Compositing,
@@ -39,6 +41,7 @@ impl Case {
             Self::Sliders => "Sliders",
             Self::Switches => "Switches",
             Self::Selects => "Selects",
+            Self::Dialogs => "Dialogs",
             Self::Interaction => "Interaction",
             Self::Layout => "Layout",
             Self::Compositing => "Compositing",
@@ -59,6 +62,7 @@ struct Gallery {
     sliders: sliders::SliderCase,
     switches: switches::SwitchCase,
     selects: selects::SelectCase,
+    dialogs: dialogs::DialogCase,
 }
 
 impl Gallery {
@@ -87,6 +91,7 @@ impl Gallery {
             sliders: sliders::SliderCase::default(),
             switches: switches::SwitchCase::default(),
             selects: selects::SelectCase::default(),
+            dialogs: dialogs::DialogCase::default(),
         };
         gallery.apply_theme(context);
         Ok(gallery)
@@ -132,6 +137,11 @@ impl Gallery {
             &mut select_live,
         );
 
+        let dialog_themes = [Theme::light(), Theme::dark()];
+        let mut dialog_live = (self.case == Case::Dialogs).then(|| {
+            self.dialogs
+                .register(&context, &dialog_themes[usize::from(self.dark)])
+        });
         let mut focus = context.memory(|memory| memory.focused());
         while let Some(event) = context.next_input_event() {
             // Navigation has already run. Observe loss now, not just at the end
@@ -141,6 +151,10 @@ impl Gallery {
 
             // Includes untargeted releases, Time, and blur. Popup wheel input
             // must be consumed before any background scroll shell sees it.
+            if let Some(live) = &mut dialog_live {
+                self.dialogs
+                    .handle(live, &dialog_themes[usize::from(self.dark)], &event);
+            }
             let select_changed = self.selects.handle_all(&mut select_live, &event);
             let scrolled = input::scroll_opportunity(&event) && page.body.scroll_event(&context);
 
@@ -203,6 +217,9 @@ impl Gallery {
             }
 
             if global {
+                if let Some(live) = dialog_live.take() {
+                    live.unregister();
+                }
                 select_live.unregister();
                 context.input_layout(|| {
                     // Re-capture the root style after a theme change.
@@ -217,6 +234,10 @@ impl Gallery {
                     );
                     page.retire(&context, &next);
                     page = next;
+                    dialog_live = (self.case == Case::Dialogs).then(|| {
+                        self.dialogs
+                            .register(&context, &dialog_themes[usize::from(self.dark)])
+                    });
                 });
             } else if scrolled
                 || handled
@@ -246,6 +267,10 @@ impl Gallery {
                         .refresh_statuses(&context, |ui, control| self.control(ui, control));
                 });
             }
+            if let Some(live) = &mut dialog_live {
+                self.dialogs
+                    .sync(live, &dialog_themes[usize::from(self.dark)]);
+            }
         }
 
         page.cancel_interactions();
@@ -265,6 +290,10 @@ impl Gallery {
             &select_resources,
             &mut select_live,
         );
+        if let Some(live) = dialog_live {
+            self.dialogs
+                .paint(live, &dialog_themes[usize::from(self.dark)]);
+        }
     }
 
     fn restart_compositor(&mut self, context: &egui::Context, device: &wgpu::Device) {
@@ -330,6 +359,7 @@ impl Gallery {
                             Case::Sliders,
                             Case::Switches,
                             Case::Selects,
+                            Case::Dialogs,
                             Case::Interaction,
                             Case::Layout,
                         ] {
@@ -402,6 +432,7 @@ impl Gallery {
                 }),
                 Case::Switches => self.switches.show(ui, &theme, frame),
                 Case::Selects => self.selects.show(ui, select_resources, self.dark, frame, select_live),
+                Case::Dialogs => self.dialogs.show(ui, &theme, frame),
                 Case::Interaction | Case::Layout => {
                     frame.track(ui.heading("Harness controls (egui)"));
                     frame.label(ui, "Activate with the pointer or Tab and Enter. Counts change once per activation and remain still while idle.");

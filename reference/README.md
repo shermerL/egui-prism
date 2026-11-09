@@ -40,6 +40,11 @@ values, outside-action blocking, light/dark themes and tinted surfaces. Use
 actual browser zoom for scaled comparisons. This fixture does not use CSS zoom,
 which changes the coordinate mapping of Radix item-aligned positioning.
 
+The `/?dialogs` fixture compares controlled A/B modal instances, neutral
+dismissal, caller actions, long scrolling bodies, instance reversal, light/dark
+themes and tinted backgrounds. The caller constrains body height to fit the
+viewport; the pinned Dialog source is unchanged.
+
 The `/?inputs` fixture compares caller-controlled text, placeholder, selection,
 invalid and disabled states, reordering and narrow columns. Compare viewport widths
 on either side of 768 pixels for the input typography breakpoint. Unicode inspection

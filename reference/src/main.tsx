@@ -11,6 +11,7 @@ import { Slider } from "./ui/slider";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "./ui/select";
 import "./reference.css";
+import { DialogCases } from "./dialog-cases";
 import { SelectCases } from "./select-cases";
 import { SliderCases } from "./slider-cases";
 import { CheckboxCases, CheckboxFixture } from "./checkbox-cases";
@@ -35,4 +36,4 @@ function App() {
  </div></main>;
 }
 const query = new URLSearchParams(location.search);
-createRoot(document.getElementById("root")!).render(query.has("inputs") ? <InputCases/> : query.has("checkboxes") ? <CheckboxFixture/> : query.has("selects") ? <SelectCases/> : query.has("sliders") ? <SliderCases/> : query.has("compositing") ? <Compositing/> : <App/>);
+createRoot(document.getElementById("root")!).render(query.has("dialogs") ? <DialogCases/> : query.has("inputs") ? <InputCases/> : query.has("checkboxes") ? <CheckboxFixture/> : query.has("selects") ? <SelectCases/> : query.has("sliders") ? <SliderCases/> : query.has("compositing") ? <Compositing/> : <App/>);
