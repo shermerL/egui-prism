@@ -1074,3 +1074,118 @@ fn zero_opacity_exit_still_blocks_input_until_its_deadline() {
         });
     }
 }
+
+#[test]
+fn keyboard_reaches_and_reveals_actions_below_the_body_viewport() {
+    let (context, _, _installation) = setup();
+    let theme = Theme::light();
+    let top = Id::unique("top-action");
+    let bottom = Id::unique("bottom-action");
+    let content = |slot: &mut DialogUi<'_>| {
+        child(slot, top, 32.0);
+        slot.ui().add_space(600.0);
+        child(slot, bottom, 32.0)
+    };
+    let mut activations = 0;
+    for (time, events) in [
+        (0.0, vec![]),
+        (
+            0.3,
+            vec![
+                key(Key::Tab, true, false),
+                key(Key::Tab, false, false),
+                key(Key::Enter, true, false),
+            ],
+        ),
+    ] {
+        frame(&context, time, vec2(320.0, 240.0), events, |context| {
+            context.begin_input();
+            let mut dialog = Dialog::new(&theme, Id::unique("keyboard-scroll"), "Actions")
+                .register(context, true, content);
+            while let Some(event) = context.next_input_event() {
+                if matches!(
+                    event.trigger,
+                    InputTrigger::Event {
+                        event: Event::Key {
+                            key: Key::Enter,
+                            pressed: true,
+                            ..
+                        },
+                        ..
+                    }
+                ) && event.target == Some(bottom)
+                {
+                    activations += 1;
+                }
+                let intent = dialog.handle(&event);
+                if intent.layout_changed {
+                    dialog.refresh(true, content);
+                }
+                if matches!(
+                    event.trigger,
+                    InputTrigger::Event {
+                        event: Event::Key {
+                            key: Key::Tab,
+                            pressed: true,
+                            ..
+                        },
+                        ..
+                    }
+                ) {
+                    assert_eq!(context.memory(|m| m.focused()), Some(bottom));
+                    let response = context.read_response(bottom).unwrap();
+                    assert!(
+                        response.visible() && response.interact_rect.is_positive(),
+                        "focused action must be revealed: {:?}",
+                        response.rect
+                    );
+                }
+            }
+            dialog.paint(content).unwrap();
+        });
+    }
+    assert_eq!(activations, 1);
+}
+
+#[test]
+fn accesskit_close_click_reports_one_intent_then_stops_when_closed() {
+    let (context, _, _installation) = setup();
+    context.enable_accesskit();
+    let theme = Theme::light();
+    let id = Id::unique("accessible-dialog");
+    let mut close = None;
+    frame(&context, 0.0, vec2(800.0, 600.0), vec![], |context| {
+        context.begin_input();
+        let mut dialog = Dialog::new(&theme, id, "Accessible").register(context, true, |_| ());
+        close = context.memory(|m| m.focused());
+        while let Some(event) = context.next_input_event() {
+            dialog.handle(&event);
+        }
+        dialog.paint(|_| ()).unwrap();
+    });
+    let request = Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+        action: egui::accesskit::Action::Click,
+        target_tree: egui::accesskit::TreeId::ROOT,
+        target_node: close.unwrap().accesskit_id(),
+        data: None,
+    });
+    frame(
+        &context,
+        0.3,
+        vec2(800.0, 600.0),
+        vec![request.clone(), request],
+        |context| {
+            context.begin_input();
+            let mut dialog = Dialog::new(&theme, id, "Accessible").register(context, true, |_| ());
+            let mut closes = 0;
+            while let Some(event) = context.next_input_event() {
+                if dialog.handle(&event).close_requested == Some(DialogClose::CloseButton) {
+                    closes += 1;
+                    dialog.refresh(false, |_| ());
+                }
+            }
+            assert_eq!(closes, 1);
+            dialog.paint(|_| ()).unwrap();
+        },
+    );
+}

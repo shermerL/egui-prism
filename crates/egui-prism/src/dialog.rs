@@ -380,9 +380,21 @@ impl<R> DialogRegistration<'_, R> {
 
     fn own_eligible(&self, id: Id) -> bool {
         (id == self.close_id() || self.enrolled.contains(&id))
-            && self
-                .live_response(id)
-                .is_some_and(|response| response.layer_id == self.layer())
+            && self.context.read_response(id).is_some_and(|response| {
+                response.layer_id == self.layer()
+                    && response.enabled()
+                    && response.visible()
+                    && response.rect.is_finite()
+                    && response.rect.is_positive()
+                    && response.sense.contains(Sense::FOCUSABLE)
+            })
+    }
+
+    fn own_visible_eligible(&self, id: Id) -> bool {
+        // Keep visibility requirements for initial selection, not for retaining
+        // native focus on an enrolled control whose interaction rect is clipped.
+        // Leave live_response/eligible unchanged for external-focus restoration.
+        self.own_eligible(id) && self.live_response(id).is_some()
     }
 
     fn repair_focus(&mut self) {
@@ -418,15 +430,24 @@ impl<R> DialogRegistration<'_, R> {
         };
 
         let target = requested
-            .filter(|id| self.own_eligible(*id))
+            .filter(|id| {
+                if self.state.pending_focus {
+                    self.own_visible_eligible(*id)
+                } else {
+                    self.own_eligible(*id)
+                }
+            })
             .or_else(|| {
+                // Preserve visible-only default initial focus. In Gallery this
+                // may select X while actions lie below the text. Native Tab
+                // still reaches those enrolled actions, and dispatch reveals them.
                 self.enrolled
                     .iter()
                     .copied()
-                    .find(|id| self.own_eligible(*id))
+                    .find(|id| self.own_visible_eligible(*id))
             })
             .or_else(|| {
-                self.own_eligible(self.close_id())
+                self.own_visible_eligible(self.close_id())
                     .then_some(self.close_id())
             });
 
@@ -697,7 +718,7 @@ impl<R> DialogRegistration<'_, R> {
             .max(interior.top());
         let body = Rect::from_min_max(pos2(interior.left(), body_top), interior.right_bottom());
 
-        let scrolled = self.scroll(body, interactive, |ui, _viewport| {
+        let scrolled = self.scroll(body, interactive, true, |ui, _viewport| {
             let mut scoped = DialogUi {
                 ui,
                 groups: Vec::new(),
@@ -749,6 +770,7 @@ impl<R> DialogRegistration<'_, R> {
         &self,
         body: Rect,
         interactive: bool,
+        animated: bool,
         content: impl FnOnce(&mut Ui, Rect) -> T,
     ) -> ScrollBuilt<T> {
         let mut ui = Ui::new(
@@ -801,6 +823,7 @@ impl<R> DialogRegistration<'_, R> {
 
         let output = ScrollArea::vertical()
             .id_salt("scroll")
+            .animated(animated)
             .max_height(body.height())
             .min_scrolled_height(0.0)
             .auto_shrink([false, false])
@@ -835,7 +858,7 @@ impl<R> DialogRegistration<'_, R> {
         }
     }
 
-    fn drive_scroll(&self) -> bool {
+    fn drive_scroll(&self, reveal: Option<Rect>) -> bool {
         let Some(geometry) = self.geometry else {
             return false;
         };
@@ -845,8 +868,20 @@ impl<R> DialogRegistration<'_, R> {
 
         // No borrowed Ui, user closure, user widgets, or user drawing is retained
         // or replayed here. Native ScrollArea receives its measured extent.
-        let output = self.scroll(geometry.body, true, |ui, _viewport| {
+        let output = self.scroll(geometry.body, true, reveal.is_none(), |ui, viewport| {
             ui.expand_to_include_rect(Rect::from_min_size(ui.max_rect().min, geometry.natural));
+            if let Some(rect) = reveal {
+                // ScrollArea::begin saves/clears targets, so submit inside
+                // its content callback. Rebase the registered, dialog-local
+                // rect onto this shell's current offset; Context owns scale.
+                // Disable animation for this shell so refresh can register
+                // the revealed geometry before the next same-batch event.
+                ui.scroll_to_rect_animation(
+                    rect.translate(geometry.offset - viewport.min.to_vec2()),
+                    None,
+                    egui::style::ScrollAnimation::none(),
+                );
+            }
         });
 
         output.end_offset != geometry.offset || output.clip != geometry.content_clip
@@ -892,9 +927,22 @@ impl<R> DialogRegistration<'_, R> {
             return intent;
         }
 
+        let previous_focus = self.state.last_focus;
         self.repair_focus();
 
         let focused = self.context.memory(|memory| memory.focused());
+        // Reveal a focus transition, not merely a clipped focused widget.
+        // Scrolling an unchanged focused control offscreen must not scroll back.
+        let reveal = focused
+            .filter(|id| {
+                Some(*id) != previous_focus
+                    && !Popup::is_any_open(&self.context)
+                    && self.enrolled.contains(id)
+                    && self.own_eligible(*id)
+            })
+            .and_then(|id| self.context.read_response(id))
+            .map(|response| response.rect);
+
         if let Some(id) = focused
             && self.own_eligible(id)
         {
@@ -906,7 +954,7 @@ impl<R> DialogRegistration<'_, R> {
 
         let event = match &routed.trigger {
             InputTrigger::Time => {
-                intent.layout_changed = self.drive_scroll();
+                intent.layout_changed |= self.drive_scroll(reveal);
                 if !Popup::is_any_open(&self.context) || self.pointer_layer_is_ours() {
                     self.absorb_scroll();
                 }
@@ -917,6 +965,23 @@ impl<R> DialogRegistration<'_, R> {
             }
             InputTrigger::Event { event, .. } => event,
         };
+
+        let pointer_scroll_event = matches!(
+            event,
+            Event::MouseWheel { .. } | Event::PointerMoved(_) | Event::PointerButton { .. }
+        );
+
+        // Time and pointer events carry reveal through their existing shell,
+        // rather than driving ScrollArea twice. Unchanged focus supplies no
+        // target, leaving intentional wheel/drag scrolling entirely native.
+        // Other events need a shell only when focus transitions.
+        if !pointer_scroll_event && reveal.is_some() {
+            intent.layout_changed |= self.drive_scroll(reveal);
+            if intent.layout_changed {
+                // Dismissal branches below can return early.
+                self.context.request_repaint();
+            }
+        }
 
         if let Event::Key {
             key: Key::Escape,
@@ -983,6 +1048,22 @@ impl<R> DialogRegistration<'_, R> {
             return intent;
         }
 
+        if let Event::AccessKitActionRequest(request) = event
+            && routed.target == Some(self.close_id())
+            && request.action == egui::accesskit::Action::Click
+            && self
+                .context
+                .read_response(self.close_id())
+                .is_some_and(|response| response.enabled())
+            && consume_event(&self.context, event)
+        {
+            // Accessibility activation needs neither pointer release nor focus.
+            // The caller still owns closing; after acceptance, the existing
+            // open/top guard rejects subsequent activation requests.
+            intent.close_requested = Some(DialogClose::CloseButton);
+            return intent;
+        }
+
         if routed.target == Some(self.close_id()) && focused == Some(self.close_id()) {
             match event {
                 Event::Key {
@@ -1019,11 +1100,9 @@ impl<R> DialogRegistration<'_, R> {
         if matches!(event, Event::WindowFocused(false)) {
             self.state.space_armed = false;
         }
-        if matches!(
-            event,
-            Event::MouseWheel { .. } | Event::PointerMoved(_) | Event::PointerButton { .. }
-        ) {
-            intent.layout_changed = self.drive_scroll();
+        if pointer_scroll_event {
+            // Keep layout_changed monotonic, including any reveal adjustment.
+            intent.layout_changed |= self.drive_scroll(reveal);
             if !Popup::is_any_open(&self.context) || self.pointer_layer_is_ours() {
                 self.absorb_scroll();
             }

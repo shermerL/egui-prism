@@ -23,6 +23,10 @@ The final paint closure rebuilds drawings from the current application values.
 `Group` in the dialog's opacity/scale animation. `focusable` enrolls each body control, including clipped or disabled controls,
 so refresh can retire removed targets; initial focus selects an eligible control. An explicit initial focus override can select a
 particular enrolled control. Composite controls enroll their actual focus targets.
+Keyboard traversal retains eligible enrolled targets beyond the current scroll
+viewport and reveals them through the native ScrollArea before the next routed
+event. Scrolling an unchanged focused control out of view does not force it back.
+The close icon also accepts a routed AccessKit Click as a neutral close request.
 
 Ordinary egui widgets that paint directly are **not** automatically captured into
 this drawing group. Use controls with explicit drawing output, such as Prism
@@ -90,9 +94,16 @@ logical points showed the corresponding responsive layout. CSS source and
 computed styles establish the 200 ms content and 150 ms overlay easing contracts;
 settled screenshots are not frame-by-frame animation measurements.
 
-Twenty public-API Dialog tests cover ordered dispatch, controlled close policy,
-focus, viewport/scroll behavior, drawing ownership and host errors. Workspace
-tests, strict clippy, documentation and the Gallery/reference builds passed.
+Twenty-two public-API Dialog tests cover ordered dispatch, controlled close policy,
+focus, viewport/scroll behavior, drawing ownership and host errors. The two added
+regressions verify keyboard reveal followed by same-batch activation and routed
+AccessKit close activation with duplicate requests after accepted close. The
+long-body keyboard path was also exercised on macOS/Metal: Tab revealed Apply,
+Enter activated it, then Tab and Enter selected Done and restored opener focus.
+The AccessKit check is synthetic event coverage, not a screen-reader acceptance.
+Workspace tests, strict clippy, documentation and the Gallery/reference builds
+passed before these repairs; the 22 Dialog tests, strict workspace clippy and
+Gallery build passed again after them.
 Default workspace tests leave native-adapter tests explicitly ignored; this
 observation does not claim those ignored suites ran.
 
