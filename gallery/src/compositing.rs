@@ -1,9 +1,20 @@
+use crate::input::{self, Draw, Layout, Phase};
 use egui_prism::{
     compositing::{self, Group, Item},
     egui::{self, epaint::ClippedShape},
     theme::Theme,
 };
 use std::sync::{Arc, Mutex};
+
+#[derive(Clone, Copy, Debug)]
+pub(super) enum Control {
+    OpacityRail,
+    OpacityValue,
+    ParentRail,
+    ParentValue,
+    Clip,
+    Capture,
+}
 
 pub(super) struct CompositingCase {
     image: egui::TextureHandle,
@@ -19,6 +30,7 @@ pub(super) struct CompositingCase {
     reference_frames: Arc<Mutex<ReferenceFrames>>,
     error: Option<String>,
     announced: bool,
+    capture_requested: bool,
 }
 
 const OPACITIES: [f32; 5] = [0.0, 0.25, 0.5, 0.75, 1.0];
@@ -51,6 +63,7 @@ impl CompositingCase {
             reference_frames: Arc::default(),
             error: None,
             announced: false,
+            capture_requested: false,
         }
     }
 
@@ -66,7 +79,7 @@ impl CompositingCase {
         self.automatic
     }
 
-    pub(super) fn show(&mut self, ui: &mut egui::Ui, theme: &Theme) {
+    pub(super) fn begin_update(&mut self) {
         if let Some(result) = self.result.lock().expect("capture result").take() {
             self.pending = false;
             match result {
@@ -82,27 +95,81 @@ impl CompositingCase {
                 }
             }
         }
-        let requested = if self.automatic {
-            ui.label("Final framebuffer conformance: images, layers, clips, rings, shadows and resource restart");
-            false
+    }
+
+    pub(super) fn control(&mut self, ui: &mut egui::Ui, control: Control) -> Draw {
+        match control {
+            Control::OpacityRail => ui
+                .add(egui::Slider::new(&mut self.opacity, 0.0..=1.0).show_value(false))
+                .into(),
+            Control::OpacityValue => ui
+                .add(
+                    egui::DragValue::new(&mut self.opacity)
+                        .range(0.0..=1.0)
+                        .speed(0.01),
+                )
+                .into(),
+            Control::ParentRail => ui
+                .add(egui::Slider::new(&mut self.parent, 0.0..=1.0).show_value(false))
+                .into(),
+            Control::ParentValue => ui
+                .add(
+                    egui::DragValue::new(&mut self.parent)
+                        .range(0.0..=1.0)
+                        .speed(0.01),
+                )
+                .into(),
+            Control::Clip => ui.checkbox(&mut self.clip, "Clip right edge").into(),
+            Control::Capture => {
+                let response = ui.button("Check visible framebuffer matrix");
+                if response.clicked() {
+                    self.capture_requested = true;
+                }
+                response.into()
+            }
+        }
+    }
+
+    fn widget(&mut self, ui: &mut egui::Ui, frame: &mut Layout, control: Control) {
+        frame.widget(ui, input::Control::Compositing(control), |ui| {
+            self.control(ui, control)
+        });
+    }
+
+    pub(super) fn show(&mut self, ui: &mut egui::Ui, theme: &Theme, frame: &mut Layout) {
+        let paint = frame.phase == Phase::Paint;
+        if self.automatic {
+            frame.label(ui, "Final framebuffer conformance: images, layers, clips, rings, shadows and resource restart");
         } else {
-            ui.heading("Host compositing");
-            ui.label("Independent group fixture. Component adoption is tracked separately.");
+            frame.track(ui.heading("Host compositing"));
+            frame.label(
+                ui,
+                "Independent group fixture. Component adoption is tracked separately.",
+            );
+            // Keep the rail and editable value as separate, explicitly routed
+            // stock controls. Do not infer a Slider's internal DragValue ID.
             ui.horizontal_wrapped(|ui| {
-                ui.add(egui::Slider::new(&mut self.opacity, 0.0..=1.0).text("Group opacity"));
-                ui.add(egui::Slider::new(&mut self.parent, 0.0..=1.0).text("Parent opacity"));
-                ui.checkbox(&mut self.clip, "Clip right edge");
+                frame.label(ui, "Group opacity");
+                self.widget(ui, frame, Control::OpacityRail);
+                self.widget(ui, frame, Control::OpacityValue);
+                frame.label(ui, "Parent opacity");
+                self.widget(ui, frame, Control::ParentRail);
+                self.widget(ui, frame, Control::ParentValue);
+                self.widget(ui, frame, Control::Clip);
             });
-            ui.button("Check visible framebuffer matrix").clicked()
-        };
-        ui.label(format!("Framebuffer samples passed: {}", self.passed));
+            self.widget(ui, frame, Control::Capture);
+        }
+        let requested = paint && std::mem::take(&mut self.capture_requested);
+        frame.label(ui, format!("Framebuffer samples passed: {}", self.passed));
         if let Some(error) = &self.error {
-            ui.colored_label(egui::Color32::RED, error);
+            frame.track(ui.colored_label(egui::Color32::RED, error));
         }
         let stage_zoom = if self.stage < 3 { 1.0 } else { 1.5 };
         if self.automatic && self.stage < 6 && ui.ctx().zoom_factor() != stage_zoom {
-            ui.ctx().set_zoom_factor(stage_zoom);
-            ui.ctx().request_repaint();
+            if paint {
+                ui.ctx().set_zoom_factor(stage_zoom);
+                ui.ctx().request_repaint();
+            }
             return;
         }
         let transformed = self.automatic && self.stage % 3 == 2;
@@ -115,7 +182,9 @@ impl CompositingCase {
             egui::Order::Foreground,
             egui::Id::unique("compositing-conformance"),
         );
-        ui.ctx().set_transform_layer(layer, transform);
+        if paint {
+            ui.ctx().set_transform_layer(layer, transform);
+        }
         let painter = egui::Painter::new(ui.ctx().clone(), layer, ui.clip_rect());
         let mut probes = Vec::new();
         if self.restarted {
@@ -174,7 +243,9 @@ impl CompositingCase {
                     if transformed {
                         group_painter.set_opacity(0.8);
                     }
-                    compositing::paint(&group_painter, group).expect("installed compositor");
+                    if paint {
+                        compositing::paint(&group_painter, group).expect("installed compositor");
+                    }
                     for (point, alpha) in [
                         (image_rect.min + egui::vec2(4.0, 8.0), 1.0),
                         (image_rect.min + egui::vec2(24.0, 8.0), 128.0 / 255.0),
@@ -210,16 +281,23 @@ impl CompositingCase {
                 }
             });
         }
-        ui.label("Isolated group / per-shape alpha. Each fixture includes all six role palettes, rings, shadows and images.");
+        frame.label(ui, "Isolated group / per-shape alpha. Each fixture includes all six role palettes, rings, shadows and images.");
         let opacity = if self.automatic {
             [0.0, 1.0, 0.5][self.stage.min(5) % 3]
         } else {
             self.opacity
         };
-        let decoration =
-            draw_comparison(ui, theme, self.image.id(), opacity, self.parent, self.clip);
+        let decoration = draw_comparison(
+            ui,
+            theme,
+            self.image.id(),
+            opacity,
+            self.parent,
+            self.clip,
+            paint,
+        );
         let done = self.automatic && self.stage >= 6;
-        if done {
+        if paint && done {
             ui.colored_label(
                 egui::Color32::GREEN,
                 format!(
@@ -237,7 +315,8 @@ impl CompositingCase {
                 ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
             }
             self.announced = true;
-        } else if !self.pending
+        } else if paint
+            && !self.pending
             && (requested || (self.automatic && (ui.ctx().zoom_factor() - stage_zoom).abs() < 0.01))
         {
             self.pending = true;
@@ -377,6 +456,7 @@ fn draw_comparison(
     opacity: f32,
     parent: f32,
     clipped: bool,
+    paint: bool,
 ) -> [egui::Rect; 2] {
     let mut rects = [egui::Rect::NOTHING; 2];
     ui.horizontal(|ui| {
@@ -487,7 +567,9 @@ fn draw_comparison(
                 let child = Group::new(rect, opacity, children).expect("roles");
                 let group =
                     Group::new(rect, parent, vec![Item::Group(child)]).expect("parent group");
-                compositing::paint(ui.painter(), group).expect("installed compositor");
+                if paint {
+                    compositing::paint(ui.painter(), group).expect("installed compositor");
+                }
             }
         }
     });

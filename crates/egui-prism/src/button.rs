@@ -102,7 +102,7 @@ impl<'theme, 'a> Button<'theme, 'a> {
         self
     }
 
-    fn draw(self, ui: &mut Ui, icon_name: Option<&str>) -> ButtonOutput {
+    fn draw(self, ui: &mut Ui, icon_name: Option<&str>, handle_input: bool) -> ButtonOutput {
         let (height, padding, icon_padding, gap, icon_size) = match self.size {
             ButtonSize::ExtraSmall => (24.0, 8.0, 6.0, 4.0, 12.0),
             ButtonSize::Small => (32.0, 12.0, 10.0, 6.0, 16.0),
@@ -166,18 +166,15 @@ impl<'theme, 'a> Button<'theme, 'a> {
             .data(|data| data.get_temp::<ButtonState>(state_id))
             .unwrap_or_default();
         let frame = ui.ctx().cumulative_frame_nr();
-        if response.gained_focus() || state.last_frame.is_some_and(|last| frame > last + 1) {
+        if state.last_frame.is_some_and(|last| frame > last + 1) {
             state.space_armed = false;
         }
         state.last_frame = Some(frame);
-        let pointer_down = response.is_pointer_button_down_on();
-        if pointer_down && !response.has_focus() {
-            response.request_focus();
-        }
-        if response.has_focus() && response.enabled() {
+        if response.enabled() {
             ui.memory_mut(|memory| {
-                memory.set_focus_lock_filter(
+                memory.register_focus_policy(
                     response.id,
+                    response.layer_id,
                     egui::EventFilter {
                         horizontal_arrows: true,
                         vertical_arrows: true,
@@ -186,45 +183,26 @@ impl<'theme, 'a> Button<'theme, 'a> {
                     },
                 )
             });
-            let (clicked, any_key) = ui.input(|input| {
-                let mut clicked =
-                    input.has_accesskit_action_request(response.id, egui::accesskit::Action::Click);
-                let mut any_key = false;
-                for event in &input.events {
-                    if let egui::Event::Key {
-                        key,
-                        pressed,
-                        repeat,
-                        ..
-                    } = event
-                    {
-                        any_key |= *pressed;
-                        match key {
-                            egui::Key::Space if *pressed && !repeat => state.space_armed = true,
-                            egui::Key::Space if !pressed => {
-                                clicked |= state.space_armed;
-                                state.space_armed = false;
-                            }
-                            egui::Key::Enter if *pressed => clicked = true,
-                            _ => {}
-                        }
-                    }
-                }
-                (clicked, any_key)
-            });
-            // egui activates Space on keydown; a native HTML button activates on keyup.
-            response
-                .flags
-                .set(egui::response::Flags::FAKE_PRIMARY_CLICKED, clicked);
-            if response.gained_focus() || any_key {
-                state.focus_visible = true;
+        }
+        if handle_input {
+            // Ordinary egui does not focus a click-only widget on pointer press.
+            // Ordered dispatch owns this decision before handing over the event.
+            if response.enabled()
+                && response.is_pointer_button_down_on()
+                && ui.input(|input| input.pointer.primary_pressed())
+            {
+                response.request_focus();
             }
-            if pointer_down {
-                state.focus_visible = false;
-            }
-        } else {
+            update_input(&mut response, &mut state);
+        } else if !response.has_focus() || !response.enabled() {
             state.space_armed = false;
             state.focus_visible = false;
+            state.focused = false;
+        } else if !state.focused {
+            // Navigation or accessibility may acquire focus without a targeted event.
+            state.space_armed = false;
+            state.focus_visible = true;
+            state.focused = true;
         }
         response.widget_info(|| {
             egui::WidgetInfo::labeled(egui::Role::Button, response.enabled(), &label)
@@ -392,18 +370,39 @@ impl<'theme, 'a> Button<'theme, 'a> {
             });
             let items = shapes
                 .into_iter()
-                .map(|shape| Item::Shape(egui::epaint::ClippedShape::new(ui.clip_rect(), shape)))
+                .map(|shape| {
+                    Item::Shape(egui::epaint::ClippedShape::new(
+                        if ui.clip_rect().is_finite() {
+                            ui.clip_rect()
+                        } else {
+                            ui.clip_rect().intersect(bounds)
+                        },
+                        shape,
+                    ))
+                })
                 .collect();
             Some(Group::new(bounds, paint.opacity, items).expect("valid button drawing"))
         } else {
             None
         };
-        ButtonOutput { response, drawing }
+        ButtonOutput {
+            response,
+            drawing,
+            label,
+        }
     }
 
     /// Lay out the button and return its response and unfaded drawing for this frame.
     pub fn show(self, ui: &mut Ui) -> ButtonOutput {
-        self.draw(ui, None)
+        self.draw(ui, None, true)
+    }
+
+    /// Register geometry and focus policy, or build the final drawing, without handling input.
+    ///
+    /// In an ordered pass, retain this output for `ButtonOutput::handle`, then
+    /// call `register` again at the final layout and submit that final drawing.
+    pub fn register(self, ui: &mut Ui) -> ButtonOutput {
+        self.draw(ui, None, false)
     }
 }
 
@@ -414,8 +413,60 @@ pub struct ButtonOutput {
     pub response: Response,
     /// The unfaded group, absent when the button is not visible.
     pub drawing: Option<Group>,
+    label: String,
 }
 impl ButtonOutput {
+    /// Handle one routed event using the current authoritative response.
+    ///
+    /// Call only for this button's target. After a focus transfer, also call
+    /// `cancel_unfocused` on the old focused button before routing another event.
+    /// The returned response belongs only to this event; regenerate the final
+    /// drawing with `register` after the host drains the event stream.
+    pub fn handle(&self, event: &egui::RoutedInput) -> Response {
+        assert_eq!(event.target, Some(self.response.id), "button event target");
+        let mut response = self
+            .response
+            .ctx
+            .read_response(self.response.id)
+            .expect("registered button response");
+        let state_id = response.id.with("prism-button");
+        let mut state = response
+            .ctx
+            .data(|data| data.get_temp::<ButtonState>(state_id))
+            .unwrap_or_default();
+        update_input(&mut response, &mut state);
+        response
+            .ctx
+            .data_mut(|data| data.insert_temp(state_id, state));
+        if response.clicked() {
+            response.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::Role::Button, response.enabled(), &self.label)
+            });
+        }
+        response
+    }
+
+    /// Cancel a pending Space activation after focus or enablement is lost.
+    pub fn cancel_unfocused(&self) {
+        let context = &self.response.ctx;
+        if !context.memory(|memory| memory.has_focus(self.response.id))
+            || !context
+                .read_response(self.response.id)
+                .is_some_and(|response| response.enabled())
+        {
+            context.data_mut(|data| {
+                if let Some(mut state) =
+                    data.get_temp::<ButtonState>(self.response.id.with("prism-button"))
+                {
+                    state.space_armed = false;
+                    state.focused = false;
+                    state.focus_visible = false;
+                    data.insert_temp(self.response.id.with("prism-button"), state);
+                }
+            });
+        }
+    }
+
     /// Submit with a same-layer painter captured before entering a disabled scope.
     ///
     /// The painter supplies actual parent opacity; egui's disabled fade must not
@@ -443,6 +494,11 @@ impl ButtonOutput {
 fn image_shapes(ui: &Ui, image: &Image<'_>, rect: egui::Rect) -> Vec<egui::Shape> {
     use egui::emath::GuiRounding as _;
     let rect = rect.round_to_pixels(ui.pixels_per_point());
+    let image = image
+        .clone()
+        .fit_to_exact_size(rect.size())
+        .max_size(rect.size())
+        .maintain_aspect_ratio(false);
     match image.load_for_size(ui.ctx(), rect.size()) {
         Ok(egui::load::TexturePoll::Ready { texture }) => {
             let options = image.image_options();
@@ -552,9 +608,16 @@ impl<'theme, 'a> IconButton<'theme, 'a> {
 }
 
 impl IconButton<'_, '_> {
+    /// Register an image action without handling input; submit only the final drawing.
+    pub fn register(self, ui: &mut Ui) -> ButtonOutput {
+        let mut output = self.button.draw(ui, Some(&self.name), false);
+        output.response = output.response.on_hover_text(self.name);
+        output
+    }
+
     /// Lay out the icon action and return its response and drawing for this frame.
     pub fn show(self, ui: &mut Ui) -> ButtonOutput {
-        let mut output = self.button.draw(ui, Some(&self.name));
+        let mut output = self.button.draw(ui, Some(&self.name), true);
         output.response = output.response.on_hover_text(self.name);
         output
     }
@@ -591,10 +654,62 @@ impl ButtonPaint {
     }
 }
 
+fn update_input(response: &mut Response, state: &mut ButtonState) {
+    let context = response.ctx.clone();
+    let pointer_pressed = response.is_pointer_button_down_on()
+        && context.input(|input| input.pointer.primary_pressed());
+    let focused = response.has_focus() && response.enabled();
+    if pointer_pressed || (focused && !state.focused) {
+        state.space_armed = false;
+    }
+    if focused {
+        let (clicked, any_key) = context.input(|input| {
+            let mut clicked =
+                input.has_accesskit_action_request(response.id, egui::accesskit::Action::Click);
+            let mut any_key = false;
+            for event in &input.events {
+                if let egui::Event::Key {
+                    key,
+                    pressed,
+                    repeat,
+                    ..
+                } = event
+                {
+                    any_key |= *pressed;
+                    match key {
+                        egui::Key::Space if *pressed && !repeat => state.space_armed = true,
+                        egui::Key::Space if !pressed => {
+                            clicked |= state.space_armed;
+                            state.space_armed = false;
+                        }
+                        egui::Key::Enter if *pressed => clicked = true,
+                        _ => {}
+                    }
+                }
+            }
+            (clicked, any_key)
+        });
+        response
+            .flags
+            .set(egui::response::Flags::FAKE_PRIMARY_CLICKED, clicked);
+        if !state.focused || any_key {
+            state.focus_visible = true;
+        }
+        if pointer_pressed {
+            state.focus_visible = false;
+        }
+    } else {
+        state.space_armed = false;
+        state.focus_visible = false;
+    }
+    state.focused = focused;
+}
+
 #[derive(Clone, Default)]
 struct ButtonState {
     last_frame: Option<u64>,
     space_armed: bool,
+    focused: bool,
     focus_visible: bool,
     transition: Option<(ButtonPaint, ButtonPaint, f64)>,
 }

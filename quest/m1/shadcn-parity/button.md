@@ -24,9 +24,8 @@ Repeat native/reference acceptance, independent review, latest-head GitHub revie
 and CI before completing this Quest; automated pixels alone are not full parity
 acceptance.
 
-Also close the focus-acquisition gap: egui cannot install a focus filter on the
-pass that acquires focus, so immediate Escape/arrow input can navigate away.
-Handle this at the input/framework boundary without reclaiming focus that the
-caller deliberately released or canceling a pending Tab traversal. Preserve the
-existing hit-target, input-lifetime and inherited-text-color regression fixes.
-
+Register the Button focus policy before ordered dispatch. Route keyboard and
+pointer events to the authoritative registered response, retaining caller focus
+ownership and normal Tab traversal. Verify the first acquisition event and
+cancel pending Space activation when focus transfers, including within a batch.
+Retain the existing hit-target, input-lifetime and inherited-text-color tests.

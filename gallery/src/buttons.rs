@@ -1,9 +1,24 @@
+use crate::input::{self, Draw, Layout};
 use egui_prism::{
     button::{Button, ButtonRole, ButtonSize, IconButton},
     egui,
     theme::Theme,
 };
 
+#[derive(Clone, Copy, Debug)]
+pub(super) enum Control {
+    Disabled,
+    Invalid,
+    Reversed,
+    Preview {
+        role: ButtonRole,
+        size: ButtonSize,
+        kind: u8,
+    },
+    Instance(usize),
+    PreviewCount,
+    Count(usize),
+}
 pub(super) struct ButtonCase {
     icon: egui::TextureHandle,
     disabled: bool,
@@ -12,10 +27,8 @@ pub(super) struct ButtonCase {
     preview_activations: u64,
     counts: [u64; 2],
 }
-
 impl ButtonCase {
     pub(super) fn new(context: &egui::Context) -> Self {
-        // A local geometric mask keeps the example independent of fonts and loaders.
         let mut image = egui::ColorImage::filled([16, 16], egui::Color32::TRANSPARENT);
         for y in 2..14 {
             for x in 2..14 {
@@ -33,22 +46,106 @@ impl ButtonCase {
             counts: [0; 2],
         }
     }
-
-    pub(super) fn show(&mut self, ui: &mut egui::Ui, theme: &Theme) {
-        ui.heading("Prism buttons");
-        ui.label("Hover, press, or use Tab and Enter/Space. Theme and scale changes preserve action counts.");
+    pub(super) fn control(&mut self, ui: &mut egui::Ui, theme: &Theme, control: Control) -> Draw {
+        match control {
+            Control::Disabled => ui.checkbox(&mut self.disabled, "Disable buttons").into(),
+            Control::Invalid => ui.checkbox(&mut self.invalid, "Invalid buttons").into(),
+            Control::Reversed => ui
+                .checkbox(&mut self.reversed, "Reverse button instances")
+                .into(),
+            Control::PreviewCount => ui
+                .label(format!("Preview activations: {}", self.preview_activations))
+                .into(),
+            Control::Count(i) => ui.label(format!("Activations: {}", self.counts[i])).into(),
+            Control::Instance(i) => {
+                if self.disabled {
+                    ui.disable();
+                }
+                Button::new(
+                    theme,
+                    format!("Activate {}", if i == 0 { "A" } else { "B" }),
+                )
+                .register(ui)
+                .into()
+            }
+            Control::Preview { role, size, kind } => {
+                if self.disabled {
+                    ui.disable();
+                }
+                let image = egui::Image::new((self.icon.id(), egui::vec2(16., 16.)));
+                if kind == 2 || kind == 3 {
+                    let image = if kind == 3 {
+                        image.tint(egui::Color32::RED)
+                    } else {
+                        image
+                    };
+                    return IconButton::new(
+                        theme,
+                        image,
+                        if kind == 3 {
+                            "Explicit red icon"
+                        } else {
+                            "Add item"
+                        },
+                    )
+                    .size(size)
+                    .invalid(self.invalid)
+                    .register(ui)
+                    .into();
+                }
+                if kind == 4 {
+                    ui.style_mut()
+                        .text_styles
+                        .insert(egui::TextStyle::Button, egui::FontId::proportional(24.));
+                }
+                let label = match kind {
+                    1 => "Add item",
+                    4 => "Host button font",
+                    5 => "A deliberately long action label that keeps its intrinsic width",
+                    6 => "Clipped parent preview",
+                    _ => match role {
+                        ButtonRole::Primary => "Primary",
+                        ButtonRole::Secondary => "Secondary",
+                        ButtonRole::Outline => "Outline",
+                        ButtonRole::Ghost => "Ghost",
+                        ButtonRole::Destructive => "Destructive",
+                        ButtonRole::Link => "Link",
+                    },
+                };
+                let mut button = Button::new(theme, label)
+                    .role(role)
+                    .size(size)
+                    .invalid(self.invalid);
+                if kind == 1 || kind == 6 {
+                    button = button.icon(image);
+                }
+                button.register(ui).into()
+            }
+        }
+    }
+    pub(super) fn activated(&mut self, control: Control) {
+        match control {
+            Control::Instance(i) => self.counts[i] += 1,
+            Control::Preview { .. } => self.preview_activations += 1,
+            _ => {}
+        }
+    }
+    pub(super) fn show(&mut self, ui: &mut egui::Ui, theme: &Theme, frame: &mut Layout) {
+        frame.track(ui.heading("Prism buttons"));
+        frame.label(ui,"Hover, press, or use Tab and Enter/Space. Theme and scale changes preserve action counts.");
         ui.horizontal_wrapped(|ui| {
-            ui.checkbox(&mut self.disabled, "Disable buttons");
-            ui.checkbox(&mut self.invalid, "Invalid buttons");
+            for c in [Control::Disabled, Control::Invalid] {
+                self.widget(ui, theme, frame, c);
+            }
         });
-        ui.label("Roles and sizes: XS / Small / Default / Large");
-        for (name, role) in [
-            ("Primary", ButtonRole::Primary),
-            ("Secondary", ButtonRole::Secondary),
-            ("Outline", ButtonRole::Outline),
-            ("Ghost", ButtonRole::Ghost),
-            ("Destructive", ButtonRole::Destructive),
-            ("Link", ButtonRole::Link),
+        frame.label(ui, "Roles and sizes: XS / Small / Default / Large");
+        for role in [
+            ButtonRole::Primary,
+            ButtonRole::Secondary,
+            ButtonRole::Outline,
+            ButtonRole::Ghost,
+            ButtonRole::Destructive,
+            ButtonRole::Link,
         ] {
             ui.horizontal_wrapped(|ui| {
                 for size in [
@@ -57,142 +154,118 @@ impl ButtonCase {
                     ButtonSize::Medium,
                     ButtonSize::Large,
                 ] {
-                    if show_enabled(ui, !self.disabled, |ui| {
-                        Button::new(theme, name)
-                            .role(role)
-                            .size(size)
-                            .invalid(self.invalid)
-                            .show(ui)
-                    })
-                    .clicked()
-                    {
-                        self.preview_activations += 1;
-                    }
+                    self.widget(
+                        ui,
+                        theme,
+                        frame,
+                        Control::Preview {
+                            role,
+                            size,
+                            kind: 0,
+                        },
+                    );
                 }
             });
         }
         ui.horizontal_wrapped(|ui| {
-            if show_enabled(ui, !self.disabled, |ui| {
-                Button::new(theme, "Add item")
-                    .icon((self.icon.id(), egui::vec2(16.0, 16.0)))
-                    .show(ui)
-            })
-            .clicked()
-            {
-                self.preview_activations += 1;
-            }
+            self.widget(
+                ui,
+                theme,
+                frame,
+                Control::Preview {
+                    role: ButtonRole::Primary,
+                    size: ButtonSize::Medium,
+                    kind: 1,
+                },
+            );
             for size in [
                 ButtonSize::ExtraSmall,
                 ButtonSize::Small,
                 ButtonSize::Medium,
                 ButtonSize::Large,
             ] {
-                if show_enabled(ui, !self.disabled, |ui| {
-                    IconButton::new(theme, (self.icon.id(), egui::vec2(16.0, 16.0)), "Add item")
-                        .size(size)
-                        .invalid(self.invalid)
-                        .show(ui)
-                })
-                .clicked()
-                {
-                    self.preview_activations += 1;
-                }
+                self.widget(
+                    ui,
+                    theme,
+                    frame,
+                    Control::Preview {
+                        role: ButtonRole::Primary,
+                        size,
+                        kind: 2,
+                    },
+                );
             }
         });
         ui.horizontal_wrapped(|ui| {
-            let red_icon =
-                egui::Image::new((self.icon.id(), egui::vec2(16.0, 16.0))).tint(egui::Color32::RED);
-            if show_enabled(ui, !self.disabled, |ui| {
-                IconButton::new(theme, red_icon, "Explicit red icon").show(ui)
-            })
-            .clicked()
-            {
-                self.preview_activations += 1;
-            }
-            ui.label("Explicit image tint");
+            self.widget(
+                ui,
+                theme,
+                frame,
+                Control::Preview {
+                    role: ButtonRole::Primary,
+                    size: ButtonSize::Medium,
+                    kind: 3,
+                },
+            );
+            frame.label(ui, "Explicit image tint");
         });
-        ui.scope(|ui| {
-            ui.style_mut()
-                .text_styles
-                .insert(egui::TextStyle::Button, egui::FontId::proportional(24.0));
-            if show_enabled(ui, !self.disabled, |ui| {
-                Button::new(theme, "Host button font").show(ui)
-            })
-            .clicked()
-            {
-                self.preview_activations += 1;
-            }
+        self.widget(
+            ui,
+            theme,
+            frame,
+            Control::Preview {
+                role: ButtonRole::Primary,
+                size: ButtonSize::Medium,
+                kind: 4,
+            },
+        );
+        frame.scroll(ui, true, |ui, frame| {
+            self.widget(
+                ui,
+                theme,
+                frame,
+                Control::Preview {
+                    role: ButtonRole::Outline,
+                    size: ButtonSize::Medium,
+                    kind: 5,
+                },
+            );
         });
-        egui::ScrollArea::horizontal()
-            .id_salt("long-button")
-            .show(ui, |ui| {
-                if show_enabled(ui, !self.disabled, |ui| {
-                    Button::new(
-                        theme,
-                        "A deliberately long action label that keeps its intrinsic width",
-                    )
-                    .role(ButtonRole::Outline)
-                    .show(ui)
-                })
-                .clicked()
-                {
-                    self.preview_activations += 1;
-                }
-            });
-        ui.label("Parent opacity 60% with a clipped image and label");
+        frame.label(ui, "Parent opacity 60% with a clipped image and label");
         ui.scope(|ui| {
             ui.set_opacity(0.6);
-            let clip = ui.clip_rect().intersect(egui::Rect::from_min_size(
+            ui.set_clip_rect(ui.clip_rect().intersect(egui::Rect::from_min_size(
                 ui.cursor().min,
-                egui::vec2(160.0, 36.0),
-            ));
-            ui.set_clip_rect(clip);
-            if show_enabled(ui, !self.disabled, |ui| {
-                Button::new(theme, "Clipped parent preview")
-                    .icon((self.icon.id(), egui::vec2(16.0, 16.0)))
-                    .role(ButtonRole::Outline)
-                    .show(ui)
-            })
-            .clicked()
-            {
-                self.preview_activations += 1;
-            }
+                egui::vec2(160., 36.),
+            )));
+            self.widget(
+                ui,
+                theme,
+                frame,
+                Control::Preview {
+                    role: ButtonRole::Outline,
+                    size: ButtonSize::Medium,
+                    kind: 6,
+                },
+            );
         });
-        ui.label(format!("Preview activations: {}", self.preview_activations));
+        self.widget(ui, theme, frame, Control::PreviewCount);
         ui.separator();
-        ui.label("Independent instances");
-        ui.checkbox(&mut self.reversed, "Reverse button instances");
-        for index in if self.reversed { [1, 0] } else { [0, 1] } {
-            let id = ui.make_persistent_id(("button-instance", index));
-            ui.scope_builder(egui::UiBuilder::new().scope_id(id), |ui| {
+        frame.label(ui, "Independent instances");
+        self.widget(ui, theme, frame, Control::Reversed);
+        for i in if self.reversed { [1, 0] } else { [0, 1] } {
+            ui.push_id(("button-instance", i), |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    if show_enabled(ui, !self.disabled, |ui| {
-                        Button::new(
-                            theme,
-                            format!("Activate {}", if index == 0 { "A" } else { "B" }),
-                        )
-                        .show(ui)
-                    })
-                    .clicked()
-                    {
-                        self.counts[index] += 1;
-                    }
-                    ui.label(format!("Activations: {}", self.counts[index]));
+                    self.widget(ui, theme, frame, Control::Instance(i));
+                    self.widget(ui, theme, frame, Control::Count(i));
                 });
             });
         }
-        ui.small("Icon names are exposed through egui metadata; actual screen-reader support is not verified.");
+        frame.label(ui,egui::RichText::new("Icon names are exposed through egui metadata; actual screen-reader support is not verified.").small());
     }
-}
-
-fn show_enabled(
-    ui: &mut egui::Ui,
-    enabled: bool,
-    show: impl FnOnce(&mut egui::Ui) -> egui_prism::button::ButtonOutput,
-) -> egui::Response {
-    let painter = ui.painter().clone();
-    ui.add_enabled_ui(enabled, show)
-        .inner
-        .paint(&painter)
-        .expect("button compositor")
+    fn widget(&mut self, ui: &mut egui::Ui, theme: &Theme, frame: &mut Layout, c: Control) {
+        frame.widget(ui, input::Control::Button(c), |ui| {
+            self.control(ui, theme, c)
+        });
+    }
 }
