@@ -85,18 +85,17 @@ impl SliderCase {
         visit(self, ui, Control::Heading);
         visit(self, ui, Control::Help);
 
+        // Give each setting a full row in the narrow comparison fixture.
+        for control in [
+            Control::Disabled,
+            Control::Reversed,
+            Control::Long,
+            Control::Tinted,
+        ] {
+            visit(self, ui, control);
+        }
+        visit(self, ui, Control::WidthLabel);
         ui.horizontal_wrapped(|ui| {
-            for control in [
-                Control::Disabled,
-                Control::Reversed,
-                Control::Long,
-                Control::Tinted,
-            ] {
-                visit(self, ui, control);
-            }
-        });
-        ui.horizontal_wrapped(|ui| {
-            visit(self, ui, Control::WidthLabel);
             for width in [448.0, 200.0, 20.0, 16.0] {
                 visit(self, ui, Control::Width(width));
             }
