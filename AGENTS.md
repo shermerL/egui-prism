@@ -61,4 +61,4 @@ Component changes include their gallery examples, API documentation, and relevan
 behavior checks. Report automated checks, observed GUI behavior, and untested
 platforms separately. Read REVIEW.md before reviewing a change.
 
-Quests: before any work, run `quest context` and follow it.
+Quests: before any work, run `quest context` and follow it, unless this session already holds its rules.
