@@ -7,6 +7,7 @@ mod checkboxes;
 mod compositing;
 mod input;
 mod interaction;
+mod sliders;
 mod switches;
 mod text_inputs;
 
@@ -20,6 +21,7 @@ enum Case {
     Buttons,
     Inputs,
     Checkboxes,
+    Sliders,
     Switches,
     Interaction,
     Layout,
@@ -32,6 +34,7 @@ impl Case {
             Self::Buttons => "Buttons",
             Self::Inputs => "Inputs",
             Self::Checkboxes => "Checkboxes",
+            Self::Sliders => "Sliders",
             Self::Switches => "Switches",
             Self::Interaction => "Interaction",
             Self::Layout => "Layout",
@@ -50,6 +53,7 @@ struct Gallery {
     buttons: buttons::ButtonCase,
     inputs: text_inputs::InputCase,
     checkboxes: checkboxes::CheckboxCase,
+    sliders: sliders::SliderCase,
     switches: switches::SwitchCase,
 }
 
@@ -76,6 +80,7 @@ impl Gallery {
             buttons: buttons::ButtonCase::new(context),
             inputs: text_inputs::InputCase::default(),
             checkboxes: checkboxes::CheckboxCase::default(),
+            sliders: sliders::SliderCase::default(),
             switches: switches::SwitchCase::default(),
         };
         gallery.apply_theme(context);
@@ -110,7 +115,11 @@ impl Gallery {
 
         context.begin_input();
         let root = LocalUi::named(ui, ui.make_persistent_id("gallery-root"));
-        let mut page = self.layout(&mut root.open(&context), Phase::Register);
+        let mut page = self.layout(
+            &mut root.open(&context),
+            Phase::Register,
+            sliders::Live::default(),
+        );
 
         let mut focus = context.memory(|memory| memory.focused());
         while let Some(event) = context.next_input_event() {
@@ -143,6 +152,13 @@ impl Gallery {
                         self.case = page;
                     }
                     response
+                } else if let Control::Slider(slider) = control {
+                    self.sliders.handle(
+                        &mut entry.open(&context),
+                        slider,
+                        &page.body.slider_live,
+                        &event,
+                    )
                 } else {
                     self.control(&mut entry.open(&context), &control).response
                 };
@@ -165,7 +181,7 @@ impl Gallery {
                     // Re-capture the root style after a theme change.
                     let mut root_ui = root.open(&context);
                     root_ui.set_style(context.global_style());
-                    let next = self.layout(&mut root_ui, Phase::Register);
+                    let next = self.layout(&mut root_ui, Phase::Register, sliders::Live::default());
                     page.retire(&context, &next);
                     page = next;
                 });
@@ -175,7 +191,11 @@ impl Gallery {
                     .is_some_and(|(control, response)| control.changes_layout(response))
             {
                 context.input_layout(|| {
-                    let next = self.body(&mut page.body_ui.open(&context), Phase::Register);
+                    let next = self.body(
+                        &mut page.body_ui.open(&context),
+                        Phase::Register,
+                        sliders::Live::default(),
+                    );
                     page.body.retire(&context, &next);
                     page.body = next;
                 });
@@ -205,7 +225,7 @@ impl Gallery {
 
         let mut root_ui = root.open(&context);
         root_ui.set_style(context.global_style());
-        let _ = self.layout(&mut root_ui, Phase::Paint);
+        let _ = self.layout(&mut root_ui, Phase::Paint, page.body.slider_live);
     }
 
     fn restart_compositor(&mut self, context: &egui::Context, device: &wgpu::Device) {
@@ -238,7 +258,12 @@ impl Gallery {
         frame.widget(ui, control.clone(), |ui| self.control(ui, &control));
     }
 
-    fn layout(&mut self, ui: &mut egui::Ui, phase: Phase) -> PageLayout {
+    fn layout(
+        &mut self,
+        ui: &mut egui::Ui,
+        phase: Phase,
+        slider_live: sliders::Live,
+    ) -> PageLayout {
         let theme = self.theme();
         let automatic = self.compositing.automatic();
         let panel = if automatic {
@@ -261,6 +286,7 @@ impl Gallery {
                             Case::Buttons,
                             Case::Inputs,
                             Case::Checkboxes,
+                            Case::Sliders,
                             Case::Switches,
                             Case::Interaction,
                             Case::Layout,
@@ -283,7 +309,7 @@ impl Gallery {
 
                 let body_ui = LocalUi::named(ui, ui.make_persistent_id("gallery-body"));
                 let mut child = body_ui.open(ui.ctx());
-                let body = self.body(&mut child, phase);
+                let body = self.body(&mut child, phase, slider_live);
                 ui.advance_cursor_after_rect(child.min_rect());
                 PageLayout {
                     chrome,
@@ -294,7 +320,7 @@ impl Gallery {
             .inner
     }
 
-    fn body(&mut self, ui: &mut egui::Ui, phase: Phase) -> Layout {
+    fn body(&mut self, ui: &mut egui::Ui, phase: Phase, mut slider_live: sliders::Live) -> Layout {
         let theme = self.theme();
         let mut frame = Layout::new(phase);
         if self.compositing.automatic() {
@@ -317,6 +343,14 @@ impl Gallery {
                 Case::Buttons => self.buttons.show(ui, &theme, frame),
                 Case::Inputs => self.inputs.show(ui, &theme, frame),
                 Case::Checkboxes => self.checkboxes.show(ui, &theme, frame),
+                Case::Sliders => self.sliders.layout(ui, &theme, |case, ui, control| {
+                    frame.widget(ui, Control::Slider(control), |ui| {
+                        match phase {
+                            Phase::Register => case.register_control(ui, &theme, control, &mut slider_live),
+                            Phase::Paint => case.paint_control(ui, control, &mut slider_live),
+                        }.into()
+                    })
+                }),
                 Case::Switches => self.switches.show(ui, &theme, frame),
                 Case::Interaction | Case::Layout => {
                     frame.track(ui.heading("Harness controls (egui)"));
@@ -369,6 +403,7 @@ impl Gallery {
                 }
             });
         });
+        frame.slider_live = slider_live;
         frame
     }
 }

@@ -82,6 +82,8 @@ advance once per activation and stay unchanged while idle or disabled.
 The Switches case checks track/label activation, keyboard focus, explicit value
 changes, disabled state, independent instances, and wrapped-label layout.
 
+The Sliders case checks two ranges and step sizes, pointer/keyboard edits,
+disabled values, reordering, and wrapped labels above constrained rails.
 The Compositing case independently checks group opacity. Run the automatic
 final-framebuffer matrix with `--compositing-check`; see
 [host compositing](compositing.md) for resource and ordering contracts.

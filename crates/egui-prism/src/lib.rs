@@ -24,3 +24,4 @@ pub mod checkbox;
 pub mod switch;
 
 pub mod compositing;
+pub mod slider;

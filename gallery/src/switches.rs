@@ -239,7 +239,8 @@ mod tests {
             .run_ui(raw(Vec::new()), |ui| {
                 context.begin_input();
                 let root = LocalUi::named(ui, ui.make_persistent_id("gallery-root"));
-                let page = gallery.layout(&mut root.open(context), Phase::Register);
+                let page =
+                    gallery.layout(&mut root.open(context), Phase::Register, Default::default());
                 rects.extend(
                     page.chrome
                         .entries

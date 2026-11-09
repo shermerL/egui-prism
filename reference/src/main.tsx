@@ -10,6 +10,7 @@ import { Slider } from "./ui/slider";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "./ui/select";
 import "./reference.css";
+import { SliderCases } from "./slider-cases";
 import { SwitchCases } from "./switch-cases";
 function App() {
  const [dark,setDark]=React.useState(false); const [amount,setAmount]=React.useState([50]);
@@ -29,4 +30,5 @@ function App() {
  <section className="flex gap-4"><Select><SelectTrigger className="w-48"><SelectValue placeholder="Choose an option" /></SelectTrigger><SelectContent><SelectItem value="one">Option one</SelectItem><SelectItem value="two">Option two</SelectItem></SelectContent></Select><Dialog><DialogTrigger asChild><Button variant="outline">Open dialog</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Reference dialog</DialogTitle><DialogDescription>Compare popup geometry, focus and animation.</DialogDescription></DialogHeader></DialogContent></Dialog></section>
  </div></main>;
 }
-createRoot(document.getElementById("root")!).render(location.search.includes("compositing") ? <Compositing/> : <App/>);
+const query = new URLSearchParams(location.search);
+createRoot(document.getElementById("root")!).render(query.has("sliders") ? <SliderCases/> : query.has("compositing") ? <Compositing/> : <App/>);
