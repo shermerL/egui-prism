@@ -4,7 +4,7 @@
 
 | Tool | Pin | Owner |
 |---|---|---|
-| Quest | `19a2438cd80cf968dddfbf664570a2c8b9a254bf` | `flake.nix` and `flake.lock` |
+| Quest | `0c1da19a74f77e4f662cf9536fb789aca686b3bc` | `flake.nix` and `flake.lock` |
 | Rust | 1.96.0, rustfmt, Clippy | `rust-toolchain.toml` |
 | egui / egui-winit / egui-wgpu | 0.37.0 | Cargo manifests and `Cargo.lock` |
 | winit / wgpu | 0.30.13 / 30.0.0 | Gallery manifest and `Cargo.lock` |
@@ -29,23 +29,40 @@ Linux runtime libraries and an appropriate Vulkan driver are required.
 
 ## Quest provenance
 
-The CLI is built from the [pinned source mirror](https://github.com/shermerL/quest/tree/19a2438cd80cf968dddfbf664570a2c8b9a254bf).
+The CLI is built from the [pinned upstream source](https://github.com/moq-dev/quest/tree/0c1da19a74f77e4f662cf9536fb789aca686b3bc).
 It reports `0.1.0`; that string alone does not identify the source. The shell
 selects the upstream default CLI, not its runner or development shell. The
 upstream `quest-pinned` input serves its own development and is not this project's
 selected CLI. Init installs upstream skill stubs and the clone-local merge driver;
 no global hooks or unattended services are enabled.
 
-Retain Quest at `19a2438cd80cf968dddfbf664570a2c8b9a254bf`. Upgrade evaluation
-is deferred until the maintainer explicitly requests it again. Do not track newer
-revisions automatically, resume upgrade experiments, or change the Quest pin or
-lock entry as routine maintenance. This deferral does not block the completed M0
-foundations or component work using the current tool.
+The project's nixpkgs remains pinned independently at
+`d3b13ad75cc492690728f9307e443dec9ef9a20e`. Quest uses its own locked nixpkgs
+and Bun inputs, so a Quest update does not implicitly replace the project's
+Node.js, Python, lint tools, or Linux runtime libraries. Rust and Cargo pins
+remain separate.
 
-If the maintainer requests a new evaluation, scope it as a separate Quest before
-changing explicit pins or regenerating locks. Review upstream behavior and rerun
-the relevant checks before proposing a version switch. Keep the tool and runtime
-dependency graphs separate.
+Quest now derives epic membership from directory contents. Root, milestone,
+and epic READMEs do not repeat their own children under `Required`; that section
+keeps actual dependencies outside the epic. Milestone meanings are unchanged.
+
+The newer review command can reuse a clean result for an unchanged head and
+review subsequent changes with the previous findings. It starts a new review
+when the reviewer or governing instructions change. Keep private review records
+and concise public summaries; adopting this CLI does not enable merge daemons,
+automatic pin bumps, or global hooks.
+
+On macOS, run `quest gate` from a host context that can query process start times
+with `/bin/ps`. A restricted agent command sandbox can allow a PID liveness probe
+but deny that query; mixing those observers with host-created admissions can
+misclassify a live reservation. Request host execution for the gated command in
+that environment. This upgrade uses the unmodified upstream CLI and does not
+claim support for mixed-permission gate observers.
+
+Keep Quest revisions exact. Evaluate future updates as separate Quests, review
+the upstream behavior and lock changes, and run the affected tooling checks
+before proposing a switch. Do not update the pin automatically as routine
+maintenance.
 
 ## Source and assets
 
@@ -60,7 +77,7 @@ retained in `THIRD_PARTY_NOTICES.md`, copied alongside native CI artifacts. The
 project adds no separate CJK font or image bundle.
 
 Sources: [egui 0.37.0](https://github.com/emilk/egui/tree/0.37.0),
-[Quest setup](https://github.com/shermerL/quest/blob/19a2438cd80cf968dddfbf664570a2c8b9a254bf/SETUP.md).
+[Quest setup](https://github.com/moq-dev/quest/blob/0c1da19a74f77e4f662cf9536fb789aca686b3bc/SETUP.md).
 
 ## Validation boundaries
 

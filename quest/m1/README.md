@@ -17,10 +17,3 @@ Native desktop is the primary product. Rust browser compatibility and Pages do
 not block M1; their existing preparation and deployment tasks move to the deferred
 M2 track. The real pinned shadcn browser reference remains the comparison source.
 Record macOS, Windows and Linux build, rendering, input and IME evidence separately.
-
-## Required
-
-- [Strict shadcn parity for existing components](/quest/m1/shadcn-parity/README.md)
-
-- [Dialog](/quest/m1/dialog.md)
-- [Build and validate the native gallery](/quest/m1/native-gallery.md)

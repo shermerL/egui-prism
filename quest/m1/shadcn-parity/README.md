@@ -14,8 +14,3 @@ reference comparison and preserve caller ownership, accessibility, and IME safet
 Switch, Slider and Select were delivered by their component Quests; the
 remaining Dialog Quest owns its component work;
 this epic owns the shared foundation and corrections to completed components.
-
-## Required
-
-- [TextInput parity](/quest/m1/shadcn-parity/text-input.md)
-- [Checkbox parity](/quest/m1/shadcn-parity/checkbox.md)
