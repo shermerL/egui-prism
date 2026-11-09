@@ -39,3 +39,8 @@ long lists with disabled items, empty/all-disabled lists, missing selected
 values, outside-action blocking, light/dark themes and tinted surfaces. Use
 actual browser zoom for scaled comparisons. This fixture does not use CSS zoom,
 which changes the coordinate mapping of Radix item-aligned positioning.
+
+The `/?inputs` fixture compares caller-controlled text, placeholder, selection,
+invalid and disabled states, reordering and narrow columns. Compare viewport widths
+on either side of 768 pixels for the input typography breakpoint. Unicode inspection
+separates committed text from platform font coverage during native IME checks.
