@@ -82,11 +82,9 @@ impl InputCase {
     pub(super) fn show(&mut self, ui: &mut egui::Ui, theme: &Theme, frame: &mut Layout) {
         frame.track(ui.heading("Prism text inputs"));
         frame.label(ui, "Type, select, paste, undo, or compose with the host input method. The caller owns both values and validation.");
-        ui.horizontal_wrapped(|ui| {
-            for control in [Control::Disabled, Control::Error, Control::Reversed] {
-                self.widget(ui, theme, frame, control);
-            }
-        });
+        for control in [Control::Disabled, Control::Error, Control::Reversed] {
+            self.widget(ui, theme, frame, control);
+        }
         for index in if self.reversed { [1, 0] } else { [0, 1] } {
             ui.push_id(("text-input-instance", index), |ui| {
                 self.widget(ui, theme, frame, Control::Editor(index));

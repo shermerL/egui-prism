@@ -76,5 +76,17 @@ The Gallery Inputs page and `reference/?inputs` provide independent values,
 invalid/disabled states, reordering and Unicode inspection. Automated checks cover
 reference geometry, selection/paste/undo, first-disabled-frame safety, metadata,
 synthetic composition and real ordered dispatch. They do not establish OS IME,
-screen-reader behavior or another platform's rendering. Actual native/reference
-observations and untested platforms are recorded separately in the PR.
+screen-reader behavior or another platform's rendering.
+
+On macOS with Metal, native observation covered selection, paste, undo, Tab focus,
+disabled editing, reordered instances, long-value scrolling and light/dark,
+invalid and focused states. The pinned browser fixture supplied the geometry and
+state comparison at 100% and 150%, including a 320-point content column and the
+viewport typography breakpoint. This is an observed comparison, not a measured
+pixel-difference result.
+
+The macOS input method displayed an underlined preedit and committed `你好`;
+the Unicode inspector confirmed U+4F60 U+597D. The Gallery font rendered missing
+glyph boxes, so this does not establish Chinese glyph coverage or candidate-panel
+placement. Windows/Linux GUI and IME, and screen-reader interaction, remain
+unverified here and belong to the native Gallery's platform acceptance.
