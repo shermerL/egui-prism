@@ -1,6 +1,6 @@
 //! Pass-local routing for the Gallery's explicit controls and scroll shells.
 use crate::{
-    Case, Gallery, buttons, checkboxes, compositing, egui, interaction, sliders, switches,
+    Case, Gallery, buttons, checkboxes, compositing, egui, interaction, selects, sliders, switches,
     text_inputs,
 };
 use egui_prism::switch::{Switch, SwitchRegistration};
@@ -18,6 +18,7 @@ pub(super) enum Control {
     Checkbox(checkboxes::Control),
     Slider(sliders::Control),
     Switch(switches::Control),
+    Select(selects::Control),
     Interaction(interaction::Control),
     Compositing(compositing::Control),
     Link(&'static str, &'static str),
@@ -32,6 +33,7 @@ impl Control {
                 | Self::Checkbox(checkboxes::Control::Count(_) | checkboxes::Control::Focus(_))
                 | Self::Slider(sliders::Control::Value(_) | sliders::Control::Focus(_))
                 | Self::Switch(switches::Control::Count(_))
+                | Self::Select(selects::Control::Count(_) | selects::Control::OutsideCount)
                 | Self::Interaction(
                     interaction::Control::Count(_) | interaction::Control::Focus(_)
                 )
@@ -69,12 +71,23 @@ impl Control {
                 | switches::Control::Invalid
                 | switches::Control::Compositing,
             )
+            | Self::Select(
+                selects::Control::Small
+                | selects::Control::Disabled
+                | selects::Control::Invalid
+                | selects::Control::Long
+                | selects::Control::Reversed
+                | selects::Control::Empty
+                | selects::Control::AllDisabled
+                | selects::Control::Tinted,
+            )
             | Self::Interaction(
                 interaction::Control::Disabled
                 | interaction::Control::Reversed
                 | interaction::Control::Text(_),
             ) => response.changed(),
-            Self::Input(text_inputs::Control::Inspector) => response.clicked(),
+            Self::Input(text_inputs::Control::Inspector)
+            | Self::Select(selects::Control::Reset) => response.clicked(),
             _ => false,
         }
     }
@@ -494,6 +507,7 @@ impl Gallery {
             Control::Checkbox(control) => self.checkboxes.control(ui, &theme, *control),
             Control::Slider(control) => self.sliders.stock(ui, *control).into(),
             Control::Switch(control) => self.switches.control(ui, *control),
+            Control::Select(control) => self.selects.control(ui, *control),
             Control::Interaction(control) => {
                 self.interaction
                     .control(ui, *control, self.case == Case::Layout)

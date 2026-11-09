@@ -1,8 +1,9 @@
 # Acceptance gallery
 
 The native macOS, Windows and Linux hosts use the same Rust gallery and library. The gallery
-demonstrates the theme API, Prism buttons and text inputs, and standard egui harness controls.
-Other Prism widgets are planned. A harness check is not a component acceptance result.
+demonstrates the theme API, Prism buttons, text inputs, checkboxes, switches, sliders,
+and selects, alongside standard egui harness controls. Other Prism widgets are planned.
+A harness check is not a component acceptance result.
 
 ## Run and identify a build
 
@@ -24,13 +25,14 @@ No release or Pages deployment is performed by these commands or CI.
 ## Repeatable cases
 
 The controls above the scrolling content remain available while navigating cases.
-Theme and case changes preserve caller text, checkboxes, and action counts.
+Theme and case changes preserve caller text, checkboxes, selected values, and action counts.
 
 | Case | What to inspect |
 |---|---|
 | Theme | Light/dark foreground/background pairs and selected foreground |
 | Buttons | Prism roles, sizes, icon names, disabled actions, wrapping, and independent counts |
 | Inputs | Caller-owned text, editing, errors, disabled state, stable IDs, and IME diagnostics |
+| Selects | Independent controlled values, popup shielding, keyboard/typeahead, list variants, and idle counts |
 | Interaction | Independent A/B values, pointer activation, Tab/Enter, disabled actions, and idle counts |
 | Layout | The same instances and IDs with long wrapping action labels |
 
@@ -58,6 +60,42 @@ For a screenshot and manual interaction pass:
    before sharing captures.
 8. Test native copy/paste, IME composition and cancellation, focus loss, resize,
    minimize/restore and close on each OS. Record Linux X11/Wayland separately.
+
+### Select comparison
+
+The Selects page mirrors the cases in `reference/src/select-cases.tsx`, using
+short bounded labels and wrapping settings to fit the native viewport. Compare
+at 100% first; do not add CSS zoom to the browser reference.
+
+- A starts at None and B at Cherry. Both use stable semantic IDs and independent
+  change counters. The third trigger is permanently disabled and reflects A.
+  Reverse the instances and verify values stay with A/B, not their positions.
+- Triggers are 192 points wide, 36 points high by default and 32 with `Small`.
+  Check light/dark, `Invalid`, `Disabled`, and the blue `Tinted` surface. Repeat
+  in narrow content and at native 150% scale, scrolling where necessary.
+- The short list has Apple, Apricot, disabled Banana, Blueberry, and Cherry.
+  `Long list` has 30 options with 7 and 14 disabled. `Reset values` sets A to
+  None and B to Cherry or Option 30 without resetting or incrementing counters.
+  Switching lists does not silently replace a caller-owned value absent from
+  the new list. `Empty` and `All disabled` must remain safely dismissible.
+- Open by primary press or a focused trigger's Enter, Space, or vertical arrow.
+  Navigate with arrows and Home/End, type to search, and commit with Enter.
+  Navigation alone must not increment a counter. Selecting the existing value
+  must not increment it either. Escape dismisses and restores trigger focus.
+- Try a trigger-to-row drag and release, pointer departure, and window blur.
+  Reopen after dismissal. Check that disabled rows cannot commit and that
+  keyboard/typeahead skip them. Check closed-trigger typeahead separately.
+- With a popup open, click `Outside action`. That click dismisses without
+  incrementing the outside counter; a subsequent fresh click increments it
+  once. Wheels over the popup or its backdrop must not scroll the page behind
+  it, including at a popup scroll endpoint.
+- In the long list, hover the scroll indicators and let them repeat without
+  moving the pointer. Leave the indicator, dismiss, change pages, or blur the
+  window. Scrolling must stop, and after the animation tail the viewport must
+  return to idle rather than repaint continuously.
+
+See [Select integration](selects.md) for the caller-owned value, frame-local
+borrow, all-event forwarding, and unregister-before-replacement contracts.
 
 ## Automated coverage
 
@@ -87,3 +125,26 @@ disabled values, reordering, and wrapped labels above constrained rails.
 The Compositing case independently checks group opacity. Run the automatic
 final-framebuffer matrix with `--compositing-check`; see
 [host compositing](compositing.md) for resource and ordering contracts.
+
+The Select tests in `gallery/src/selects.rs` are marked
+`#[ignore = "requires a native wgpu adapter"]` and execute production
+`Gallery::ui` with an actual native adapter and wgpu Host. They use deterministic
+time, raw events, and AccessKit requests rather than a parallel input host.
+They inspect drawing callbacks without submitting them to a rendered framebuffer.
+They cover pointer clicks and split press/release with intervening idle frames,
+same-batch page navigation/open/navigation/commit, independent values
+and one count per real change, reordering, configured/hidden trigger retirement,
+outside-click shielding, reopening/focus, same-batch theme/list variants,
+empty/all-disabled lists, and no repeated actions during registration, final
+paint, or idle frames. They also inspect viewport `repaint_delay` after dismissal
+and long-list indicator-hover cancellation, including blur.
+
+The existing native-adapter CI command includes these tests:
+
+```sh
+cargo test --locked -p egui-prism-gallery -- --ignored --nocapture
+```
+
+The standard check script also runs the core `select` example's assertions.
+These automated checks are not native GUI or Windows/Linux acceptance and do
+not establish screenshot parity or real assistive-technology behavior.

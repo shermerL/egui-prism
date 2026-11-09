@@ -38,6 +38,7 @@ def main():
         run("cargo", "test", "--manifest-path", "vendor/egui/Cargo.toml", "--locked", "--lib", "--features", "serde", "--target-dir", "target/vendor-egui")
         run(sys.executable, "scripts/check_input_consumer.py")
         run("cargo", "run", "--locked", "-p", "egui-prism", "--example", "ordered_input")
+        run("cargo", "run", "--locked", "-p", "egui-prism", "--example", "select")
         run("cargo", "check", "-p", "egui-prism", "--locked", "--no-default-features")
         run("cargo", "clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings")
         run("cargo", "test", "--workspace", "--locked")
