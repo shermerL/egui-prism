@@ -1,16 +1,9 @@
-# [L] Strict shadcn parity for existing components
+# Strict shadcn parity
 
 ## Goal
 
-Every shipped component matches the pinned shadcn appearance, geometry, states,
-and interaction rather than presenting themed egui defaults.
+Shipped controls use the fixed reference appearance and interaction with one consistent theme and explicit input/drawing ownership.
 
 ## Plan
 
-M1 owns core component correctness, including correction of already merged
-components. The maintainer explicitly requires this for all components. Follow
-[the parity contract](/docs/shadcn-parity.md). Complete each correction with real
-reference comparison and preserve caller ownership, accessibility, and IME safety.
-Switch, Slider and Select were delivered by their component Quests; the
-remaining Dialog Quest owns its component work;
-this epic owns the shared foundation and corrections to completed components.
+At closure, reconcile shared parity documentation and remove stale approximate-control claims. Reuse accepted foundation evidence and inspect only changes that affect shared contracts. Individual control delivery owns its own states, examples and regressions; this epic does not repeat those implementations or enumerate its children.
