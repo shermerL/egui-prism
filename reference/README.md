@@ -44,3 +44,8 @@ The `/?dialogs` fixture compares controlled A/B modal instances, neutral
 dismissal, caller actions, long scrolling bodies, instance reversal, light/dark
 themes and tinted backgrounds. The caller constrains body height to fit the
 viewport; the pinned Dialog source is unchanged.
+
+The `/?checkboxes` fixture isolates the boolean Checkbox with controlled values
+and counters, invalid and disabled states, reordered instances, long labels,
+three compositing backgrounds, light/dark themes, and 320px content. It renders
+the unmodified pinned component; use actual browser zoom for scale comparisons.
