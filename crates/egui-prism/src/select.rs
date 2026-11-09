@@ -1055,7 +1055,9 @@ impl<T: Clone + Eq + Hash> SelectRegistration<'_, T> {
         let position = match key {
             egui::Key::Home => 0,
             egui::Key::End => enabled.len() - 1,
-            egui::Key::ArrowUp => current.unwrap_or(0).saturating_sub(1),
+            egui::Key::ArrowUp => {
+                current.map_or(enabled.len() - 1, |position| position.saturating_sub(1))
+            }
             egui::Key::ArrowDown => current
                 .map_or(0, |position| position.saturating_add(1))
                 .min(enabled.len() - 1),
@@ -1363,8 +1365,7 @@ impl<T: Clone + Eq + Hash> SelectRegistration<'_, T> {
                             | egui::Key::ArrowDown
                             | egui::Key::Home
                             | egui::Key::End
-                            | egui::Key::Escape
-                    ) || (was_open && *key == egui::Key::Tab)
+                    ) || (was_open && matches!(key, egui::Key::Escape | egui::Key::Tab))
                     {
                         self.response.ctx.input_mut(|input| {
                             input.consume_key(*modifiers, *key);
@@ -1383,6 +1384,24 @@ impl<T: Clone + Eq + Hash> SelectRegistration<'_, T> {
                     self.typeahead(&mut state, text, selected, &mut response);
                     refresh |= state.open;
                     focus_active = state.open;
+                }
+
+                egui::Event::AccessKitActionRequest(request)
+                    if state.open
+                        && request.target_tree == egui::accesskit::TreeId::ROOT
+                        && request.action == egui::accesskit::Action::Focus =>
+                {
+                    // The dispatcher has already applied accepted focus requests.
+                    if let Some(index) = self.index(self.focused_id())
+                        && !self.items[index].disabled
+                        && request.target_node == self.ids[index].accesskit_id()
+                    {
+                        state.active = Some(self.ids[index]);
+                        state.keyboard = true;
+                        state.stop_repeat();
+                        self.reveal_active(&mut state);
+                        refresh = true;
+                    }
                 }
 
                 egui::Event::AccessKitActionRequest(request)

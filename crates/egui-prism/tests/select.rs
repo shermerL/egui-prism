@@ -1914,3 +1914,219 @@ fn trigger_outer_shadow_does_not_fill_the_transparent_interior() {
         0.0
     );
 }
+
+#[test]
+fn accessibility_focus_ignores_disabled_options_and_reveals_the_committed_row() {
+    let mut h = Harness::new();
+    h.ctx.enable_accesskit();
+    h.screen = egui::vec2(1280.0, 720.0);
+    h.origin = egui::pos2(48.0, 436.0);
+    h.items = (0..30)
+        .map(|index| SelectItem::new(index, format!("Option {index:02}")))
+        .collect();
+    h.selected = Some(29);
+    h.open();
+
+    // Discover option IDs through public keyboard focus, not Select's ID scheme.
+    let mut navigation = vec![key(egui::Key::Home)];
+    navigation.extend((0..16).map(|_| key(egui::Key::ArrowDown)));
+    h.frame(navigation);
+    let target = h.ctx.memory(|memory| memory.focused()).unwrap();
+    h.frame(vec![key(egui::Key::ArrowDown)]);
+    let disabled_target = h.ctx.memory(|memory| memory.focused()).unwrap();
+    assert_ne!(target, disabled_target);
+
+    // Reopening restores the item-aligned viewport: Option 16 is partially
+    // clipped but still visible and focusable, unlike a wholly offscreen row.
+    h.frame(vec![key(egui::Key::Escape)]);
+    h.items[17].disabled = true;
+    h.frame(vec![key(egui::Key::Enter)]);
+    h.frame_after(0.2, vec![]);
+    let initial_focus = h.ctx.memory(|memory| memory.focused());
+    assert_ne!(initial_focus, Some(target));
+    let target_response = h.ctx.read_response(target).unwrap();
+    assert!(target_response.enabled() && target_response.visible());
+    assert!(!h.ctx.read_response(disabled_target).unwrap().enabled());
+
+    let target_clip = |h: &Harness| {
+        let mut clip = None;
+        visit(h.drawings().last().unwrap(), &mut |shape| {
+            if let egui::Shape::Text(text) = &shape.shape
+                && text.galley.job.text == "Option 16"
+            {
+                clip = Some(shape.clip_rect);
+            }
+        });
+        clip.expect("target row text must be drawn")
+    };
+    let before = h.popup_row("Option 16");
+    let clip = target_clip(&h);
+    assert!(before.top() < clip.top() && before.bottom() > clip.top());
+
+    let focus = |id: egui::Id| {
+        egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+            action: egui::accesskit::Action::Focus,
+            target_tree: egui::accesskit::TreeId::ROOT,
+            target_node: id.accesskit_id(),
+            data: None,
+        })
+    };
+    h.frame(vec![focus(disabled_target)]);
+    assert_eq!(h.ctx.memory(|memory| memory.focused()), initial_focus);
+    assert_eq!(h.selected, Some(29));
+    assert_eq!(h.changes, 0);
+    assert!(h.ctx.memory(|memory| memory.top_modal_layer()).is_some());
+
+    h.frame(vec![focus(target)]);
+    assert_eq!(h.ctx.memory(|memory| memory.focused()), Some(target));
+    assert_eq!(h.selected, Some(29), "focus alone must not commit");
+    assert_eq!(h.changes, 0);
+    let revealed = h.popup_row("Option 16");
+    let clip = target_clip(&h);
+    assert!(revealed.top() >= clip.top(), "focused row must be revealed");
+    assert!(revealed.bottom() <= clip.bottom());
+    assert_eq!(h.accents().len(), 1);
+    assert!(h.accents()[0].contains(h.popup_text("Option 16").center()));
+
+    h.frame(vec![key(egui::Key::Enter)]);
+    assert_eq!(h.selected, Some(16));
+    assert_eq!(h.changes, 1);
+    assert_eq!(h.ctx.memory(|memory| memory.focused()), Some(h.id()));
+    assert_eq!(h.ctx.memory(|memory| memory.top_modal_layer()), None);
+}
+
+#[test]
+fn escape_dismisses_only_the_open_select_then_remains_available_to_its_modal() {
+    for open_first in [false, true] {
+        let ctx = context();
+        let theme = Theme::light();
+        let items = [SelectItem::new(1, "One"), SelectItem::new(2, "Two")];
+        let select_id = egui::Id::unique("escape-nested-select");
+        let parent_id = egui::Id::unique("escape-parent-modal");
+        let parent_layer = egui::LayerId::new(egui::Order::Foreground, parent_id);
+        let mut selected = None;
+        let mut close_requests = Vec::new();
+
+        for pass in 0..2 {
+            ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(500.0, 500.0),
+                    )),
+                    events: if pass == 0 {
+                        vec![]
+                    } else if open_first {
+                        vec![
+                            key(egui::Key::Enter),
+                            key(egui::Key::Escape),
+                            key(egui::Key::Escape),
+                        ]
+                    } else {
+                        vec![key(egui::Key::Escape)]
+                    },
+                    ..Default::default()
+                },
+                |_| {
+                    ctx.begin_input();
+                    let mut modal = egui::Modal::new(parent_id)
+                        .area(
+                            egui::Area::new(parent_id)
+                                .order(parent_layer.order)
+                                .fixed_pos(egui::pos2(50.0, 50.0))
+                                .fade_in(false),
+                        )
+                        .register(&ctx, |ui| {
+                            Select::new(&theme, select_id, &items).register(ui, &selected)
+                        });
+                    if pass == 0 {
+                        modal.inner.response.request_focus();
+                    }
+                    while let Some(event) = ctx.next_input_event() {
+                        assert!(!modal.inner.handle(&event, &mut selected).changed());
+                        if let egui::InputTrigger::Event {
+                            event:
+                                egui::Event::Key {
+                                    key, pressed: true, ..
+                                },
+                            ..
+                        } = &event.trigger
+                        {
+                            if *key == egui::Key::Enter {
+                                let top = ctx.memory(|memory| memory.top_modal_layer());
+                                assert!(top.is_some());
+                                assert_ne!(top, Some(parent_layer));
+                                assert_ne!(ctx.memory(|memory| memory.focused()), Some(select_id));
+                            } else if *key == egui::Key::Escape {
+                                assert_eq!(
+                                    ctx.memory(|memory| memory.top_modal_layer()),
+                                    Some(parent_layer)
+                                );
+                                assert_eq!(ctx.memory(|memory| memory.focused()), Some(select_id));
+                                // Query the real modal after Select, while this
+                                // ordered Escape is still the current event.
+                                close_requests.push(modal.should_close());
+                            }
+                        }
+                    }
+                },
+            )
+            .drop_without_applying_deltas();
+        }
+        assert_eq!(selected, None);
+        assert_eq!(
+            close_requests,
+            if open_first {
+                vec![false, true]
+            } else {
+                vec![true]
+            },
+            "only an open Select may consume Escape"
+        );
+    }
+}
+
+#[test]
+fn navigation_after_pointer_clears_active_starts_at_the_enabled_endpoint() {
+    for disabled_destination in [false, true] {
+        for (arrow, expected, label) in [
+            (egui::Key::ArrowUp, 3, "Blueberry"),
+            (egui::Key::ArrowDown, 1, "Apricot"),
+        ] {
+            let mut h = Harness::new();
+            h.items[0].disabled = true;
+            h.items[2].disabled = true;
+            h.items[4].disabled = true;
+            h.open();
+
+            let enabled = h.popup_text("Apricot").center();
+            h.frame(vec![egui::Event::PointerMoved(enabled)]);
+            assert_eq!(h.accents().len(), 1);
+            assert!(h.accents()[0].contains(enabled));
+            let row_focus = h.ctx.memory(|memory| memory.focused());
+
+            let destination = if disabled_destination {
+                h.popup_text("Banana").center()
+            } else {
+                egui::pos2(450.0, 450.0)
+            };
+            h.frame(vec![egui::Event::PointerMoved(destination)]);
+            assert!(h.accents().is_empty());
+            let content_focus = h.ctx.memory(|memory| memory.focused());
+            assert!(content_focus.is_some());
+            assert_ne!(content_focus, row_focus);
+            assert!(h.ctx.memory(|memory| memory.top_modal_layer()).is_some());
+
+            h.frame(vec![key(arrow)]);
+            assert_eq!(h.selected, None);
+            assert_ne!(h.ctx.memory(|memory| memory.focused()), content_focus);
+            assert_eq!(h.accents().len(), 1);
+            assert!(h.accents()[0].contains(h.popup_text(label).center()));
+            h.frame(vec![key(egui::Key::Enter)]);
+            assert_eq!(h.selected, Some(expected));
+            assert_eq!(h.changes, 1);
+            assert_eq!(h.ctx.memory(|memory| memory.focused()), Some(h.id()));
+            assert_eq!(h.ctx.memory(|memory| memory.top_modal_layer()), None);
+        }
+    }
+}
