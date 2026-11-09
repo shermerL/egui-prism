@@ -819,3 +819,31 @@ fn disabled_output_has_one_group_opacity_and_unfaded_thumb() {
     assert!(groups[0].items().iter().any(|item| matches!(item,
         Item::Shape(shape) if matches!(&shape.shape, egui::Shape::Circle(c) if c.fill == egui::Color32::WHITE))));
 }
+
+#[test]
+fn fractional_range_start_anchors_home_and_step_edits() {
+    let mut h = Harness::new();
+    h.range = 0.05..=1.05;
+    h.step = 0.1;
+    h.values[0] = 0.55;
+    let id = h.frame(vec![])[0].id;
+    h.context.memory_mut(|m| m.request_focus(id));
+    h.key(egui::Key::Home);
+    assert_eq!(h.values[0], 0.05);
+    h.key(egui::Key::ArrowRight);
+    assert_eq!(h.values[0], 0.15);
+    h.set_accessible(id, 0.36);
+    assert_eq!(h.values[0], 0.35);
+}
+
+#[test]
+fn subnormal_step_preserves_interior_edits() {
+    let mut h = Harness::new();
+    h.range = 0.0..=1.0;
+    h.step = 1e-320;
+    let response = h.frame(vec![])[0].clone();
+    h.click(response.rect.center());
+    assert_eq!(h.values[0], 0.5);
+    h.set_accessible(response.id, 0.25);
+    assert_eq!(h.values[0], 0.25);
+}

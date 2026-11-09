@@ -531,15 +531,41 @@ fn thumb_center(rect: egui::Rect, value: f64, min: f64, max: f64) -> egui::Pos2 
 }
 
 fn snap(value: f64, min: f64, max: f64, step: f64) -> f64 {
-    let snapped = ((value - min) / step + 0.5).floor() * step + min;
-    // Decimal rounding removes binary drift in repeated fractional key steps.
-    let digits = step
-        .to_string()
-        .split_once('.')
-        .map_or(0, |(_, tail)| tail.len());
-    let scale = 10.0_f64.powi(digits.min(308) as i32);
-    let rounded = if (snapped * scale).is_finite() {
-        (snapped * scale + 0.5).floor() / scale
+    fn round_up(x: f64) -> f64 {
+        let lo = x.floor();
+        lo + if x - lo >= 0.5 { 1.0 } else { 0.0 }
+    }
+
+    let offset = value - min;
+    let ticks = if offset.is_finite() {
+        offset / step
+    } else {
+        value / step - min / step
+    };
+    let snapped = if ticks.is_finite() {
+        round_up(ticks).mul_add(step, min)
+    } else if value.is_finite() {
+        // The step count overflowed. Find the nearest grid point relative to
+        // the edit so a distant minimum cannot erase its local precision.
+        let remainder = (value % step - min % step) % step;
+        let distance = remainder.abs();
+        let other = step - distance;
+        if distance < other || (distance == other && remainder <= 0.0) {
+            value - remainder
+        } else {
+            value + other.copysign(remainder)
+        }
+    } else {
+        value
+    };
+
+    // Both the origin and the step contribute to the grid's decimal precision.
+    let decimal_places = |v: f64| v.to_string().split_once('.').map_or(0, |(_, s)| s.len());
+    let digits = decimal_places(min).max(decimal_places(step));
+    let scale = 10.0_f64.powi(digits as i32);
+    let scaled = snapped * scale;
+    let rounded = if scaled.is_finite() {
+        round_up(scaled) / scale
     } else {
         snapped
     };

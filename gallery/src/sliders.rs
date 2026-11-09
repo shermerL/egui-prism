@@ -4,8 +4,7 @@ use egui_prism::{
     theme::Theme,
 };
 
-#[derive(Clone, Copy)]
-#[allow(dead_code, reason = "the ordered Gallery adapter is wired separately")]
+#[derive(Clone, Copy, Debug)]
 pub(super) enum Control {
     Heading,
     Help,
@@ -17,11 +16,10 @@ pub(super) enum Control {
     Width(f32),
     Slider(usize),
     Value(usize),
-    Focus(bool),
+    Focus(egui::Id),
     Footer,
 }
 
-#[allow(dead_code, reason = "the ordered Gallery adapter is wired separately")]
 pub(super) struct Draw {
     pub response: egui::Response,
     pub ids: Vec<egui::Id>,
@@ -37,7 +35,6 @@ impl From<egui::Response> for Draw {
 }
 
 /// Owned by the Gallery's current registration layout, not by persistent state.
-#[allow(dead_code, reason = "the ordered Gallery adapter is wired separately")]
 pub(super) struct Live {
     sliders: [Option<(SliderRegistration, egui::Rect)>; 3],
 }
@@ -50,7 +47,6 @@ impl Default for Live {
     }
 }
 
-#[allow(dead_code, reason = "the ordered Gallery adapter is wired separately")]
 pub(super) struct SliderCase {
     values: [f64; 2],
     changes: [u64; 2],
@@ -75,20 +71,7 @@ impl Default for SliderCase {
     }
 }
 
-#[allow(dead_code, reason = "the ordered Gallery adapter is wired separately")]
 impl SliderCase {
-    /// Temporary compatibility with the existing immediate Gallery match arm.
-    ///
-    /// Deliberately display-only: no local begin/drain or legacy Slider path.
-    pub(super) fn show(&mut self, ui: &mut egui::Ui, _theme: &Theme) {
-        ui.heading("Prism sliders");
-        ui.label("Slider interaction is unavailable in this preview.");
-        ui.monospace(format!(
-            "A: {:.1} · Changes: {}\nB: {:.1} · Changes: {}",
-            self.values[0], self.changes[0], self.values[1], self.changes[1],
-        ));
-    }
-
     /// Shared structural traversal for Register and Paint.
     ///
     /// The host's visitor creates its stable leaf scope, captures LocalUi before
@@ -138,7 +121,7 @@ impl SliderCase {
                         let response = visit(self, ui, Control::Slider(index));
                         visit(self, ui, Control::Value(index));
                         // Always reserve one line; focus changes cannot move B.
-                        visit(self, ui, Control::Focus(response.has_focus()));
+                        visit(self, ui, Control::Focus(response.id));
                     });
                 }
 
@@ -174,41 +157,30 @@ impl SliderCase {
         Draw { response, ids }
     }
 
-    /// Handle exactly one host-routed event using the retained registration.
-    ///
-    /// Returns whether the host must rebuild this case's layout before dispatching
-    /// another event. Slider value changes refresh their own thumb geometry.
+    /// Handle one event against the geometry registered for this pass.
     pub(super) fn handle(
         &mut self,
         ui: &mut egui::Ui,
         control: Control,
         live: &Live,
         event: &egui::RoutedInput,
-    ) -> bool {
-        if let Control::Slider(index) = control {
-            let (slider, _) = live.sliders[index].as_ref().expect("current slider layout");
-            assert_eq!(event.target, Some(slider.id()));
-
-            if index < 2 {
-                if slider.handle(ui, &mut self.values[index], event).changed() {
-                    self.changes[index] += 1;
-                }
-            } else {
-                let mut amount = 35.0;
-                let response = slider.handle(ui, &mut amount, event);
-                debug_assert!(!response.changed());
-                debug_assert_eq!(amount, 35.0);
+    ) -> egui::Response {
+        let Control::Slider(index) = control else {
+            return self.stock(ui, control);
+        };
+        let (slider, _) = live.sliders[index].as_ref().expect("current slider layout");
+        if index < 2 {
+            let response = slider.handle(ui, &mut self.values[index], event);
+            if response.changed() {
+                self.changes[index] += 1;
             }
-            return false;
-        }
-
-        match control {
-            Control::Disabled
-            | Control::Reversed
-            | Control::Long
-            | Control::Tinted
-            | Control::Width(_) => self.stock(ui, control).changed(),
-            _ => false,
+            response
+        } else {
+            let mut amount = 35.0;
+            let response = slider.handle(ui, &mut amount, event);
+            debug_assert!(!response.changed());
+            debug_assert_eq!(amount, 35.0);
+            response
         }
     }
 
@@ -278,7 +250,7 @@ impl SliderCase {
         (output.inner, output.response.rect)
     }
 
-    fn stock(&mut self, ui: &mut egui::Ui, control: Control) -> egui::Response {
+    pub(super) fn stock(&mut self, ui: &mut egui::Ui, control: Control) -> egui::Response {
         match control {
             Control::Heading => ui.heading("Prism sliders"),
             Control::Help => ui.label(
@@ -304,9 +276,9 @@ impl SliderCase {
                     .truncate(),
                 )
             }
-            Control::Focus(focused) => ui.add(
+            Control::Focus(id) => ui.add(
                 egui::Label::new(
-                    egui::RichText::new(if focused {
+                    egui::RichText::new(if ui.memory(|memory| memory.has_focus(id)) {
                         "This slider has keyboard focus."
                     } else {
                         "\u{a0}"
@@ -379,7 +351,10 @@ mod tests {
                     context.memory_mut(|memory| memory.request_focus(first.unwrap()));
                     while let Some(event) = context.next_input_event() {
                         if event.target == first {
-                            assert!(!case.handle(&mut layout, Control::Slider(0), &live, &event));
+                            assert!(
+                                case.handle(&mut layout, Control::Slider(0), &live, &event)
+                                    .changed()
+                            );
                         }
                     }
                     let mut paint =
@@ -393,5 +368,97 @@ mod tests {
             .drop_without_applying_deltas();
         assert_eq!(case.values, [55.0, 0.0]);
         assert_eq!(case.changes, [1, 0]);
+    }
+
+    #[test]
+    #[ignore = "requires a headless native wgpu adapter"]
+    fn production_gallery_routes_slider_and_rebuilds_disabled_geometry() {
+        use egui::accesskit::{Action, ActionRequest, Role, TreeId};
+
+        let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
+        descriptor.backends = wgpu::Backends::PRIMARY;
+        let instance = wgpu::Instance::new(descriptor);
+        let adapter = pollster::block_on(instance.request_adapter(&Default::default()))
+            .expect("headless native adapter");
+        let (device, _) =
+            pollster::block_on(adapter.request_device(&Default::default())).expect("native device");
+        let context = egui::Context::default();
+        context.enable_accesskit();
+        let mut gallery = crate::Gallery::new(&context, &device).unwrap();
+        let run = |gallery: &mut crate::Gallery, events| {
+            context.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(960.0, 720.0),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ui| gallery.ui(ui, &device),
+            )
+        };
+        let request = |target_node, action| {
+            egui::Event::AccessKitActionRequest(ActionRequest {
+                action,
+                target_tree: TreeId::ROOT,
+                target_node,
+                data: None,
+            })
+        };
+        let right = || egui::Event::Key {
+            key: egui::Key::ArrowRight,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        };
+
+        let output = run(&mut gallery, vec![]);
+        let tree = output.platform_output.accesskit_update.as_ref().unwrap();
+        let tab = tree
+            .nodes
+            .iter()
+            .find(|(_, node)| node.label() == Some("Sliders"))
+            .unwrap()
+            .0;
+        output.drop_without_applying_deltas();
+
+        let output = run(&mut gallery, vec![request(tab, Action::Click)]);
+        assert_eq!(gallery.case, crate::Case::Sliders);
+        let tree = output.platform_output.accesskit_update.as_ref().unwrap();
+        let slider = tree
+            .nodes
+            .iter()
+            .find(|(_, node)| node.role() == Role::Slider && node.numeric_value() == Some(50.0))
+            .unwrap()
+            .0;
+        let disable = tree
+            .nodes
+            .iter()
+            .find(|(_, node)| node.label() == Some("Disable sliders"))
+            .unwrap()
+            .0;
+        output.drop_without_applying_deltas();
+
+        let output = run(
+            &mut gallery,
+            vec![
+                request(slider, Action::Focus),
+                right(),
+                request(disable, Action::Click),
+                right(),
+            ],
+        );
+        assert_eq!(gallery.sliders.values, [55.0, 0.0]);
+        assert_eq!(gallery.sliders.changes, [1, 0]);
+        assert!(gallery.sliders.disabled);
+        assert!(
+            output
+                .shapes
+                .iter()
+                .any(|shape| matches!(shape.shape, egui::Shape::Callback(_)))
+        );
+        output.drop_without_applying_deltas();
     }
 }

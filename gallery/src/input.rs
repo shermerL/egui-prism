@@ -1,5 +1,7 @@
 //! Pass-local routing for the Gallery's explicit controls and scroll shells.
-use crate::{Case, Gallery, buttons, checkboxes, compositing, egui, interaction, text_inputs};
+use crate::{
+    Case, Gallery, buttons, checkboxes, compositing, egui, interaction, sliders, text_inputs,
+};
 use std::{collections::HashSet, sync::Arc};
 
 #[derive(Clone, Debug)]
@@ -12,6 +14,7 @@ pub(super) enum Control {
     Button(buttons::Control),
     Input(text_inputs::Control),
     Checkbox(checkboxes::Control),
+    Slider(sliders::Control),
     Interaction(interaction::Control),
     Compositing(compositing::Control),
     Link(&'static str, &'static str),
@@ -24,6 +27,7 @@ impl Control {
             Self::Button(buttons::Control::PreviewCount | buttons::Control::Count(_))
                 | Self::Input(text_inputs::Control::Count(_))
                 | Self::Checkbox(checkboxes::Control::Count(_) | checkboxes::Control::Focus(_))
+                | Self::Slider(sliders::Control::Value(_) | sliders::Control::Focus(_))
                 | Self::Interaction(
                     interaction::Control::Count(_) | interaction::Control::Focus(_)
                 )
@@ -45,6 +49,12 @@ impl Control {
                 checkboxes::Control::Disabled
                 | checkboxes::Control::Reversed
                 | checkboxes::Control::Long,
+            )
+            | Self::Slider(
+                sliders::Control::Disabled
+                | sliders::Control::Reversed
+                | sliders::Control::Long
+                | sliders::Control::Width(_),
             )
             | Self::Interaction(
                 interaction::Control::Disabled
@@ -73,6 +83,15 @@ impl From<egui::Response> for Draw {
         Self {
             response,
             ids: Vec::new(),
+            button: None,
+        }
+    }
+}
+impl From<sliders::Draw> for Draw {
+    fn from(draw: sliders::Draw) -> Self {
+        Self {
+            response: draw.response,
+            ids: draw.ids,
             button: None,
         }
     }
@@ -184,6 +203,7 @@ pub(super) struct Layout {
     pub entries: Vec<Entry>,
     pub ids: HashSet<egui::Id>,
     scrolls: Vec<Scroll>,
+    pub slider_live: sliders::Live,
 }
 impl Layout {
     pub fn new(phase: Phase) -> Self {
@@ -192,6 +212,7 @@ impl Layout {
             entries: Vec::new(),
             ids: HashSet::new(),
             scrolls: Vec::new(),
+            slider_live: sliders::Live::default(),
         }
     }
 
@@ -425,6 +446,7 @@ impl Gallery {
             Control::Button(control) => self.buttons.control(ui, &theme, *control),
             Control::Input(control) => self.inputs.control(ui, &theme, *control),
             Control::Checkbox(control) => self.checkboxes.control(ui, &theme, *control),
+            Control::Slider(control) => self.sliders.stock(ui, *control).into(),
             Control::Interaction(control) => {
                 self.interaction
                     .control(ui, *control, self.case == Case::Layout)
