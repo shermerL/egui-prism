@@ -170,8 +170,21 @@ struct Layout {
 }
 
 impl Layout {
+    fn label_position(&self) -> egui::Pos2 {
+        egui::pos2(
+            self.square.right() + 8.0,
+            self.rect.center().y - self.galley.size().y * 0.5,
+        ) - self.galley.rect.min.to_vec2()
+    }
+
     fn outer_bounds(&self) -> egui::Rect {
-        self.rect.union(self.square.expand(4.0))
+        // Explicit font sizes and italics can extend ink beyond the line box.
+        // Keep that visual overflow without changing the registered hit area.
+        self.rect.union(self.square.expand(4.0)).union(
+            self.galley
+                .mesh_bounds
+                .translate(self.label_position().to_vec2()),
+        )
     }
 
     // The native owner remains the square. Public responses describe the row
@@ -360,7 +373,7 @@ impl Checkbox<'_, '_> {
         let clip = ui.clip_rect().intersect(outer_bounds);
         let drawing = if response.visible()
             && ui.is_visible()
-            && ui.is_rect_visible(layout.rect)
+            && ui.is_rect_visible(outer_bounds)
             && clip.is_finite()
             && clip.is_positive()
         {
@@ -393,10 +406,7 @@ impl Checkbox<'_, '_> {
             )
             .expect("finite Checkbox drawing");
             let label = item(egui::Shape::galley(
-                egui::pos2(
-                    square.right() + 8.0,
-                    layout.rect.center().y - layout.galley.size().y * 0.5,
-                ) - layout.galley.rect.min.to_vec2(),
+                layout.label_position(),
                 layout.galley.clone(),
                 colors.background.foreground,
             ));

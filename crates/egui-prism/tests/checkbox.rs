@@ -1157,3 +1157,57 @@ fn outer_shadow_excludes_the_transparent_square_interior() {
         );
     }
 }
+
+#[test]
+fn rich_label_ink_is_not_clipped_to_the_twenty_point_row() {
+    for enabled in [true, false] {
+        let context = ordered_context();
+        let theme = Theme::light();
+        let value = false;
+        context
+            .run_ui(Default::default(), |ui| {
+                context.begin_input();
+                let text = egui::RichText::new("Option gj").size(40.0).italics();
+                let mut register = phase_ui(ui);
+                register.add_space(48.0);
+                let registration = register
+                    .add_enabled_ui(enabled, |ui| {
+                        Checkbox::new(&theme, &value, text.clone()).register(ui)
+                    })
+                    .inner;
+                while context.next_input_event().is_some() {}
+                let mut draw = phase_ui(ui);
+                draw.add_space(48.0);
+                let output = draw
+                    .add_enabled_ui(enabled, |ui| {
+                        Checkbox::new(&theme, &value, text.clone()).show(ui)
+                    })
+                    .inner;
+                assert_eq!(registration.response.rect, output.response.rect);
+                assert_eq!(output.response.rect.height(), 20.0);
+                let drawing = output.drawing.unwrap();
+                let ink = label(&drawing).visual_bounding_rect();
+                assert!(
+                    !output.response.rect.contains_rect(ink),
+                    "test requires overflowing glyph ink"
+                );
+                assert!(
+                    drawing.bounds().contains_rect(ink),
+                    "group clips rich-label ink: {:?} versus {ink:?}",
+                    drawing.bounds()
+                );
+                let Item::Shape(shape) = &drawing.items()[1] else {
+                    panic!("label shape");
+                };
+                assert!(
+                    shape.clip_rect.contains_rect(ink),
+                    "label clip excludes glyph ink"
+                );
+                assert_eq!(
+                    control(&drawing).bounds(),
+                    background(&drawing).rect.expand(4.0)
+                );
+            })
+            .drop_without_applying_deltas();
+    }
+}
