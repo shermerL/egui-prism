@@ -248,8 +248,7 @@ impl<'a, T: Clone + Eq + Hash> Select<'a, T> {
 
         // Only a current-pass enclosing scope can be restored on dismissal.
         if let Some(previous) = state.previous_modal
-            && (registration.top_modal() == Some(previous)
-                || registration.response.layer_id == previous)
+            && registration.top_modal() == Some(previous)
         {
             state.previous_modal_pass = registration.pass;
         }
@@ -372,6 +371,14 @@ fn popup_ease(x: f32) -> f32 {
     0.3 * u * u * t + 3.0 * u * t * t + t * t * t
 }
 
+// Release authority is separate from hit/capture routing. Only a live primary
+// press can create this token; the trigger origin also suppresses its first click.
+#[derive(Clone, Copy)]
+enum PrimaryGesture {
+    Trigger(Pos2),
+    Popup,
+}
+
 // No T, borrowed data, galleys, responses, UIs, or renderer resources enter the
 // Context. Selection identity is only an external-change detector; displayed
 // text, checked state, and committed values always come from the caller.
@@ -386,7 +393,7 @@ struct State {
     wrapper_height: f32,
     bottom_anchored: bool,
     scroll: f32,
-    opening_press: Option<Pos2>,
+    primary_gesture: Option<PrimaryGesture>,
     keyboard: bool,
     trigger_focused: bool,
     previous_modal: Option<LayerId>,
@@ -410,7 +417,7 @@ impl State {
             wrapper_height: 0.0,
             bottom_anchored: false,
             scroll: 0.0,
-            opening_press: None,
+            primary_gesture: None,
             keyboard: true,
             trigger_focused: false,
             previous_modal: None,
@@ -435,7 +442,7 @@ impl State {
     }
 
     fn reset_transient(&mut self) {
-        self.opening_press = None;
+        self.primary_gesture = None;
         self.search.clear();
         self.stop_repeat();
         self.scroll = 0.0;
@@ -450,6 +457,16 @@ struct PopupGeometry {
     up: Option<Rect>,
     down: Option<Rect>,
     max_scroll: f32,
+}
+
+impl PopupGeometry {
+    fn animation_transform(&self, progress: f32) -> egui::emath::TSTransform {
+        let scale = 0.95 + 0.05 * progress;
+        egui::emath::TSTransform {
+            scaling: scale,
+            translation: self.menu.center().to_vec2() * (1.0 - scale),
+        }
+    }
 }
 
 fn option_id(key: Id, value: &impl Hash) -> Id {
@@ -530,7 +547,10 @@ impl<T: Clone + Eq + Hash> SelectRegistration<'_, T> {
         let Some(id) = self.focused_id() else {
             return false;
         };
-        if id == self.popup_id() {
+        // The previously active ID remains ours while options are reconciled,
+        // even if that row was removed or disabled. Require an exact focus
+        // match: host surrender/transfer must not be mistaken for a mutation.
+        if id == self.popup_id() || state.active == Some(id) {
             return true;
         }
         if self
@@ -800,6 +820,10 @@ impl<T: Clone + Eq + Hash> SelectRegistration<'_, T> {
     fn register_popup(&self, state: &State, selected: &Option<T>) {
         let ctx = &self.response.ctx;
         let geometry = self.geometry(state);
+        // Transform the parts, not the layer: the backdrop must cover the screen.
+        let transform = geometry.animation_transform(state.fade.value(self.now()));
+        let menu = transform * geometry.menu;
+        let viewport = (transform * geometry.viewport).intersect(self.screen);
         let layer = self.popup_layer();
         let owner = self.popup_id();
         let selected_index = self.selected_index(selected);
@@ -808,8 +832,8 @@ impl<T: Clone + Eq + Hash> SelectRegistration<'_, T> {
             .area(
                 egui::Area::new(layer.id)
                     .order(layer.order)
-                    .fixed_pos(geometry.menu.min)
-                    .default_size(geometry.menu.size())
+                    .fixed_pos(menu.min)
+                    .default_size(menu.size())
                     .movable(false)
                     .constrain(false)
                     .fade_in(false)
@@ -819,9 +843,9 @@ impl<T: Clone + Eq + Hash> SelectRegistration<'_, T> {
             .backdrop_color(egui::Color32::TRANSPARENT)
             .register(ctx, |ui| {
                 ui.set_clip_rect(self.screen);
-                ui.set_min_size(geometry.menu.size());
-                let popup = ui.interact(geometry.menu, owner, egui::Sense::click_and_drag());
-                ctx.set_input_rounding(owner, 8.0);
+                ui.set_min_size(menu.size());
+                let popup = ui.interact(menu, owner, egui::Sense::click_and_drag());
+                ctx.set_input_rounding(owner, 8.0 * transform.scaling);
                 popup.widget_info(|| {
                     egui::WidgetInfo::selected(egui::Role::ListBox, true, false, &self.placeholder)
                 });
@@ -830,12 +854,13 @@ impl<T: Clone + Eq + Hash> SelectRegistration<'_, T> {
                 });
 
                 for (index, rect) in geometry.rows.iter().copied().enumerate() {
+                    let rect = transform * rect;
                     let mut row_ui = ui.new_child(
                         egui::UiBuilder::new()
                             .scope_id(self.ids[index].with("ui"))
                             .max_rect(rect),
                     );
-                    row_ui.set_clip_rect(geometry.viewport.intersect(self.screen));
+                    row_ui.set_clip_rect(viewport);
                     if self.items[index].disabled {
                         row_ui.disable();
                     }
@@ -849,7 +874,7 @@ impl<T: Clone + Eq + Hash> SelectRegistration<'_, T> {
                             &self.items[index].label,
                         )
                     });
-                    ctx.set_input_rounding(self.ids[index], 6.0);
+                    ctx.set_input_rounding(self.ids[index], 6.0 * transform.scaling);
                     if !self.items[index].disabled {
                         ctx.memory_mut(|memory| {
                             memory.register_focus_policy(
@@ -865,6 +890,7 @@ impl<T: Clone + Eq + Hash> SelectRegistration<'_, T> {
 
                 for (id, rect) in [(self.up_id(), geometry.up), (self.down_id(), geometry.down)] {
                     if let Some(rect) = rect {
+                        let rect = transform * rect;
                         ui.interact(rect, id, egui::Sense::click_and_drag());
                         ctx.memory_mut(|memory| {
                             memory.register_focus_policy(id, layer, focus_filter(true));
@@ -925,7 +951,7 @@ impl<T: Clone + Eq + Hash> SelectRegistration<'_, T> {
         state.previous_modal_pass = self.pass;
         state.open = true;
         state.active = self.initial_active(selected);
-        state.opening_press = press;
+        state.primary_gesture = press.map(PrimaryGesture::Trigger);
         state.keyboard = press.is_none();
         state.search.clear();
         state.stop_repeat();
@@ -950,16 +976,13 @@ impl<T: Clone + Eq + Hash> SelectRegistration<'_, T> {
         let previous_live = state.previous_modal_pass == self.pass;
 
         state.open = false;
-        state.opening_press = None;
+        state.primary_gesture = None;
         state.search.clear();
         state.stop_repeat();
         state.fade.retarget(self.now(), 0.0);
 
         ctx.remove_input_layer(self.popup_layer());
-        if had_focus
-            && self.focused_id() == focused
-            && let Some(id) = focused
-        {
+        if had_focus && let Some(id) = focused {
             ctx.memory_mut(|memory| memory.surrender_focus(id));
         }
 
@@ -993,12 +1016,13 @@ impl<T: Clone + Eq + Hash> SelectRegistration<'_, T> {
         })
     }
 
-    fn over_menu(&self, geometry: &PopupGeometry) -> bool {
+    fn over_menu(&self, state: &State, geometry: &PopupGeometry) -> bool {
+        let menu = geometry.animation_transform(state.fade.value(self.now())) * geometry.menu;
         let inside = self.response.ctx.input(|input| {
             input
                 .pointer
                 .hover_pos()
-                .is_some_and(|pos| geometry.menu.contains(pos))
+                .is_some_and(|pos| menu.contains(pos))
         });
         inside
             && (self.authoritative_hit(self.popup_id())
@@ -1193,7 +1217,7 @@ impl<T: Clone + Eq + Hash> SelectRegistration<'_, T> {
                         state.active = None;
                         focus_active = true;
                     }
-                    state.opening_press = None;
+                    state.primary_gesture = None;
                     state.stop_repeat();
                 }
 
@@ -1205,24 +1229,36 @@ impl<T: Clone + Eq + Hash> SelectRegistration<'_, T> {
                 } => {
                     if state.open {
                         let geometry = self.geometry(&state);
+                        let menu = geometry.animation_transform(state.fade.value(self.now()))
+                            * geometry.menu;
                         if *pressed {
+                            if *button == egui::PointerButton::Primary {
+                                state.primary_gesture = None;
+                            }
                             // The owner hit outside the menu is the bound
                             // backdrop's authoritative hit, not an expanded
                             // owner rectangle. Dismiss on press, not click.
-                            if !geometry.menu.contains(*pos)
-                                && self.authoritative_hit(self.popup_id())
-                            {
+                            if !menu.contains(*pos) && self.authoritative_hit(self.popup_id()) {
                                 self.close(&mut state, true);
-                            } else if self.over_menu(&geometry) {
+                            } else if self.over_menu(&state, &geometry) {
+                                if *button == egui::PointerButton::Primary {
+                                    state.primary_gesture = Some(PrimaryGesture::Popup);
+                                }
                                 state.keyboard = false;
                                 state.active = self.hit_row().map(|index| self.ids[index]);
                                 focus_active = true;
                                 self.update_repeat(&mut state, false);
                             }
-                        } else if *button == egui::PointerButton::Primary {
-                            let prevented = state.opening_press.take().is_some_and(|origin| {
-                                (origin.x - pos.x).abs() <= 10.0 && (origin.y - pos.y).abs() <= 10.0
-                            });
+                        } else if *button == egui::PointerButton::Primary
+                            && let Some(gesture) = state.primary_gesture.take()
+                        {
+                            let prevented = match gesture {
+                                PrimaryGesture::Trigger(origin) => {
+                                    (origin.x - pos.x).abs() <= 10.0
+                                        && (origin.y - pos.y).abs() <= 10.0
+                                }
+                                PrimaryGesture::Popup => false,
+                            };
                             if !prevented {
                                 // Capture and routed targets are not part-hit
                                 // authority. In particular, releases can be
@@ -1230,7 +1266,7 @@ impl<T: Clone + Eq + Hash> SelectRegistration<'_, T> {
                                 if let Some(index) = self.hit_row() {
                                     self.commit(index, selected, &mut response);
                                     self.close(&mut state, true);
-                                } else if !geometry.menu.contains(*pos)
+                                } else if !menu.contains(*pos)
                                     && self.authoritative_hit(self.popup_id())
                                 {
                                     self.close(&mut state, true);
@@ -1256,7 +1292,7 @@ impl<T: Clone + Eq + Hash> SelectRegistration<'_, T> {
 
                 egui::Event::MouseWheel { unit, delta, .. } if state.open => {
                     let geometry = self.geometry(&state);
-                    if self.over_menu(&geometry) {
+                    if self.over_menu(&state, &geometry) {
                         let amount = match unit {
                             egui::MouseWheelUnit::Point => delta.y,
                             egui::MouseWheelUnit::Line => delta.y * ROW_HEIGHT,

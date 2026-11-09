@@ -325,6 +325,210 @@ impl Harness {
     }
 }
 
+fn untextured_mesh(ctx: &egui::Context, shape: egui::Shape) -> egui::epaint::Mesh {
+    let mut mesh = egui::epaint::Mesh::default();
+    for primitive in ctx.tessellate(
+        vec![egui::epaint::ClippedShape::new(ctx.content_rect(), shape)],
+        ctx.pixels_per_point(),
+    ) {
+        let egui::epaint::Primitive::Mesh(part) = primitive.primitive else {
+            panic!("drawing test expects mesh primitives");
+        };
+        mesh.append(part);
+    }
+    mesh
+}
+
+fn over(source: [f32; 4], destination: [f32; 4]) -> [f32; 4] {
+    std::array::from_fn(|channel| source[channel] + destination[channel] * (1.0 - source[3]))
+}
+
+fn mesh_sample(mesh: &egui::epaint::Mesh, point: egui::Pos2) -> [f32; 4] {
+    let cross = |a: egui::Vec2, b: egui::Vec2| a.x * b.y - a.y * b.x;
+    let mut sample = [0.0; 4];
+    for triangle in mesh.indices.chunks_exact(3) {
+        let mut vertices =
+            [triangle[0], triangle[1], triangle[2]].map(|index| mesh.vertices[index as usize]);
+        let area = cross(
+            vertices[1].pos - vertices[0].pos,
+            vertices[2].pos - vertices[0].pos,
+        );
+        if area == 0.0 {
+            continue;
+        }
+        if area < 0.0 {
+            vertices.swap(1, 2);
+        }
+        let [a, b, c] = vertices;
+        let edges = [(b.pos, c.pos), (c.pos, a.pos), (a.pos, b.pos)];
+        let weights = edges.map(|(a, b)| cross(b - a, point - a));
+        // Half-open edges sample a shared triangle boundary only once.
+        if edges.iter().zip(weights).any(|(&(a, b), weight)| {
+            weight < 0.0 || (weight == 0.0 && !(b.y < a.y || (b.y == a.y && b.x > a.x)))
+        }) {
+            continue;
+        }
+        let colors = vertices.map(|vertex| vertex.color.to_array());
+        let color = std::array::from_fn(|channel| {
+            (0..3)
+                .map(|i| weights[i] / area.abs() * f32::from(colors[i][channel]) / 255.0)
+                .sum::<f32>()
+        });
+        sample = over(color, sample);
+    }
+    sample
+}
+
+fn trigger_sample(ctx: &egui::Context, group: &Group, point: egui::Pos2) -> [f32; 4] {
+    let mut sample = [0.0; 4];
+    for item in group.items() {
+        let Item::Shape(shape) = item else {
+            panic!("expected a flat trigger");
+        };
+        if !shape.clip_rect.contains(point) {
+            continue;
+        }
+        let mut mesh = untextured_mesh(ctx, shape.shape.clone());
+        for vertex in &mut mesh.vertices {
+            vertex.pos = shape.transform_after_tessellation * vertex.pos;
+        }
+        sample = over(mesh_sample(&mesh, point), sample);
+    }
+    sample.map(|channel| channel * group.opacity())
+}
+
+#[test]
+fn trigger_outer_shadow_preserves_transparent_interior_and_rounded_exterior() {
+    for size in [SelectSize::Default, SelectSize::Small] {
+        for pixels_per_point in [1.0, 2.0] {
+            let mut h = Harness::new();
+            h.size = size;
+            h.ctx.set_pixels_per_point(pixels_per_point);
+            // Blank label; the sample positions also avoid the chevron.
+            h.selected = Some(999);
+            let rect = h.frame(vec![]).unwrap().rect;
+            let drawings = h.drawings();
+            assert_eq!(drawings.len(), 1);
+            let trigger = &drawings[0];
+            assert_eq!(trigger.opacity(), 1.0);
+
+            for point in [
+                egui::pos2(rect.left() + 5.3, rect.center().y + 0.7),
+                egui::pos2(rect.center().x + 7.3, rect.top() + 4.2),
+                egui::pos2(rect.center().x - 9.1, rect.bottom() - 4.3),
+            ] {
+                let source = trigger_sample(&h.ctx, trigger, point);
+                assert_eq!(source, [0.0; 4], "shadow leaked into {point:?}");
+                for background in [
+                    egui::Color32::WHITE,
+                    egui::Color32::from_rgb(67, 123, 191),
+                    egui::Color32::from_rgba_unmultiplied(67, 123, 191, 117),
+                    egui::Color32::TRANSPARENT,
+                ] {
+                    let background = background
+                        .to_array()
+                        .map(|channel| f32::from(channel) / 255.0);
+                    assert_eq!(over(source, background), background, "{point:?}");
+                }
+            }
+
+            let Item::Shape(shadow) = &trigger.items()[0] else {
+                panic!("expected the trigger shadow");
+            };
+            let shadow = untextured_mesh(&h.ctx, shadow.shape.clone());
+            // Include samples under the border to pin the unshifted knockout.
+            for point in [
+                egui::pos2(rect.center().x + 2.7, rect.top() + 0.25),
+                egui::pos2(rect.center().x - 3.1, rect.bottom() - 0.25),
+                egui::pos2(rect.left() + 0.25, rect.center().y + 0.7),
+                rect.min + egui::vec2(3.0, 3.0),
+                egui::pos2(rect.right() - 3.0, rect.bottom() - 3.0),
+            ] {
+                assert_eq!(mesh_sample(&shadow, point), [0.0; 4], "{point:?}");
+            }
+
+            let original = untextured_mesh(
+                &h.ctx,
+                egui::epaint::Shadow {
+                    offset: [0, 1],
+                    blur: 2,
+                    spread: 0,
+                    color: egui::Color32::from_black_alpha(13),
+                }
+                .as_shape(rect, 8)
+                .into(),
+            );
+            assert_eq!(original.texture_id, egui::TextureId::default());
+            assert!(
+                original
+                    .vertices
+                    .iter()
+                    .all(|vertex| vertex.uv == egui::epaint::WHITE_UV)
+            );
+            for point in [
+                egui::pos2(rect.center().x + 7.3, rect.bottom() + 0.75),
+                // Inside the rectangular box, but outside its rounded corners.
+                egui::pos2(rect.left() + 2.2, rect.bottom() - 1.8),
+                egui::pos2(rect.right() - 2.2, rect.bottom() - 1.8),
+            ] {
+                let expected = mesh_sample(&original, point);
+                let actual = mesh_sample(&shadow, point);
+                assert!(
+                    expected[3] > 1.0 / 255.0,
+                    "{size:?} at {pixels_per_point}x {point:?}: original={expected:?}, clipped={actual:?}"
+                );
+                assert!(actual[3] > 0.0, "missing exterior shadow at {point:?}");
+                for channel in 0..4 {
+                    assert!(
+                        (actual[channel] - expected[channel]).abs() <= 1.0 / 255.0,
+                        "{point:?}: {actual:?} != {expected:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn disabled_trigger_preserves_children_and_only_changes_outer_opacity() {
+    let mut h = Harness::new();
+    h.selected = Some(999);
+    let rect = h.frame(vec![]).unwrap().rect;
+    h.frame_after(0.2, vec![]);
+    let enabled = h.drawings();
+    h.enabled = false;
+    h.frame(vec![]);
+    let disabled = h.drawings();
+
+    assert_eq!(enabled.len(), 1);
+    assert_eq!(disabled.len(), 1);
+    let (enabled, disabled) = (&enabled[0], &disabled[0]);
+    assert_eq!(enabled.opacity(), 1.0);
+    assert_eq!(disabled.opacity(), 0.5);
+    assert_eq!(enabled.bounds(), disabled.bounds());
+    assert_eq!(enabled.items().len(), disabled.items().len());
+    for (enabled, disabled) in enabled.items().iter().zip(disabled.items()) {
+        let (Item::Shape(enabled), Item::Shape(disabled)) = (enabled, disabled) else {
+            panic!("trigger children must not introduce another opacity group");
+        };
+        // Includes the shadow mesh, transparent fill, border, text and chevron.
+        assert_eq!(enabled, disabled);
+    }
+
+    let inside = egui::pos2(rect.center().x + 7.3, rect.bottom() - 4.3);
+    let outside = egui::pos2(rect.center().x + 7.3, rect.bottom() + 0.75);
+    let enabled_shadow = trigger_sample(&h.ctx, enabled, outside);
+    let disabled_shadow = trigger_sample(&h.ctx, disabled, outside);
+    for channel in 0..4 {
+        assert_eq!(disabled_shadow[channel], enabled_shadow[channel] * 0.5);
+    }
+    let tint = egui::Color32::from_rgb(67, 123, 191)
+        .to_array()
+        .map(|channel| f32::from(channel) / 255.0);
+    assert_eq!(over(trigger_sample(&h.ctx, disabled, inside), tint), tint);
+    assert!(over(disabled_shadow, tint)[0] < tint[0]);
+}
+
 #[test]
 fn same_batch_open_navigation_commit_and_no_initial_step() {
     let mut h = Harness::new();
@@ -1485,5 +1689,228 @@ fn registration_cannot_paint_after_a_discard_without_reregistering() {
     assert!(
         rejected,
         "a registration from a previous pass must be rejected"
+    );
+}
+
+#[test]
+fn animated_popup_boundary_click_selects_the_painted_row() {
+    let mut h = Harness::new();
+    h.focus();
+    h.frame(vec![key(egui::Key::Enter)]);
+    h.frame_after(0.015, vec![]);
+    let apple = h.accents()[0];
+    let position = egui::pos2(apple.center().x, apple.bottom() - 1.0);
+    assert!(apple.contains(position));
+    h.frame_after(
+        0.0,
+        vec![
+            egui::Event::PointerMoved(position),
+            pointer(position, true),
+            pointer(position, false),
+        ],
+    );
+    assert_eq!(h.selected, Some(0));
+    assert_eq!(h.changes, 1);
+}
+
+#[test]
+fn pointer_cancellation_rejects_orphan_release_and_allows_a_fresh_gesture() {
+    let mut h = Harness::new();
+    let start = h.frame(vec![]).unwrap().rect.center();
+    h.frame(vec![pointer(start, true)]);
+    h.frame_after(0.2, vec![egui::Event::PointerGone]);
+    let position = h.popup_text("Cherry").center();
+    h.frame(vec![
+        egui::Event::PointerMoved(position),
+        pointer(position, false),
+    ]);
+    assert_eq!(h.selected, None);
+    assert_eq!(h.changes, 0);
+    assert!(h.ctx.memory(|memory| memory.top_modal_layer()).is_some());
+    h.frame(vec![pointer(position, true), pointer(position, false)]);
+    assert_eq!(h.selected, Some(4));
+    assert_eq!(h.changes, 1);
+}
+
+#[test]
+fn former_parent_modal_demotion_to_the_same_area_does_not_restore_a_barrier() {
+    let ctx = context();
+    let theme = Theme::light();
+    let items = [SelectItem::new(1, "One"), SelectItem::new(2, "Two")];
+    let select_id = egui::Id::unique("demoted-parent-select");
+    let parent_id = egui::Id::unique("demoted-parent");
+    let parent_layer = egui::LayerId::new(egui::Order::Foreground, parent_id);
+    let mut selected = None;
+    let mut observed = Vec::new();
+    for pass in 0..3 {
+        ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(500.0, 500.0),
+                )),
+                events: match pass {
+                    0 => vec![],
+                    1 => vec![key(egui::Key::Enter)],
+                    _ => vec![key(egui::Key::Escape)],
+                },
+                ..Default::default()
+            },
+            |_| {
+                ctx.begin_input();
+                let area = egui::Area::new(parent_id)
+                    .order(parent_layer.order)
+                    .fixed_pos(egui::pos2(50.0, 50.0))
+                    .fade_in(false);
+                let mut select = if pass < 2 {
+                    egui::Modal::new(parent_id)
+                        .area(area)
+                        .register(&ctx, |ui| {
+                            Select::new(&theme, select_id, &items).register(ui, &selected)
+                        })
+                        .inner
+                } else {
+                    area.show(&ctx, |ui| {
+                        Select::new(&theme, select_id, &items).register(ui, &selected)
+                    })
+                    .inner
+                };
+                if pass == 0 {
+                    select.response.request_focus();
+                }
+                while let Some(event) = ctx.next_input_event() {
+                    select.handle(&event, &mut selected);
+                }
+                observed.push((
+                    select.response.layer_id,
+                    ctx.memory(|memory| memory.top_modal_layer()),
+                ));
+            },
+        )
+        .drop_without_applying_deltas();
+    }
+    assert_eq!(observed[2].0, parent_layer);
+    assert!(observed[1].1.is_some());
+    assert_ne!(observed[1].1, Some(parent_layer));
+    assert_eq!(observed[2].1, None);
+    assert_eq!(selected, None);
+}
+
+#[test]
+fn removing_the_focused_option_keeps_the_popup_open_with_an_enabled_fallback() {
+    let mut h = Harness::new();
+    h.open();
+    h.items.remove(0);
+    h.frame(vec![]);
+    assert!(h.ctx.memory(|memory| memory.top_modal_layer()).is_some());
+    assert!(h.ctx.memory(|memory| memory.focused()).is_some());
+    h.frame(vec![key(egui::Key::Enter)]);
+    assert_eq!(h.selected, Some(1));
+    assert_eq!(h.changes, 1);
+}
+
+#[test]
+fn disabling_the_focused_option_keeps_the_popup_open_with_an_enabled_fallback() {
+    let mut h = Harness::new();
+    h.open();
+    h.items[0].disabled = true;
+    h.frame(vec![]);
+    assert!(h.ctx.memory(|memory| memory.top_modal_layer()).is_some());
+    assert!(h.ctx.memory(|memory| memory.focused()).is_some());
+    h.frame(vec![key(egui::Key::Enter)]);
+    assert_eq!(h.selected, Some(1));
+    assert_eq!(h.changes, 1);
+}
+
+#[test]
+fn removing_all_options_keeps_modal_focus_and_escape_dismissal() {
+    let mut h = Harness::new();
+    h.open();
+    h.items.clear();
+    h.frame(vec![]);
+    assert!(h.ctx.memory(|memory| memory.top_modal_layer()).is_some());
+    assert!(h.ctx.memory(|memory| memory.focused()).is_some());
+    h.frame(vec![key(egui::Key::Enter), key(egui::Key::Escape)]);
+    assert_eq!(h.selected, None);
+    assert_eq!(h.changes, 0);
+    assert_eq!(h.ctx.memory(|memory| memory.top_modal_layer()), None);
+    assert_eq!(h.ctx.memory(|memory| memory.focused()), Some(h.id()));
+}
+
+#[test]
+fn disabling_all_options_keeps_modal_focus_and_escape_dismissal() {
+    let mut h = Harness::new();
+    h.open();
+    for item in &mut h.items {
+        item.disabled = true;
+    }
+    h.frame(vec![]);
+    assert!(h.ctx.memory(|memory| memory.top_modal_layer()).is_some());
+    assert!(h.ctx.memory(|memory| memory.focused()).is_some());
+    h.frame(vec![key(egui::Key::Enter), key(egui::Key::Escape)]);
+    assert_eq!(h.selected, None);
+    assert_eq!(h.changes, 0);
+    assert_eq!(h.ctx.memory(|memory| memory.top_modal_layer()), None);
+    assert_eq!(h.ctx.memory(|memory| memory.focused()), Some(h.id()));
+}
+
+#[test]
+fn a_keyboard_opened_popup_requires_a_primary_press_before_release() {
+    for secondary_press in [false, true] {
+        let mut h = Harness::new();
+        h.open();
+        let position = h.popup_text("Cherry").center();
+        let mut events = vec![egui::Event::PointerMoved(position)];
+        if secondary_press {
+            events.push(egui::Event::PointerButton {
+                pos: position,
+                button: egui::PointerButton::Secondary,
+                pressed: true,
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+        events.push(pointer(position, false));
+        h.frame(events);
+        assert_eq!(h.selected, None);
+        assert_eq!(h.changes, 0);
+        assert!(h.ctx.memory(|memory| memory.top_modal_layer()).is_some());
+        h.frame(vec![pointer(position, true), pointer(position, false)]);
+        assert_eq!(h.selected, Some(4));
+        assert_eq!(h.changes, 1);
+    }
+}
+
+#[test]
+fn option_mutation_does_not_undo_explicit_host_focus_surrender() {
+    for remove in [false, true] {
+        let mut h = Harness::new();
+        h.open();
+        let focused = h.ctx.memory(|memory| memory.focused()).unwrap();
+        h.ctx.memory_mut(|memory| memory.surrender_focus(focused));
+        if remove {
+            h.items.remove(0);
+        } else {
+            h.items[0].disabled = true;
+        }
+        h.frame(vec![key(egui::Key::Enter)]);
+        assert_eq!(h.ctx.memory(|memory| memory.focused()), None);
+        assert_eq!(h.ctx.memory(|memory| memory.top_modal_layer()), None);
+        assert_eq!(h.selected, None);
+        assert_eq!(h.changes, 0);
+    }
+}
+
+#[test]
+fn trigger_outer_shadow_does_not_fill_the_transparent_interior() {
+    let mut h = Harness::new();
+    let trigger = h.frame(vec![]).unwrap();
+    let drawings = h.drawings();
+    let Item::Shape(shadow) = &drawings[0].items()[0] else {
+        panic!("the trigger shadow must remain an ordinary drawing shape");
+    };
+    let point = egui::pos2(trigger.rect.center().x, trigger.rect.bottom() - 8.0);
+    assert_eq!(
+        mesh_sample(&untextured_mesh(&h.ctx, shadow.shape.clone()), point)[3],
+        0.0
     );
 }
