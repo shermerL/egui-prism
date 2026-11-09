@@ -33,7 +33,6 @@ test commands and read-only CI artifacts for all three desktop platforms.
 ## Required
 
 - [Strict shadcn parity for existing components](/quest/m1/shadcn-parity/README.md)
-- [Switch](/quest/m1/switch.md)
 - [Slider](/quest/m1/slider.md)
 - [Select](/quest/m1/select.md)
 - [Dialog](/quest/m1/dialog.md)
