@@ -164,3 +164,14 @@ Gallery with the pinned `reference/src/select-cases.tsx` at 100% for reference
 geometry. Use native 150% and narrow controls as additional layout checks,
 without introducing CSS zoom into the browser reference. See the
 [Gallery cases](gallery.md) for manual coverage and platform boundaries.
+
+The implementation at `2e9a0fb` passed the complete local check, 48 Select
+behavior tests, and all six ignored Gallery adapter tests on macOS. Actual
+macOS/Metal observation covered light/dark triggers and popups, both sizes,
+disabled/invalid states, tinted backgrounds, independent reordered values,
+outside-click shielding, keyboard navigation, empty/all-disabled lists,
+long-list scrolling, and native 150% scaling with narrow content. The pinned
+shadcn browser fixture supplied the visual and interaction reference at 100%.
+Windows/Linux GUI and assistive-technology acceptance remain unverified.
+The narrow Gallery's standard egui configuration labels still wrap poorly;
+that presentation work belongs to the existing native Gallery Quest.
