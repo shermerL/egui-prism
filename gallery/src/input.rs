@@ -1,7 +1,7 @@
 //! Pass-local routing for the Gallery's explicit controls and scroll shells.
 use crate::{
-    Case, Gallery, buttons, checkboxes, compositing, egui, interaction, selects, sliders, switches,
-    text_inputs,
+    Case, Gallery, buttons, checkboxes, compositing, dialogs, egui, interaction, selects, sliders,
+    switches, text_inputs,
 };
 use egui_prism::switch::{Switch, SwitchRegistration};
 use std::{collections::HashSet, sync::Arc};
@@ -19,6 +19,7 @@ pub(super) enum Control {
     Slider(sliders::Control),
     Switch(switches::Control),
     Select(selects::Control),
+    Dialog(dialogs::Control),
     Interaction(interaction::Control),
     Compositing(compositing::Control),
     Link(&'static str, &'static str),
@@ -34,6 +35,7 @@ impl Control {
                 | Self::Slider(sliders::Control::Value(_) | sliders::Control::Focus(_))
                 | Self::Switch(switches::Control::Count(_))
                 | Self::Select(selects::Control::Count(_) | selects::Control::OutsideCount)
+                | Self::Dialog(dialogs::Control::Count(_) | dialogs::Control::OutsideCount)
                 | Self::Interaction(
                     interaction::Control::Count(_) | interaction::Control::Focus(_)
                 )
@@ -80,6 +82,12 @@ impl Control {
                 | selects::Control::Empty
                 | selects::Control::AllDisabled
                 | selects::Control::Tinted,
+            )
+            | Self::Dialog(
+                dialogs::Control::Long
+                | dialogs::Control::Reverse
+                | dialogs::Control::KeepOpen
+                | dialogs::Control::Tinted,
             )
             | Self::Interaction(
                 interaction::Control::Disabled
@@ -508,6 +516,7 @@ impl Gallery {
             Control::Slider(control) => self.sliders.stock(ui, *control).into(),
             Control::Switch(control) => self.switches.control(ui, *control),
             Control::Select(control) => self.selects.control(ui, *control),
+            Control::Dialog(control) => self.dialogs.control(ui, *control),
             Control::Interaction(control) => {
                 self.interaction
                     .control(ui, *control, self.case == Case::Layout)

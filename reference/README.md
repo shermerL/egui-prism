@@ -39,3 +39,8 @@ long lists with disabled items, empty/all-disabled lists, missing selected
 values, outside-action blocking, light/dark themes and tinted surfaces. Use
 actual browser zoom for scaled comparisons. This fixture does not use CSS zoom,
 which changes the coordinate mapping of Radix item-aligned positioning.
+
+The `/?dialogs` fixture compares controlled A/B modal instances, neutral
+dismissal, caller actions, long scrolling bodies, instance reversal, light/dark
+themes and tinted backgrounds. The caller constrains body height to fit the
+viewport; the pinned Dialog source is unchanged.

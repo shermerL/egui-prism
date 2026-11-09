@@ -1,7 +1,8 @@
 //! Shared foundation for egui-prism components.
 //!
 //! Themes are in [`theme`], buttons in [`button`], editors in [`text_input`],
-//! checkboxes in [`checkbox`], and selects in [`select`]. Applications own their
+//! checkboxes in [`checkbox`], selects in [`select`], and dialogs in [`dialog`].
+//! Applications own their
 //! window, renderer, values, and resource lifecycles.
 //!
 //! The re-export keeps applications and the gallery on the same egui types:
@@ -27,5 +28,6 @@ pub mod checkbox;
 pub mod switch;
 
 pub mod compositing;
+pub mod dialog;
 pub mod select;
 pub mod slider;
