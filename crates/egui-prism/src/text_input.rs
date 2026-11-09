@@ -63,8 +63,18 @@ impl<'theme, 'value> TextInput<'theme, 'value> {
     }
 }
 
-impl egui::Widget for TextInput<'_, '_> {
-    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
+/// Editor and visible text sources from one layout, for explicit host routing.
+pub struct TextInputOutput {
+    /// The editor's interaction response.
+    pub response: egui::Response,
+    /// The visible label registered in the same layout.
+    pub label: egui::Response,
+    /// The optional caller-provided error text source.
+    pub error: Option<egui::Response>,
+}
+impl TextInput<'_, '_> {
+    /// Lay out the editor and expose its text sources for host-owned removal.
+    pub fn show(self, ui: &mut egui::Ui) -> TextInputOutput {
         let id = self
             .id
             .unwrap_or_else(|| ui.next_auto_id().with("text-input"));
@@ -109,8 +119,8 @@ impl egui::Widget for TextInput<'_, '_> {
                     egui::StrokeKind::Inside,
                 );
             }
-            if let Some(error) = self.error {
-                ui.label(
+            let error = if let Some(error) = self.error {
+                let error_response = ui.label(
                     egui::RichText::new(&error)
                         .small()
                         .color(self.theme.colors.destructive.background),
@@ -119,9 +129,22 @@ impl egui::Widget for TextInput<'_, '_> {
                     node.set_description(error);
                     node.set_invalid(egui::accesskit::Invalid::True);
                 });
+                Some(error_response)
+            } else {
+                None
+            };
+            TextInputOutput {
+                response,
+                label,
+                error,
             }
-            response
         })
         .inner
+    }
+}
+
+impl egui::Widget for TextInput<'_, '_> {
+    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
+        self.show(ui).response
     }
 }
