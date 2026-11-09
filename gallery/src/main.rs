@@ -159,6 +159,11 @@ impl Gallery {
                         self.buttons.activated(control);
                     }
                     response
+                } else if let Some(registration) = &entry.checkbox {
+                    let Control::Checkbox(control) = control else {
+                        unreachable!("Checkbox registration control");
+                    };
+                    self.checkboxes.handle(control, registration, &event)
                 } else if let Some(registration) = &entry.switch {
                     let Control::Switch(control) = control else {
                         unreachable!("Switch registration control");
