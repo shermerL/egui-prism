@@ -32,3 +32,10 @@ scales. Its explicit 16-pixel minimum matches the Rust intrinsic thumb footprint
 Open `/?compositing` for real CSS group-opacity samples over multiple backgrounds,
 opaque/translucent images, clipping, nested opacity, 100%/150% scale, and all pinned
 Button roles. This fixture does not alter the pinned source components.
+
+The `/?selects` fixture isolates item-aligned Select comparisons: independent
+values and change counts, default/small triggers, disabled and invalid states,
+long lists with disabled items, empty/all-disabled lists, missing selected
+values, outside-action blocking, light/dark themes and tinted surfaces. Use
+actual browser zoom for scaled comparisons. This fixture does not use CSS zoom,
+which changes the coordinate mapping of Radix item-aligned positioning.
