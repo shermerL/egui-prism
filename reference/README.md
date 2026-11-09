@@ -40,6 +40,11 @@ values, outside-action blocking, light/dark themes and tinted surfaces. Use
 actual browser zoom for scaled comparisons. This fixture does not use CSS zoom,
 which changes the coordinate mapping of Radix item-aligned positioning.
 
+The `/?inputs` fixture compares caller-controlled text, placeholder, selection,
+invalid and disabled states, reordering and narrow columns. Compare viewport widths
+on either side of 768 pixels for the input typography breakpoint. Unicode inspection
+separates committed text from platform font coverage during native IME checks.
+
 The `/?checkboxes` fixture isolates the boolean Checkbox with controlled values
 and counters, invalid and disabled states, reordered instances, long labels,
 three compositing backgrounds, light/dark themes, and 320px content. It renders

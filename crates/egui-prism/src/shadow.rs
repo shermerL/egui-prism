@@ -2,9 +2,14 @@
 
 use crate::egui;
 
-pub(crate) fn outer(ctx: &egui::Context, rect: egui::Rect, radius: u8) -> egui::Shape {
+pub(crate) fn outer(
+    ctx: &egui::Context,
+    rect: egui::Rect,
+    radius: impl Into<egui::CornerRadius>,
+) -> egui::Shape {
     use egui::epaint::{Mesh, Primitive, RoundedRect, Vertex, tessellator::path};
 
+    let radius = radius.into();
     let mut shadow = Mesh::default();
     let shape: egui::Shape = egui::epaint::Shadow {
         offset: [0, 1],
@@ -24,7 +29,7 @@ pub(crate) fn outer(ctx: &egui::Context, rect: egui::Rect, radius: u8) -> egui::
         shadow.append(part);
     }
     let mut hole = Vec::new();
-    path::rounded_rectangle(&mut hole, RoundedRect::new(rect, f32::from(radius)));
+    path::rounded_rectangle(&mut hole, RoundedRect::new(rect, radius));
 
     // CSS outer shadows exclude the unshifted rounded border-box, not its fill.
     // Keep cut colors premultiplied and unrounded until the final mesh vertices.
