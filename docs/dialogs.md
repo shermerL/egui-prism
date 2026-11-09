@@ -77,6 +77,27 @@ setting does not resize a modal's viewport.
 
 ## Evidence and limits
 
-Implementation and automated validation are in progress. No native component,
-Windows/Linux desktop, screen-reader or browser-reference parity acceptance is
-claimed by a successful build or a collecting compositing backend.
+On 2026-11-10, the native Gallery was exercised on macOS with the Metal backend
+against the pinned Chrome reference fixture. Observed main flows included
+independent A/B instances, Apply without closing, Done, Escape, X, primary
+backdrop dismissal, ignored context clicks, caller-declined dismissal, keyboard
+focus and restoration, background action isolation, dark long-content scrolling,
+and a narrowed native window with centered headings and vertical actions.
+
+The desktop short panel measured 512 by 148 logical points; the 500-point browser
+viewport produced a 468 by 192 panel. The native window at approximately 501
+logical points showed the corresponding responsive layout. CSS source and
+computed styles establish the 200 ms content and 150 ms overlay easing contracts;
+settled screenshots are not frame-by-frame animation measurements.
+
+Twenty public-API Dialog tests cover ordered dispatch, controlled close policy,
+focus, viewport/scroll behavior, drawing ownership and host errors. Workspace
+tests, strict clippy, documentation and the Gallery/reference builds passed.
+Default workspace tests leave native-adapter tests explicitly ignored; this
+observation does not claim those ignored suites ran.
+
+Ordinary direct-painting egui controls remain outside group opacity isolation.
+Without `theme::install_fonts`, the title uses the host proportional font instead
+of claiming a semibold face. Windows/Linux desktop behavior, screen readers,
+real IME interaction inside dialog bodies, and pixel-identical scrollbar or
+animation rasterization remain unverified.

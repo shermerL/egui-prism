@@ -94,7 +94,7 @@ These are known gaps, not an exhaustive acceptance result.
 | Switch | Default 32 by 18.4 track and 16-point thumb; small 24 by 14 and 12-point thumb; exact translation/states | 36 by 20 track, approximate colors and outline | Existing Switch Quest/PR |
 | Slider | 6-point rounded rail, 16-point round white thumb, primary fill, hover/focus ring and reference keyboard/value mapping | Rectangular egui handle, blue fill, egui geometry and keyboard mapping | Existing Slider Quest/PR |
 | Select | Reference popup geometry, states, focus and dismissal | Previously absent; now controlled ordered-input implementation | [Select evidence and limits](selects.md#evidence-and-limits) |
-| Dialog | Reference modal geometry, states, focus and dismissal | No completed implementation | Existing Quest |
+| Dialog | Reference modal geometry, states, focus and dismissal | Controlled modal shell with scoped explicit drawing and bounded content | [Dialog evidence and limits](dialogs.md#evidence-and-limits) |
 | Gallery | Consistent reference typography and component presentation | Default egui harness controls dominate the visible page | Foundation and Gallery Quests |
 
 The original behavior tests remain useful regression evidence, but they must not

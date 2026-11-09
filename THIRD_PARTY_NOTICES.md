@@ -377,10 +377,11 @@ Sources:
 
 - https://www.npmjs.com/package/@radix-ui/react-slider/v/1.3.6
 - https://www.npmjs.com/package/@radix-ui/react-select/v/2.2.6
+- https://www.npmjs.com/package/@radix-ui/react-dialog/v/1.1.15
 
 Slider step, pointer and thumb-position rules and Select popup placement,
-keyboard navigation, typeahead and pointer-selection rules are adapted from
-these primitives.
+keyboard navigation, typeahead and pointer-selection rules, and Dialog dismissal
+and focus-presence behavior are adapted from these primitives.
 
 MIT License
 
@@ -404,8 +405,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-## Lucide Check icon
+## Lucide Check and X icons
 
-The checkbox check path follows the Lucide Check icon bundled by the pinned
-reference fixture. The complete Lucide and underlying Feather notices are
+The Checkbox check path and Dialog close paths follow the Lucide Check and X
+icons bundled by the pinned reference fixture. The complete Lucide and underlying Feather notices are
 retained in [reference/LICENSE.lucide](reference/LICENSE.lucide).
