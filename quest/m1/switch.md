@@ -18,5 +18,5 @@ do not satisfy this requirement.
 
 ## Waiting
 
-- Implementation: migrate Switch to the merged ordered-input and group-compositing capabilities, then validate its own reference behavior and native rendering. Shared capability checks are not component acceptance.
-- Integration: the shared Gallery phase/navigation owner must connect the Switch case before final native acceptance.
+- Gallery integration: the shared phase and navigation host must register, route and paint the Switch case. Verify the case is reachable and receives ordered input in the native Gallery.
+- Native acceptance: compare the wired Switch case with the pinned browser reference and record each observed platform and backend.

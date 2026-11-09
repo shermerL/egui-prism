@@ -1,10 +1,37 @@
 //! Public switch interaction, identity, layout, and host-style boundaries.
 
 use egui_prism::{
+    compositing::{Group, Item},
     egui,
     switch::{Switch, SwitchSize},
     theme::Theme,
 };
+
+fn ordered_context() -> egui::Context {
+    let context = egui::Context::default();
+    context.options_mut(|options| {
+        options.ordered_input = true;
+        options.max_passes = std::num::NonZeroUsize::MIN;
+    });
+    context
+}
+
+fn phase_ui(ui: &mut egui::Ui) -> egui::Ui {
+    ui.new_child(
+        egui::UiBuilder::new()
+            .scope_id(egui::Id::unique("switch-test-layout"))
+            .max_rect(ui.max_rect()),
+    )
+}
+
+fn group_shapes(group: &Group, visit: &mut impl FnMut(&egui::Shape)) {
+    for item in group.items() {
+        match item {
+            Item::Group(child) => group_shapes(child, visit),
+            Item::Shape(shape) => visit(&shape.shape),
+        }
+    }
+}
 
 struct Harness {
     context: egui::Context,
@@ -22,11 +49,13 @@ struct Harness {
     size: SwitchSize,
     invalid: bool,
     tree: Option<egui::accesskit::TreeUpdate>,
+    drawings: Vec<Group>,
+    cover: Option<egui::Rect>,
 }
 
 impl Harness {
     fn new() -> Self {
-        let context = egui::Context::default();
+        let context = ordered_context();
         context.enable_accesskit();
         Self {
             context,
@@ -44,63 +73,97 @@ impl Harness {
             size: SwitchSize::Default,
             invalid: false,
             tree: None,
+            drawings: Vec::new(),
+            cover: None,
         }
     }
 
     fn frame(&mut self, events: Vec<egui::Event>) -> [egui::Response; 2] {
         self.time += 1.0 / 60.0;
+        let context = self.context.clone();
+        let order = if self.reversed { [1, 0] } else { [0, 1] };
         let mut responses = None;
-        let mut output = self.context.run_ui(egui::RawInput {
-            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(self.width, 800.0))),
-            events, time: Some(self.time), ..Default::default()
-        }, |ui| {
-            responses = Some((if self.reversed { [1, 0] } else { [0, 1] }).map(|index| {
-                let id = ui.make_persistent_id(index);
-                ui.scope_builder(egui::UiBuilder::new().scope_id(id), |ui| {
-                    let label = if self.long { "A deliberately long switch label with enough words to wrap on multiple lines in a narrow host" } else { "Enable this option" };
-                    let response = ui.add_enabled(self.enabled, Switch::new(&self.theme, &mut self.values[index], label).size(self.size).invalid(self.invalid));
-                    if response.changed() { self.changes[index] += 1; }
-                    response
-                }).inner
-            }));
-        });
-        self.circles = output
-            .shapes
-            .iter()
-            .filter_map(|s| {
-                if let egui::Shape::Circle(circle) = &s.shape {
-                    Some(*circle)
-                } else {
-                    None
+        self.drawings.clear();
+        let mut output = context.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(self.width, 800.0),
+                )),
+                events,
+                time: Some(self.time),
+                ..Default::default()
+            },
+            |ui| {
+                context.begin_input();
+                let mut register = phase_ui(ui);
+                let registrations = order.map(|index| {
+                    let enabled = self.enabled;
+                    let switch = self.control(index);
+                    register
+                        .add_enabled_ui(enabled, |ui| switch.register(ui))
+                        .inner
+                });
+                if let Some(cover) = self.cover {
+                    register.interact(cover, egui::Id::unique("cover"), egui::Sense::click());
                 }
-            })
-            .collect();
-        self.tracks = output
-            .shapes
-            .iter()
-            .filter_map(|s| {
-                if let egui::Shape::Rect(rect) = &s.shape {
-                    (rect.blur_width == 0.0 && rect.fill != egui::Color32::TRANSPARENT)
-                        .then(|| rect.clone())
-                } else {
-                    None
+                while let Some(event) = context.next_input_event() {
+                    if let Some(slot) = registrations
+                        .iter()
+                        .position(|r| Some(r.response.id) == event.target)
+                    {
+                        let index = order[slot];
+                        if registrations[slot]
+                            .handle(&event, &mut self.values[index])
+                            .changed()
+                        {
+                            self.changes[index] += 1;
+                        }
+                    }
+                    for registration in &registrations {
+                        registration.cancel_unfocused();
+                    }
                 }
-            })
-            .collect();
-        self.outlines = output
-            .shapes
-            .iter()
-            .filter_map(|s| {
-                if let egui::Shape::Rect(rect) = &s.shape {
-                    Some(rect.clone())
-                } else {
-                    None
+                let mut draw = phase_ui(ui);
+                responses = Some(order.map(|index| {
+                    let enabled = self.enabled;
+                    let switch = self.control(index);
+                    let output = draw.add_enabled_ui(enabled, |ui| switch.show(ui)).inner;
+                    self.drawings.push(output.drawing.unwrap());
+                    output.response
+                }));
+            },
+        );
+        self.circles.clear();
+        self.tracks.clear();
+        self.outlines.clear();
+        for group in &self.drawings {
+            group_shapes(group, &mut |shape| match shape {
+                egui::Shape::Circle(circle) => self.circles.push(*circle),
+                egui::Shape::Rect(rect) => {
+                    if rect.blur_width == 0.0 && rect.fill != egui::Color32::TRANSPARENT {
+                        self.tracks.push(rect.clone());
+                    }
+                    self.outlines.push(rect.clone());
                 }
-            })
-            .collect();
+                _ => {}
+            });
+        }
         self.tree = output.platform_output.accesskit_update.take();
         output.drop_without_applying_deltas();
         responses.unwrap()
+    }
+
+    fn control(&self, index: usize) -> Switch<'_, '_> {
+        let label = if self.long {
+            "A deliberately long switch label with enough words to wrap on multiple lines in a narrow host"
+        } else {
+            "Enable this option"
+        };
+        Switch::new(&self.theme, &self.values[index], label)
+            .id(egui::Id::unique(("switch-test", index)))
+            .size(self.size)
+            .invalid(self.invalid)
     }
 
     fn click(&mut self, pos: egui::Pos2) {
@@ -207,16 +270,22 @@ fn wrapped_label_remains_in_the_same_hit_target() {
 
 #[test]
 fn component_style_is_local_to_the_call() {
-    let context = egui::Context::default();
+    let context = ordered_context();
     let theme = Theme::dark();
-    let mut value = false;
+    let value = false;
     let mut unchanged = false;
     let output = context.run_ui(Default::default(), |ui| {
         ui.style_mut().visuals.override_text_color = Some(egui::Color32::RED);
         ui.spacing_mut().interact_size.y = 47.0;
         let before = ui.style().clone();
-        ui.add(Switch::new(&theme, &mut value, "Keep the host style"));
-        unchanged = ui.style().as_ref() == before.as_ref();
+        context.begin_input();
+        let mut registration = phase_ui(ui);
+        drop(Switch::new(&theme, &value, "Keep the host style").register(&mut registration));
+        while context.next_input_event().is_some() {}
+        let mut paint = phase_ui(ui);
+        drop(Switch::new(&theme, &value, "Keep the host style").show(&mut paint));
+        unchanged = registration.style().as_ref() == before.as_ref()
+            && paint.style().as_ref() == before.as_ref();
     });
     output.drop_without_applying_deltas();
     assert!(unchanged);
@@ -225,8 +294,8 @@ fn component_style_is_local_to_the_call() {
 #[test]
 #[should_panic(expected = "Switch requires a nonempty label")]
 fn empty_label_is_rejected() {
-    let mut checked = false;
-    let _ = Switch::new(&Theme::light(), &mut checked, "  ");
+    let checked = false;
+    let _ = Switch::new(&Theme::light(), &checked, "  ");
 }
 
 #[test]
@@ -271,9 +340,9 @@ fn painted_thumb_and_accessibility_follow_the_value_at_different_sizes() {
 #[test]
 fn aligned_labels_stay_beside_the_track_and_inside_the_hit_target() {
     for align in [egui::Align::Center, egui::Align::Max] {
-        let context = egui::Context::default();
+        let context = ordered_context();
         let theme = Theme::light();
-        let mut value = false;
+        let value = false;
         let mut response = None;
         let mut text_bounds = None;
         for _ in 0..2 {
@@ -285,13 +354,24 @@ fn aligned_labels_stay_beside_the_track_and_inside_the_hit_target() {
                     240.0,
                 );
                 job.halign = align;
-                response = Some(ui.add(Switch::new(&theme, &mut value, job)));
+                context.begin_input();
+                let id = egui::Id::unique("aligned switch");
+                let mut layout = phase_ui(ui);
+                drop(
+                    Switch::new(&theme, &value, job.clone())
+                        .id(id)
+                        .register(&mut layout),
+                );
+                while context.next_input_event().is_some() {}
+                let mut paint = phase_ui(ui);
+                let output = Switch::new(&theme, &value, job).id(id).show(&mut paint);
+                response = Some(output.response);
+                group_shapes(&output.drawing.unwrap(), &mut |shape| {
+                    if let egui::Shape::Text(text) = shape {
+                        text_bounds = Some(text.galley.rect.translate(text.pos.to_vec2()));
+                    }
+                });
             });
-            for shape in &output.shapes {
-                if let egui::Shape::Text(text) = &shape.shape {
-                    text_bounds = Some(text.galley.rect.translate(text.pos.to_vec2()));
-                }
-            }
             output.drop_without_applying_deltas();
         }
         let response = response.unwrap();
@@ -408,7 +488,7 @@ fn animation_moves_through_intermediate_frames_and_reverses_from_current_positio
 }
 
 #[test]
-fn dark_thumb_changes_immediately_and_disabled_shapes_reach_half_opacity() {
+fn dark_thumb_changes_immediately_and_disabled_group_reaches_half_opacity() {
     let mut h = Harness::new();
     h.theme = Theme::dark();
     h.frame(vec![]);
@@ -421,10 +501,15 @@ fn dark_thumb_changes_immediately_and_disabled_shapes_reach_half_opacity() {
     for _ in 0..12 {
         h.frame(vec![]);
     }
-    assert_eq!(
-        h.circles[0].fill,
-        h.theme.colors.primary.foreground.gamma_multiply(0.5)
-    );
+    assert_eq!(h.circles[0].fill, h.theme.colors.primary.foreground);
+    for drawing in &h.drawings {
+        assert_eq!(drawing.opacity(), 1.0);
+        let [Item::Group(control), Item::Shape(label)] = drawing.items() else {
+            panic!("expected isolated control and independent label");
+        };
+        assert_eq!(control.opacity(), 0.5);
+        assert!(matches!(label.shape, egui::Shape::Text(_)));
+    }
     assert_eq!(h.changes, [0, 0]);
 }
 
@@ -510,7 +595,7 @@ fn two_complete_pointer_clicks_in_one_frame_restore_the_value() {
         pointer_event(pos, false),
     ]);
     assert_eq!(h.values, [false, false]);
-    assert_eq!(h.changes, [1, 0]);
+    assert_eq!(h.changes, [2, 0]);
 }
 
 #[test]
@@ -568,7 +653,10 @@ fn disappearing_during_a_pointer_press_cancels_the_gesture() {
                 time: Some(h.time),
                 ..Default::default()
             },
-            |_| {},
+            |ui| {
+                ui.ctx().begin_input();
+                while ui.ctx().next_input_event().is_some() {}
+            },
         )
         .drop_without_applying_deltas();
     let restored = h.frame(vec![]);
@@ -599,39 +687,127 @@ fn arrow_handling_does_not_reclaim_focus_released_by_the_host() {
 
 #[test]
 fn a_covering_widget_in_the_same_layer_blocks_pointer_activation() {
-    let context = egui::Context::default();
-    let theme = Theme::light();
-    let mut checked = false;
-    let mut changes = 0;
-    let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(180.0, 20.0));
-    let pos = egui::pos2(12.0, 10.0);
-    for events in [
-        vec![],
-        vec![],
-        vec![
-            egui::Event::PointerMoved(pos),
-            pointer_event(pos, true),
-            pointer_event(pos, false),
-        ],
-    ] {
-        context
-            .run_ui(
-                egui::RawInput {
-                    events,
-                    ..Default::default()
-                },
-                |ui| {
-                    if ui
-                        .put(rect, Switch::new(&theme, &mut checked, "Covered switch"))
-                        .changed()
-                    {
-                        changes += 1;
-                    }
-                    ui.put(rect, egui::Button::new("Covering host widget"));
-                },
-            )
-            .drop_without_applying_deltas();
-    }
-    assert!(!checked);
-    assert_eq!(changes, 0);
+    let mut h = Harness::new();
+    let responses = h.frame(vec![]);
+    h.cover = Some(responses[0].rect);
+    h.click(responses[0].rect.center());
+    assert_eq!(h.changes, [0, 0]);
+}
+
+#[test]
+fn a_click_only_cover_blocks_a_long_held_switch_release() {
+    let mut h = Harness::new();
+    let responses = h.frame(vec![]);
+    let pos = responses[0].rect.left_center() + egui::vec2(8.0, 0.0);
+    h.frame(vec![pointer_event(pos, true)]);
+    h.time += 1.0;
+    h.cover = Some(responses[0].rect);
+    h.frame(vec![pointer_event(pos, false)]);
+    assert_eq!(h.changes, [0, 0]);
+}
+
+#[test]
+fn rounded_track_corner_does_not_activate_the_switch() {
+    let mut h = Harness::new();
+    let response = h.frame(vec![])[0].clone();
+    h.click(response.rect.left_top() + egui::vec2(1.0, 1.5));
+    assert_eq!(h.changes, [0, 0]);
+    h.click(response.rect.left_center() + egui::vec2(1.0, 0.0));
+    assert_eq!(h.changes, [1, 0]);
+}
+
+#[test]
+fn space_armed_before_same_batch_focus_loss_does_not_activate_after_refocus() {
+    let mut h = Harness::new();
+    let response = h.frame(vec![])[0].clone();
+    response.request_focus();
+    let tab = |pressed, shift| egui::Event::Key {
+        key: egui::Key::Tab,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers {
+            shift,
+            ..egui::Modifiers::NONE
+        },
+    };
+    h.frame(vec![
+        key_event(egui::Key::Space, true, false),
+        tab(true, false),
+        tab(false, false),
+        tab(true, true),
+        key_event(egui::Key::Space, false, false),
+    ]);
+    assert_eq!(h.context.memory(|m| m.focused()), Some(response.id));
+    assert_eq!(h.changes, [0, 0]);
+}
+
+#[test]
+fn clicks_on_separate_instances_in_one_frame_use_each_event_position() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let r = h.frame(vec![]);
+    let a = r[0].rect.center();
+    let b = r[1].rect.center();
+    h.frame(vec![
+        egui::Event::PointerMoved(a),
+        pointer_event(a, true),
+        pointer_event(a, false),
+        egui::Event::PointerMoved(b),
+        pointer_event(b, true),
+        pointer_event(b, false),
+    ]);
+    assert_eq!(h.values, [true, true]);
+    assert_eq!(h.changes, [1, 1]);
+    assert_eq!(h.context.memory(|m| m.focused()), Some(r[1].id));
+}
+
+#[test]
+fn moving_outside_after_a_completed_click_does_not_discard_it() {
+    let mut h = Harness::new();
+    h.frame(vec![]);
+    let r = h.frame(vec![]);
+    let pos = r[0].rect.center();
+    h.frame(vec![
+        egui::Event::PointerMoved(pos),
+        pointer_event(pos, true),
+        pointer_event(pos, false),
+        egui::Event::PointerMoved(egui::pos2(300.0, 700.0)),
+    ]);
+    assert_eq!(h.values, [true, false]);
+    assert_eq!(h.changes, [1, 0]);
+}
+
+#[test]
+fn pointer_release_does_not_reclaim_focus_released_by_the_host() {
+    let mut h = Harness::new();
+    let response = h.frame(vec![])[0].clone();
+    let pos = response.rect.left_center() + egui::vec2(12.0, 0.0);
+    h.frame(vec![pointer_event(pos, true)]);
+    assert_eq!(h.context.memory(|m| m.focused()), Some(response.id));
+    response.surrender_focus();
+    h.frame(vec![pointer_event(pos, false)]);
+    assert_eq!(h.changes, [1, 0]);
+    assert_eq!(h.context.memory(|m| m.focused()), None);
+}
+
+#[test]
+fn accesskit_click_changes_the_enabled_switch_once() {
+    let mut h = Harness::new();
+    let owner = h.frame(vec![])[0].id;
+    let click = || {
+        egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+            action: egui::accesskit::Action::Click,
+            target_tree: egui::accesskit::TreeId::ROOT,
+            target_node: owner.accesskit_id(),
+            data: None,
+        })
+    };
+    h.frame(vec![click()]);
+    assert_eq!(h.values, [true, false]);
+    assert_eq!(h.changes, [1, 0]);
+    h.enabled = false;
+    h.frame(vec![click()]);
+    assert_eq!(h.values, [true, false]);
+    assert_eq!(h.changes, [1, 0]);
 }
