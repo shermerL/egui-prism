@@ -1,5 +1,7 @@
 # egui-prism
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 A Rust component library implementing shadcn/ui designs with egui.
 
 [egui](https://github.com/emilk/egui) is an immediate-mode GUI library written in
