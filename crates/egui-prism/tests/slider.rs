@@ -28,6 +28,7 @@ impl Harness {
     fn new() -> Self {
         let context = egui::Context::default();
         context.enable_accesskit();
+        context.options_mut(|o| o.ordered_input = true);
         Self {
             context,
             theme: Theme::light(),
@@ -55,6 +56,7 @@ impl Harness {
         self.time += 1.0 / 60.0;
         self.context.set_zoom_factor(self.zoom);
         let mut responses = None;
+        let mut shapes = Vec::new();
         let mut output = self.context.run_ui(
             egui::RawInput {
                 screen_rect: Some(egui::Rect::from_min_size(
@@ -66,6 +68,7 @@ impl Harness {
                 ..Default::default()
             },
             |ui| {
+                self.context.begin_input();
                 if let Some(id) = self.release_focus_before_widgets {
                     ui.memory_mut(|memory| memory.surrender_focus(id));
                 }
@@ -82,37 +85,64 @@ impl Harness {
                 if self.navigation_neighbor {
                     let _ = ui.button("Neighbor");
                 }
-                responses = Some((if self.reversed { [1, 0] } else { [0, 1] }).map(|index| {
+                let order = if self.reversed { [1, 0] } else { [0, 1] };
+                let registered = order.map(|index| {
                     let id = ui.make_persistent_id(index);
                     ui.scope_builder(egui::UiBuilder::new().scope_id(id), |ui| {
-                        let response = ui.add_enabled(
-                            self.enabled,
+                        ui.add_enabled_ui(self.enabled, |ui| {
                             Slider::new(
                                 &self.theme,
-                                &mut self.values[index],
                                 "A labeled slider with enough words to wrap in a narrow host",
                             )
                             .range(self.range.clone())
-                            .step_by(self.step),
-                        );
-                        if response.changed() {
-                            self.changes[index] += 1;
-                        }
-                        response
+                            .step_by(self.step)
+                            .register(ui, self.values[index])
+                        })
+                        .inner
                     })
                     .inner
-                }));
+                });
+                while let Some(event) = self.context.next_input_event() {
+                    for (index, slider) in order.iter().zip(&registered) {
+                        if event.target == Some(slider.id())
+                            && slider
+                                .handle(ui, &mut self.values[*index], &event)
+                                .changed()
+                        {
+                            self.changes[*index] += 1;
+                        }
+                    }
+                }
+                responses = Some(
+                    registered
+                        .into_iter()
+                        .zip(order)
+                        .map(|(slider, index)| {
+                            let output = slider.finish(ui, self.values[index]);
+                            if let Some(group) = output.drawing {
+                                shapes.extend(group.items().iter().filter_map(|item| match item {
+                                    egui_prism::compositing::Item::Shape(shape) => {
+                                        Some(shape.clone())
+                                    }
+                                    _ => None,
+                                }));
+                            }
+                            output.response
+                        })
+                        .collect::<Vec<_>>()
+                        .try_into()
+                        .unwrap(),
+                );
             },
         );
-        self.handles = output
-            .shapes
+        self.handles = shapes
             .iter()
             .filter_map(|s| match &s.shape {
                 egui::Shape::Circle(c) if c.radius == 7.5 => Some(c.center),
                 _ => None,
             })
             .collect();
-        self.shapes = output.shapes.clone();
+        self.shapes = shapes;
         self.tree = output.platform_output.accesskit_update.take();
         output.drop_without_applying_deltas();
         responses.unwrap()
@@ -273,11 +303,15 @@ fn narrow_rail_and_wrapped_label_preserve_host_style() {
     assert!(r[0].rect.right() <= h.width);
     let context = egui::Context::default();
     let theme = Theme::dark();
-    let mut value = 0.5;
+    let value = 0.5;
+    context.options_mut(|o| o.ordered_input = true);
     let output = context.run_ui(Default::default(), |ui| {
+        context.begin_input();
         ui.spacing_mut().slider_width = 277.0;
         let before = ui.style().clone();
-        ui.add(Slider::new(&theme, &mut value, "Amount"));
+        let slider = Slider::new(&theme, "Amount").register(ui, value);
+        while context.next_input_event().is_some() {}
+        let _ = slider.finish(ui, value);
         assert_eq!(ui.style().as_ref(), before.as_ref());
     });
     output.drop_without_applying_deltas();
@@ -293,8 +327,7 @@ fn invalid_configuration_is_rejected() {
     ] {
         assert!(
             std::panic::catch_unwind(|| {
-                let mut value = 0.0;
-                let _ = Slider::new(&Theme::light(), &mut value, "Amount")
+                let _ = Slider::new(&Theme::light(), "Amount")
                     .range(range)
                     .step_by(step);
             })
@@ -565,4 +598,224 @@ fn capture_release_preserves_host_surrender_until_a_new_press() {
         h.pointer(pos, true);
         assert!(h.context.memory(|memory| memory.has_focus(id)));
     }
+}
+
+fn key_event(key: egui::Key, modifiers: egui::Modifiers) -> egui::Event {
+    egui::Event::Key {
+        key,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers,
+    }
+}
+fn pointer_event(pos: egui::Pos2, pressed: bool) -> egui::Event {
+    egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    }
+}
+
+#[test]
+fn navigation_and_arrows_edit_only_the_current_owner_in_one_pass() {
+    use egui::{Key, Modifiers};
+    for passes in [1, 2] {
+        let mut h = Harness::new();
+        h.context
+            .options_mut(|o| o.max_passes = passes.try_into().unwrap());
+        h.frame(vec![
+            key_event(Key::Tab, Modifiers::NONE),
+            key_event(Key::ArrowRight, Modifiers::NONE),
+            key_event(Key::Tab, Modifiers::NONE),
+            key_event(Key::ArrowRight, Modifiers::NONE),
+        ]);
+        assert_eq!(h.values, [5.0, 5.0]);
+        h.frame(vec![
+            key_event(Key::Tab, Modifiers::SHIFT),
+            key_event(Key::ArrowRight, Modifiers::NONE),
+        ]);
+        assert_eq!(h.values, [10.0, 5.0]);
+        let responses = h.frame(vec![]);
+        responses[1].request_focus();
+        h.frame(vec![key_event(Key::ArrowRight, Modifiers::NONE)]);
+        assert_eq!(h.values, [10.0, 10.0]);
+        assert_eq!(h.changes, [2, 2]);
+    }
+}
+
+#[test]
+fn moved_thumb_is_registered_before_the_next_gesture() {
+    let mut h = Harness::new();
+    let rail = h.frame(vec![])[0].rect;
+    let at_end = rail.right_center();
+    let inset_end = at_end - egui::vec2(8.0, 0.0);
+    h.frame(vec![
+        pointer_event(at_end, true),
+        pointer_event(at_end, false),
+        pointer_event(inset_end, true),
+        pointer_event(inset_end, false),
+        key_event(egui::Key::ArrowLeft, egui::Modifiers::NONE),
+    ]);
+    assert_eq!(h.values[0], 95.0);
+    assert_eq!(
+        h.changes[0], 2,
+        "a thumb press must not jump to its inset coordinate"
+    );
+}
+
+#[test]
+fn tab_restores_keyboard_ring_after_pointer_focus() {
+    let mut h = Harness::new();
+    let r = h.frame(vec![]);
+    h.click(r[0].rect.center());
+    h.key(egui::Key::Tab);
+    h.modified_key(egui::Key::Tab, egui::Modifiers::SHIFT);
+    for _ in 0..12 {
+        h.frame(vec![]);
+    }
+    assert!(
+        h.shapes
+            .iter()
+            .any(|s| matches!(&s.shape, egui::Shape::Circle(c) if c.stroke.width == 4.0))
+    );
+}
+
+#[test]
+fn lost_pointer_and_window_focus_cancel_mapping_until_a_new_press() {
+    for cancellation in [egui::Event::PointerGone, egui::Event::WindowFocused(false)] {
+        let mut h = Harness::new();
+        let r = h.frame(vec![]);
+        h.pointer(r[0].rect.center(), true);
+        h.frame(vec![cancellation]);
+        h.frame(vec![
+            egui::Event::WindowFocused(true),
+            egui::Event::PointerMoved(r[0].rect.right_center()),
+        ]);
+        h.pointer(r[0].rect.right_center(), false);
+        assert_eq!(h.values[0], 50.0);
+        h.click(r[0].rect.right_center());
+        assert_eq!(h.values[0], 100.0);
+    }
+}
+
+#[test]
+fn authoritative_rounded_parts_leave_empty_corners_to_the_underlying_widget() {
+    let context = egui::Context::default();
+    context.options_mut(|o| {
+        o.ordered_input = true;
+        o.max_passes = 1.try_into().unwrap();
+    });
+    let theme = Theme::light();
+    let mut value = 50.0;
+    let mut rail = egui::Rect::NOTHING;
+    let under = egui::Id::unique("under-slider");
+    let mut targets = Vec::new();
+    let mut run = |events| {
+        context
+            .run_ui(
+                egui::RawInput {
+                    events,
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(400.0, 200.0),
+                    )),
+                    ..Default::default()
+                },
+                |ui| {
+                    context.begin_input();
+                    ui.interact(ui.max_rect(), under, egui::Sense::click());
+                    let slider = Slider::new(&theme, "Amount")
+                        .range(0.0..=100.0)
+                        .register(ui, value);
+                    while let Some(event) = context.next_input_event() {
+                        if matches!(
+                            event.trigger,
+                            egui::InputTrigger::Event {
+                                event: egui::Event::PointerButton { pressed: true, .. },
+                                ..
+                            }
+                        ) {
+                            targets.push(event.target);
+                        }
+                        if event.target == Some(slider.id()) {
+                            slider.handle(ui, &mut value, &event);
+                        }
+                    }
+                    rail = slider.finish(ui, value).response.rect;
+                },
+            )
+            .drop_without_applying_deltas();
+        rail
+    };
+    let bounds = run(vec![]);
+    let center = bounds.center();
+    let empty = egui::pos2(bounds.left() + 1.0, center.y - 7.0);
+    let round_corner = center - egui::vec2(7.5, 7.5);
+    run(vec![
+        pointer_event(empty, true),
+        pointer_event(empty, false),
+        pointer_event(round_corner, true),
+        pointer_event(round_corner, false),
+    ]);
+    assert_eq!(targets, vec![Some(under), Some(under)]);
+    assert_eq!(value, 50.0);
+}
+
+#[test]
+fn releasing_at_a_different_coordinate_does_not_edit_without_motion() {
+    let mut h = Harness::new();
+    let rail = h.frame(vec![])[0].rect;
+    h.frame(vec![
+        pointer_event(rail.center(), true),
+        pointer_event(rail.right_center(), false),
+    ]);
+    assert_eq!(h.values[0], 50.0);
+    assert_eq!(h.changes[0], 1);
+}
+
+#[test]
+fn disabled_output_has_one_group_opacity_and_unfaded_thumb() {
+    use egui_prism::compositing::{self, Backend, Error, Group, Item};
+    use std::sync::{Arc, Mutex};
+    #[derive(Default)]
+    struct Capture(Mutex<Vec<Group>>);
+    impl Backend for Capture {
+        fn callback(&self, _: &egui::Context, group: Group) -> Result<egui::PaintCallback, Error> {
+            let rect = group.bounds();
+            self.0.lock().unwrap().push(group);
+            Ok(egui::PaintCallback {
+                rect,
+                callback: Arc::new(()),
+            })
+        }
+    }
+
+    let context = egui::Context::default();
+    context.options_mut(|o| o.ordered_input = true);
+    let backend = Arc::new(Capture::default());
+    let _installation = compositing::install(&context, backend.clone()).unwrap();
+    let theme = Theme::light();
+    context
+        .run_ui(Default::default(), |ui| {
+            context.begin_input();
+            ui.set_opacity(0.8);
+            let painter = ui.painter().clone();
+            // A zero egui disabled alpha cannot be recovered by division.
+            ui.visuals_mut().disabled_alpha = 0.0;
+            let slider = ui
+                .add_enabled_ui(false, |ui| {
+                    Slider::new(&theme, "Disabled").register(ui, 0.5)
+                })
+                .inner;
+            while context.next_input_event().is_some() {}
+            slider.finish(ui, 0.5).paint(&painter).unwrap();
+        })
+        .drop_without_applying_deltas();
+    let groups = backend.0.lock().unwrap();
+    assert_eq!(groups.len(), 1);
+    assert_eq!(groups[0].opacity(), 0.4);
+    assert!(groups[0].items().iter().any(|item| matches!(item,
+        Item::Shape(shape) if matches!(&shape.shape, egui::Shape::Circle(c) if c.fill == egui::Color32::WHITE))));
 }

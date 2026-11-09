@@ -18,7 +18,7 @@ do not satisfy this requirement.
 
 ## Waiting
 
-- Implementation: complete CSS group-opacity parity for overlapping disabled rail,
-  thumb and shadow primitives, and verify the result on different host surfaces.
-- Validation: complete matching native/browser visual and input comparisons, then
-  obtain exact-head independent review, GitHub reviews and CI.
+- Integration: wire the Slider case into the shared ordered native Gallery.
+- Validation: compare the pinned browser reference and native Gallery for input
+  and rendered states, including disabled group opacity. Record platform coverage
+  and obtain independent review, GitHub reviews and CI on the final head.

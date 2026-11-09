@@ -1,17 +1,35 @@
 # Slider
 
-`slider::Slider` borrows a caller-owned `f64` and theme for one frame. It implements
+`slider::Slider` configures a control for a caller-owned `f64`. It implements
 the pinned shadcn single-thumb horizontal LTR slider using egui input, drawing,
 focus and accessibility services. The component does not own settings, start work,
 or apply business policy.
 
 ```rust
-use egui_prism::{egui, slider::Slider, theme::Theme};
+use egui_prism::{compositing, egui, slider::Slider, theme::Theme};
 
-fn amount_control(ui: &mut egui::Ui, theme: &Theme, amount: &mut f64) {
-    if ui.add(Slider::new(theme, amount, "Amount").range(0.0..=100.0).step_by(5.0)).changed() {
-        // The caller applies the changed amount.
+// Inside the host's ordered run_ui callback, with its compositor installed.
+fn slider_frame(ui: &mut egui::Ui, theme: &Theme, amount: &mut f64, enabled: bool)
+    -> Result<(), compositing::Error>
+{
+    let ctx = ui.ctx().clone();
+    ctx.begin_input();
+    let painter = ui.painter().clone();
+    let slider = ui.add_enabled_ui(enabled, |ui| {
+        Slider::new(theme, "Amount").range(0.0..=100.0).step_by(5.0)
+            .register(ui, *amount)
+    }).inner;
+    while let Some(event) = ctx.next_input_event() {
+        if event.target == Some(slider.id()) {
+            let response = slider.handle(ui, amount, &event);
+            if response.changed() {
+                // Apply application effects before dispatching the next event.
+            }
+        }
+        // Dispatch other targets and host events here.
     }
+    slider.finish(ui, *amount).paint(&painter)?;
+    Ok(())
 }
 ```
 
@@ -34,30 +52,30 @@ An additional increasing step reaches the clamped maximum.
   pointer maps its position over the entire rail, even beyond its bounds.
 - Pressing the track maps immediately. Releasing ends that pointer interaction.
 
-Only a new pointer press requests keyboard focus. Releasing an existing capture
-does not override a host's explicit `surrender_focus`. Normal track release can
-still lose thumb focus under egui's separate track/thumb interaction routing;
-the regression requiring immediate keyboard input after that release remains an
-open failure.
-
-Other open input boundaries include the first arrow immediately after Tab or an
-external focus request, deferred reverse-Tab focus, and same-batch Tab/arrow
-ordering. Escape currently follows egui's default focus-release behavior, even
-when focus is stable. These are separate from capture-release ownership.
+The track and thumb have distinct rounded hit geometry and one focus and capture
+owner. An ordinary track click keeps the thumb focused for the next key event.
+An explicit host surrender or focus transfer takes effect during a drag and is
+preserved when it ends. Navigation and value edits follow dispatch order, including
+when a focus change and an arrow arrive in the same input batch. Escape leaves
+the focused slider and its value unchanged.
 
 Merely displaying an out-of-range caller value does not rewrite it: the thumb
 displays the nearest endpoint until the next edit. Disabled calls reject pointer,
 keyboard and accessibility writes, including while a drag is in progress.
-`Response::changed()` reports value changes, without repeating them on idle frames.
+The event handler reports `Response::changed()` only for an actual value edit.
+The final drawing response reports current focus and hover.
 
 ## Geometry and styling
 
 The rail is 6 points high with a 3-point radius; the circular thumb is 16 points
 across with a white fill, a 1-point primary border, and the reference small shadow.
 Hovering the thumb or focusing it by keyboard shows the 4-point neutral ring.
-Pointer focus alone does not show the keyboard ring. Disabled controls currently apply 50% opacity to individual drawing primitives.
-CSS group compositing parity is an open acceptance gap where the rail, thumb and
-shadow overlap. Sizes are logical points, scaled by the host at 100% or 150% zoom.
+Pointer focus alone does not show the keyboard ring. The disabled rail, fill,
+thumb, border and shadow are assembled as one group at 50% opacity. Use a
+same-context, same-layer painter captured before entering an egui disabled scope.
+It supplies the caller's parent opacity, while the group retains the control's
+clip and applies its disabled opacity once. The label is outside the Slider root.
+Sizes are logical points, scaled by the host at 100% or 150% zoom.
 
 For rail width W and normalized value t, the pointer value uses x/W and the
 painted thumb center uses `8 + (W - 16) * t`. The range fill ends at `W * t`.
@@ -80,15 +98,23 @@ Use stable caller UI scopes for reorderable instances.
 
 ## Migration from the draft candidate
 
-The constructor, range and step builders are unchanged. The unpublished draft
-used egui's native slider, automatic steps, inset pointer mapping and host-dependent
-handle sizes. Specify a fractional step explicitly when needed; account for the
-16-point intrinsic width, the new whole-rail mapping and reference keyboard rules.
-Do not derive pointer positions from the thumb's inset travel.
+Replace `ui.add(Slider::new(theme, &mut value, label))` with registration and
+explicit event handling in the host's [ordered input phases](input-compatibility.md).
+Pass the value to `register`, `handle`, and `finish`. The frame-local registration
+holds the layout and drawing colors. When host actions change the control
+geometry or eligibility, register the changed layout before the next event.
+The caller retains the value and applies
+business actions only in the handler phase. Keep a stable UI scope for each
+instance, including when reordering sliders.
+
+The host must install a [compositor](compositing.md) before submitting the drawing.
+Use `SliderOutput::paint` to submit directly, or move `SliderOutput::drawing` into
+a caller-owned parent group when it must isolate overlapping siblings.
+The range and step builders keep their previous semantics.
 
 ## Comparison and evidence
 
-The Gallery Sliders case includes two ranges, steps, change counters, disabling,
+The Sliders case fixture includes two ranges, steps, change counters, disabling,
 reordering, long labels and 448/200/20/16-point rails. Its theme and scale controls
 exercise light/dark and 100/150% states. The real React reference is available at
 `/?sliders` when serving `reference/`, with matching ranges and width choices.

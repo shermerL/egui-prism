@@ -22,5 +22,5 @@ pub mod text_input;
 
 pub mod checkbox;
 
-pub mod slider;
 pub mod compositing;
+pub mod slider;
