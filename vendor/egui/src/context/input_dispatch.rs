@@ -13,6 +13,7 @@ pub(super) struct DispatchState {
     header: Option<RawInput>,
     pub(super) shortcut_events: Vec<Event>,
     index: usize,
+    // Shared by ScrollArea registration and custom time requests.
     scroll_time_pending: bool,
     frame_dt: f32,
     timed_targets: alloc::vec::IntoIter<Id>,
@@ -50,7 +51,8 @@ pub enum InputTrigger {
         /// The original event, unchanged.
         event: Event,
     },
-    /// Frame time advanced: untargeted scrolling or a targeted pointer transition.
+    /// Frame time advanced: an untargeted consumer opportunity or a targeted
+    /// pointer transition.
     Time,
 }
 
@@ -94,6 +96,42 @@ impl Context {
         });
         crate::text_selection::LabelSelectionState::clear_input_text(self, self.viewport_id());
     }
+    /// Request this frame's untargeted [`InputTrigger::Time`] opportunity.
+    ///
+    /// Call after [`Self::begin_input`] and before the first
+    /// [`Self::next_input_event`], while registering a live time-driven consumer.
+    /// Requests coalesce with each other and with `ScrollArea` registration. The
+    /// host must forward the opportunity to its active consumers. This retains no
+    /// consumer registry and starts no timer; use [`Self::request_repaint_after`]
+    /// separately to schedule a future frame.
+    ///
+    /// Calls inside an [`Self::input_layout`] refresh after dispatch has begun,
+    /// or during a discard continuation, are no-ops: neither spends another time budget.
+    ///
+    /// # Panics
+    /// Panics outside ordered mode, before `begin_input`, during event handling
+    /// (except inside `input_layout`), or after dispatch has finished.
+    pub fn request_input_time(&self) {
+        self.write(|ctx| {
+            assert!(
+                ctx.memory.options.ordered_input,
+                "enable ordered input before using its phases"
+            );
+            let v = ctx.viewport();
+            assert!(
+                v.dispatch.events.is_some() && !v.dispatch.finished,
+                "request input time between begin_input and the end of dispatch"
+            );
+            assert!(
+                !v.dispatch.in_event,
+                "request input time during registration, not event handling"
+            );
+            if v.dispatch.previous.is_some() && v.output.num_completed_passes == 0 {
+                v.dispatch.scroll_time_pending = true;
+            }
+        });
+    }
+
     /// Register changed structure without consuming the event currently being handled.
     pub fn input_layout<R>(&self, layout: impl FnOnce() -> R) -> R {
         struct Restore {

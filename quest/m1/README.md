@@ -22,6 +22,5 @@ Record macOS, Windows and Linux build, rendering, input and IME evidence separat
 
 - [Strict shadcn parity for existing components](/quest/m1/shadcn-parity/README.md)
 
-- [Select](/quest/m1/select.md)
 - [Dialog](/quest/m1/dialog.md)
 - [Build and validate the native gallery](/quest/m1/native-gallery.md)

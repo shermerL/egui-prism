@@ -6,8 +6,7 @@ use crate::{
     theme::Theme,
 };
 
-mod transition;
-use transition::{animate, color, color_components};
+use crate::transition::{animate, color, color_components};
 
 /// The two sizes supported by the pinned shadcn switch.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
