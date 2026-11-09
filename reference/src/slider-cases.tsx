@@ -25,7 +25,7 @@ export function SliderCases() {
       {[1, 1.5].map(z => <Button key={z} variant="outline" onClick={() => setZoom(z)}>{z * 100}%</Button>)}
     </div>
     <p className="text-sm">Arrows: one step; Shift+Arrows / PageUp / PageDown: ten; Home / End: bounds.</p>
-    <div className="space-y-6" style={{ padding: 16, background: tinted ? "#193341" : "var(--background)" }}>
+    <div className="space-y-6" style={{ padding: 16, background: tinted ? "#193341" : "var(--background)", color: tinted ? "#FAFAFA" : undefined }}>
     {[0, 1].map(index => <section key={index} className="space-y-4" style={{ width, minWidth: 16 }}>
       <label className="block text-sm font-medium">Value {index === 0 ? "A" : "B"}</label>
       <Slider aria-label={`Value ${index === 0 ? "A" : "B"}`} value={values[index]} min={index === 0 ? 0 : -1} max={index === 0 ? 100 : 1} step={index === 0 ? 5 : 0.1} disabled={disabled}
