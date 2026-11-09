@@ -7,6 +7,7 @@ mod checkboxes;
 mod compositing;
 mod input;
 mod interaction;
+mod switches;
 mod text_inputs;
 
 use egui_prism::{egui, theme::Theme};
@@ -19,6 +20,7 @@ enum Case {
     Buttons,
     Inputs,
     Checkboxes,
+    Switches,
     Interaction,
     Layout,
     Compositing,
@@ -30,6 +32,7 @@ impl Case {
             Self::Buttons => "Buttons",
             Self::Inputs => "Inputs",
             Self::Checkboxes => "Checkboxes",
+            Self::Switches => "Switches",
             Self::Interaction => "Interaction",
             Self::Layout => "Layout",
             Self::Compositing => "Compositing",
@@ -47,6 +50,7 @@ struct Gallery {
     buttons: buttons::ButtonCase,
     inputs: text_inputs::InputCase,
     checkboxes: checkboxes::CheckboxCase,
+    switches: switches::SwitchCase,
 }
 
 impl Gallery {
@@ -72,6 +76,7 @@ impl Gallery {
             buttons: buttons::ButtonCase::new(context),
             inputs: text_inputs::InputCase::default(),
             checkboxes: checkboxes::CheckboxCase::default(),
+            switches: switches::SwitchCase::default(),
         };
         gallery.apply_theme(context);
         Ok(gallery)
@@ -111,7 +116,7 @@ impl Gallery {
         while let Some(event) = context.next_input_event() {
             // Navigation has already run. Observe loss now, not just at the end
             // of the batch: focus may leave and return before Space is released.
-            page.cancel_buttons();
+            page.cancel_interactions();
             let old_page = (self.case, self.dark, self.narrow);
 
             let scrolled = input::scroll_opportunity(&event) && page.body.scroll_event(&context);
@@ -127,6 +132,11 @@ impl Gallery {
                         self.buttons.activated(control);
                     }
                     response
+                } else if let Some(registration) = &entry.switch {
+                    let Control::Switch(control) = control else {
+                        unreachable!("Switch registration control");
+                    };
+                    self.switches.handle(control, registration, &event)
                 } else if let Control::Page(page) = control {
                     let response = context.read_response(id).expect("registered page tab");
                     if response.clicked() {
@@ -139,7 +149,7 @@ impl Gallery {
                 Some((control, response))
             });
 
-            page.cancel_buttons();
+            page.cancel_interactions();
 
             let global = old_page != (self.case, self.dark, self.narrow);
             let next_focus = context.memory(|memory| memory.focused());
@@ -185,7 +195,7 @@ impl Gallery {
             // its live response's enabled() AND contains_pointer() before commit.
         }
 
-        page.cancel_buttons();
+        page.cancel_interactions();
 
         // Keep the revoked-host probe in the final graphics, not in a discarded
         // registration/event list. Restart and screenshot lifecycle run once.
@@ -251,6 +261,7 @@ impl Gallery {
                             Case::Buttons,
                             Case::Inputs,
                             Case::Checkboxes,
+                            Case::Switches,
                             Case::Interaction,
                             Case::Layout,
                         ] {
@@ -306,6 +317,7 @@ impl Gallery {
                 Case::Buttons => self.buttons.show(ui, &theme, frame),
                 Case::Inputs => self.inputs.show(ui, &theme, frame),
                 Case::Checkboxes => self.checkboxes.show(ui, &theme, frame),
+                Case::Switches => self.switches.show(ui, &theme, frame),
                 Case::Interaction | Case::Layout => {
                     frame.track(ui.heading("Harness controls (egui)"));
                     frame.label(ui, "Activate with the pointer or Tab and Enter. Counts change once per activation and remain still while idle.");
