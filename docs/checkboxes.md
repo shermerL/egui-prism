@@ -83,6 +83,9 @@ The default labeled row is 20 points high and expands for wrapped text. The box
 stays 16 × 16 points regardless of `theme.metrics.control_height` or host spacing.
 The constructor now accepts a shared boolean borrow; only `handle` requires its
 mutable borrow. Application values remain owned and retained by the caller.
+Explicit rich-text sizes and italics can extend beyond the default line box.
+The compositing bounds include that ink while layout and hit geometry keep the
+same row. The parent clip still limits all drawing.
 
 ## Reference and validation
 
@@ -98,3 +101,28 @@ instance identity, geometry, accessibility metadata, group construction and
 transitions. Browser, native window behavior, assistive technology, independent
 review and CI each have separate evidence under the
 [strict parity contract](shadcn-parity.md).
+
+## Evidence and limits
+
+The implementation at `c25b009` passed 27 Checkbox behavior tests, six affected
+Select trigger drawing tests, the native Gallery Checkbox routing test, the host
+scroll check, library/Gallery clippy, documentation tests, the native build,
+pinned reference checks and reference build. Its
+[CI run](https://github.com/shermerL/egui-prism/actions/runs/42648094912)
+also passed. The rich-label correction at `0a0dd68` adds a regression that first
+failed on the previous head; all 28 Checkbox tests, focused clippy and the native
+Gallery build then passed. It changes no vendor, host input or renderer code.
+
+Actual macOS Metal Gallery and Chrome reference observations covered light and
+dark unchecked/checked states, label activation, Space and Enter, invalid checked
+border precedence, disabled safety, reordered instances, narrow long labels and
+compositing samples. The corrected native build was also compared at 150% scale
+with Chrome at 150% zoom, including both themes and disabled long labels in
+320-point content. Chrome retained 16 by 16 CSS-pixel boxes. The rich-font ink
+case is covered by shape and group bounds assertions, not a native screenshot.
+
+These observations compare geometry, state and interaction; they do not assert
+pixel-identical screenshots across browser and native rasterization or display
+color management. Windows/Linux GUI, native assistive technology and browser
+product rendering were not exercised by this component acceptance. Accessibility
+metadata tests do not replace an assistive-technology check.
