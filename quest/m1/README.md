@@ -20,8 +20,6 @@ Record macOS, Windows and Linux build, rendering, input and IME evidence separat
 
 ## Required
 
-- [Single-value slider](/quest/m1/slider.md) - shadcn geometry, values and interaction.
-
 - [Strict shadcn parity for existing components](/quest/m1/shadcn-parity/README.md)
 
 - [Select](/quest/m1/select.md)
