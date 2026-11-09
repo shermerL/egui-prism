@@ -16,6 +16,7 @@
 /// The egui version used by this library.
 pub use egui;
 
+mod shadow;
 mod transition;
 
 pub mod theme;

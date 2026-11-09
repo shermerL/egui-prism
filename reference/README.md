@@ -39,3 +39,8 @@ long lists with disabled items, empty/all-disabled lists, missing selected
 values, outside-action blocking, light/dark themes and tinted surfaces. Use
 actual browser zoom for scaled comparisons. This fixture does not use CSS zoom,
 which changes the coordinate mapping of Radix item-aligned positioning.
+
+The `/?checkboxes` fixture isolates the boolean Checkbox with controlled values
+and counters, invalid and disabled states, reordered instances, long labels,
+three compositing backgrounds, light/dark themes, and 320px content. It renders
+the unmodified pinned component; use actual browser zoom for scale comparisons.
