@@ -112,6 +112,9 @@ impl SliderCase {
             .fill(surface)
             .inner_margin(16.0)
             .show(ui, |ui| {
+                if self.tinted {
+                    ui.visuals_mut().override_text_color = Some(egui::Color32::from_gray(250));
+                }
                 ui.spacing_mut().slider_width = self.width;
 
                 for index in if self.reversed { [1, 0] } else { [0, 1] } {

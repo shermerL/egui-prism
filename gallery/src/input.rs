@@ -54,6 +54,7 @@ impl Control {
                 sliders::Control::Disabled
                 | sliders::Control::Reversed
                 | sliders::Control::Long
+                | sliders::Control::Tinted
                 | sliders::Control::Width(_),
             )
             | Self::Interaction(
