@@ -371,11 +371,16 @@ DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
 
-## Radix Slider behavior and geometry
+## Radix primitive behavior and geometry
 
-Source: https://www.npmjs.com/package/@radix-ui/react-slider/v/1.3.6
+Sources:
 
-The Slider step, pointer and thumb-position rules are adapted from this primitive.
+- https://www.npmjs.com/package/@radix-ui/react-slider/v/1.3.6
+- https://www.npmjs.com/package/@radix-ui/react-select/v/2.2.6
+
+Slider step, pointer and thumb-position rules and Select popup placement,
+keyboard navigation, typeahead and pointer-selection rules are adapted from
+these primitives.
 
 MIT License
 

@@ -46,8 +46,9 @@ requires every application viewport callback to complete the explicit phases:
    explicit `InputTrigger` and its authoritative target ID. An `Event { index,
    event }` trigger carries one original event and its position in the stream
    left by plugins; the handler sees that event in `InputState.events`. A `Time`
-   trigger delivers native long-touch or drag transitions, or an untargeted local
-   scrolling opportunity, with an empty event stream. Run the target's widget handler against its registered rectangle. Apply
+   trigger delivers native long-touch or drag transitions, or an untargeted
+   time-consumer opportunity, with an empty event stream. Run the target's widget
+   handler against its registered rectangle. Apply
    resulting application state changes before requesting another event. Untargeted
    events still reach the host through the returned event, including navigation
    already handled by the dispatcher and application/platform events.
@@ -80,6 +81,23 @@ including on frames with no raw events. Each affected owner is offered one handl
 opportunity, subject to current visibility, enablement and modal eligibility.
 Time triggers do not invent pointer events or consume a raw-event index. The final
 paint suppresses their action flags just as it suppresses raw-event activations.
+
+Register a live custom time consumer with `ctx.request_input_time()` after
+`begin_input` and before the first `next_input_event` of each frame in which it
+needs time handling. Repeated requests and all `ScrollArea` registrations share
+at most one untargeted `Time` opportunity per viewport frame, including frames
+without raw input. Without either kind of request there is no untargeted
+opportunity; native targeted transitions remain independent. The host forwards
+untargeted `Time` to its active consumers, which own their deadlines and
+cancellation. This is registration only: no consumer registry, background timer
+or business action is added. `request_repaint_after` schedules a future frame but
+does not itself request ordered time handling.
+
+`request_input_time` asserts in ordinary mode, before `begin_input`, during
+event handling or after dispatch has finished. Calls inside `input_layout`
+after dispatch began safely do nothing, so refreshing a live consumer cannot
+rearm the opportunity. Discard continuations are layout only: requests do
+nothing and cannot consume a second frame-time budget.
 
 `RawInput.events` stays available for observation in each phase. The live
 `InputState.events` stream is empty during layout/paint and contains only the

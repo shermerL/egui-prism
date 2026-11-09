@@ -237,10 +237,17 @@ mod tests {
         let mut rects = Vec::new();
         context
             .run_ui(raw(Vec::new()), |ui| {
+                let resources = crate::selects::Resources::new();
+                let mut select_live = crate::selects::Live::default();
                 context.begin_input();
                 let root = LocalUi::named(ui, ui.make_persistent_id("gallery-root"));
-                let page =
-                    gallery.layout(&mut root.open(context), Phase::Register, Default::default());
+                let page = gallery.layout(
+                    &mut root.open(context),
+                    Phase::Register,
+                    Default::default(),
+                    &resources,
+                    &mut select_live,
+                );
                 rects.extend(
                     page.chrome
                         .entries

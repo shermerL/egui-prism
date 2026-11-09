@@ -7,6 +7,7 @@ mod checkboxes;
 mod compositing;
 mod input;
 mod interaction;
+mod selects;
 mod sliders;
 mod switches;
 mod text_inputs;
@@ -23,6 +24,7 @@ enum Case {
     Checkboxes,
     Sliders,
     Switches,
+    Selects,
     Interaction,
     Layout,
     Compositing,
@@ -36,6 +38,7 @@ impl Case {
             Self::Checkboxes => "Checkboxes",
             Self::Sliders => "Sliders",
             Self::Switches => "Switches",
+            Self::Selects => "Selects",
             Self::Interaction => "Interaction",
             Self::Layout => "Layout",
             Self::Compositing => "Compositing",
@@ -55,6 +58,7 @@ struct Gallery {
     checkboxes: checkboxes::CheckboxCase,
     sliders: sliders::SliderCase,
     switches: switches::SwitchCase,
+    selects: selects::SelectCase,
 }
 
 impl Gallery {
@@ -82,6 +86,7 @@ impl Gallery {
             checkboxes: checkboxes::CheckboxCase::default(),
             sliders: sliders::SliderCase::default(),
             switches: switches::SwitchCase::default(),
+            selects: selects::SelectCase::default(),
         };
         gallery.apply_theme(context);
         Ok(gallery)
@@ -113,12 +118,18 @@ impl Gallery {
         self.compositing.begin_update();
         let restart = self.compositing.take_restart_request();
 
+        // Registrations borrow these immutable resources, never Gallery values.
+        // Both themes and every option variant survive all same-batch rebuilds.
+        let select_resources = selects::Resources::new();
+        let mut select_live = selects::Live::default();
         context.begin_input();
         let root = LocalUi::named(ui, ui.make_persistent_id("gallery-root"));
         let mut page = self.layout(
             &mut root.open(&context),
             Phase::Register,
             sliders::Live::default(),
+            &select_resources,
+            &mut select_live,
         );
 
         let mut focus = context.memory(|memory| memory.focused());
@@ -128,11 +139,18 @@ impl Gallery {
             page.cancel_interactions();
             let old_page = (self.case, self.dark, self.narrow);
 
+            // Includes untargeted releases, Time, and blur. Popup wheel input
+            // must be consumed before any background scroll shell sees it.
+            let select_changed = self.selects.handle_all(&mut select_live, &event);
             let scrolled = input::scroll_opportunity(&event) && page.body.scroll_event(&context);
 
             let handled = event.target.and_then(|id| {
                 let entry = page.entry(id)?;
                 let control = entry.control.clone();
+                if matches!(control, Control::Select(selects::Control::Instance)) {
+                    // Already handled by the all-event Select dispatch above.
+                    return None;
+                }
                 let response = if let Some(button) = &entry.button {
                     let response = button.handle(&event);
                     if response.clicked()
@@ -167,7 +185,10 @@ impl Gallery {
 
             page.cancel_interactions();
 
-            let global = old_page != (self.case, self.dark, self.narrow);
+            let global = old_page != (self.case, self.dark, self.narrow)
+                || handled.as_ref().is_some_and(|(control, response)| {
+                    matches!(control, Control::Zoom(_)) && response.clicked()
+                });
             let next_focus = context.memory(|memory| memory.focused());
             let focus_changed = focus != next_focus;
             focus = next_focus;
@@ -177,11 +198,18 @@ impl Gallery {
             }
 
             if global {
+                select_live.unregister();
                 context.input_layout(|| {
                     // Re-capture the root style after a theme change.
                     let mut root_ui = root.open(&context);
                     root_ui.set_style(context.global_style());
-                    let next = self.layout(&mut root_ui, Phase::Register, sliders::Live::default());
+                    let next = self.layout(
+                        &mut root_ui,
+                        Phase::Register,
+                        sliders::Live::default(),
+                        &select_resources,
+                        &mut select_live,
+                    );
                     page.retire(&context, &next);
                     page = next;
                 });
@@ -190,18 +218,22 @@ impl Gallery {
                     .as_ref()
                     .is_some_and(|(control, response)| control.changes_layout(response))
             {
+                select_live.unregister();
                 context.input_layout(|| {
                     let next = self.body(
                         &mut page.body_ui.open(&context),
                         Phase::Register,
                         sliders::Live::default(),
+                        &select_resources,
+                        &mut select_live,
                     );
                     page.body.retire(&context, &next);
                     page.body = next;
                 });
-            } else if handled
-                .as_ref()
-                .is_some_and(|(_, response)| response.changed() || response.clicked())
+            } else if select_changed
+                || handled
+                    .as_ref()
+                    .is_some_and(|(_, response)| response.changed() || response.clicked())
                 || focus_changed
             {
                 context.input_layout(|| {
@@ -209,10 +241,6 @@ impl Gallery {
                         .refresh_statuses(&context, |ui, control| self.control(ui, control));
                 });
             }
-
-            // Raw untargeted releases are deliberately still drained here.
-            // A future Select consumer would inspect that raw release and test
-            // its live response's enabled() AND contains_pointer() before commit.
         }
 
         page.cancel_interactions();
@@ -225,7 +253,13 @@ impl Gallery {
 
         let mut root_ui = root.open(&context);
         root_ui.set_style(context.global_style());
-        let _ = self.layout(&mut root_ui, Phase::Paint, page.body.slider_live);
+        let _ = self.layout(
+            &mut root_ui,
+            Phase::Paint,
+            page.body.slider_live,
+            &select_resources,
+            &mut select_live,
+        );
     }
 
     fn restart_compositor(&mut self, context: &egui::Context, device: &wgpu::Device) {
@@ -258,11 +292,13 @@ impl Gallery {
         frame.widget(ui, control.clone(), |ui| self.control(ui, &control));
     }
 
-    fn layout(
+    fn layout<'a>(
         &mut self,
         ui: &mut egui::Ui,
         phase: Phase,
         slider_live: sliders::Live,
+        select_resources: &'a selects::Resources,
+        select_live: &mut selects::Live<'a>,
     ) -> PageLayout {
         let theme = self.theme();
         let automatic = self.compositing.automatic();
@@ -288,6 +324,7 @@ impl Gallery {
                             Case::Checkboxes,
                             Case::Sliders,
                             Case::Switches,
+                            Case::Selects,
                             Case::Interaction,
                             Case::Layout,
                         ] {
@@ -309,7 +346,7 @@ impl Gallery {
 
                 let body_ui = LocalUi::named(ui, ui.make_persistent_id("gallery-body"));
                 let mut child = body_ui.open(ui.ctx());
-                let body = self.body(&mut child, phase, slider_live);
+                let body = self.body(&mut child, phase, slider_live, select_resources, select_live);
                 ui.advance_cursor_after_rect(child.min_rect());
                 PageLayout {
                     chrome,
@@ -320,7 +357,14 @@ impl Gallery {
             .inner
     }
 
-    fn body(&mut self, ui: &mut egui::Ui, phase: Phase, mut slider_live: sliders::Live) -> Layout {
+    fn body<'a>(
+        &mut self,
+        ui: &mut egui::Ui,
+        phase: Phase,
+        mut slider_live: sliders::Live,
+        select_resources: &'a selects::Resources,
+        select_live: &mut selects::Live<'a>,
+    ) -> Layout {
         let theme = self.theme();
         let mut frame = Layout::new(phase);
         if self.compositing.automatic() {
@@ -352,6 +396,7 @@ impl Gallery {
                     })
                 }),
                 Case::Switches => self.switches.show(ui, &theme, frame),
+                Case::Selects => self.selects.show(ui, select_resources, self.dark, frame, select_live),
                 Case::Interaction | Case::Layout => {
                     frame.track(ui.heading("Harness controls (egui)"));
                     frame.label(ui, "Activate with the pointer or Tab and Enter. Counts change once per activation and remain still while idle.");
