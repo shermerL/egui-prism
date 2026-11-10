@@ -28,6 +28,8 @@ nix develop --command cargo run --locked -p egui-prism-gallery
 
 核心库依赖 egui；Gallery 管理自己的 winit 窗口和显式 wgpu 渲染循环，由 egui-winit 对接操作系统输入、输入法和剪贴板。应用也可以在自己的宿主程序中使用组件库。
 
+`install_fonts` 安装的内置 Geist 字体只覆盖有限字符。回退字体的数据、许可和字体族链由宿主负责；未启用 egui 的 `default_fonts` 特性时，`FontDefinitions::default()` 不包含字体。详见[主题设置](docs/themes.md)。
+
 ## 开发
 
 [CONTRIBUTING.md](CONTRIBUTING.md) 说明了固定版本的 Quest 环境与当前检查流程；[工具链说明](docs/toolchain.md) 记录了依赖来源和平台限制。仓库中的 [Quest 任务树](quest/README.md) 是开发计划的正式来源。

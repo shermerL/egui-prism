@@ -34,4 +34,3 @@ deploy Pages, or create a public dependency fork as part of preparation.
 ## Required
 
 - [Build and validate the native gallery](/quest/m1/native-gallery.md)
-- [Standalone fallback contract](/quest/m0/font-fallback-contract.md) - reproducible host font setup independent of workspace features

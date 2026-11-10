@@ -38,6 +38,11 @@ and screenshot cases.
 The core library depends on egui; the gallery owns its winit window and explicit wgpu rendering
 loop, with egui-winit handling OS input, IME and clipboard. Applications can use the library with their own host.
 
+`install_fonts` adds bundled Geist faces with limited glyph coverage. Hosts own
+fallback font data, licensing and family chains; `FontDefinitions::default()`
+contains no fonts without egui's `default_fonts` feature. See
+[theme setup](docs/themes.md).
+
 ## Development
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the pinned Quest setup and current
