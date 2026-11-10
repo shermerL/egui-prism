@@ -129,6 +129,25 @@ using the real egui-winit state without a platform adapter. Existing component
 tests cover stable IDs, disabled eligibility and modal actions. Actual platform
 adapter construction and system interaction must be recorded separately.
 
+### Bridge observation record
+
+On 2026-11-10, build `540123943492bb59dbf52abedfeaf2c3c4b072b8`
+(debug, Apple M3 / Metal) ran on macOS 26.6.2 (25G83). A system AX client
+observed the native tree after its initial request and the embedded build ID.
+AXPress navigated to Interaction, activated A once (A=1, B=0), and enabled
+Disable actions. Both action nodes reported disabled; another AXPress left
+both counts unchanged. In Dialogs, AXPress opened A, an Outside action request
+left its count at zero, and Close incremented only A's dismissal count once.
+The OS window close action also exited the process successfully.
+
+This establishes native adapter/tree/action delivery for those cases, not
+VoiceOver speech or navigation. VoiceOver and system focus restoration remain
+unverified; Windows UIA and Linux AT-SPI were not observed. Dialog title and
+description are currently absent from the system tree, tracked separately in
+[issue #29](https://github.com/shermerL/egui-prism/issues/29); the header is painted
+without component semantic nodes. The host does not synthesize missing component
+semantics.
+
 ## Automated coverage
 
 The private interaction module is called by both the app and the tests. Synthetic

@@ -11,3 +11,11 @@ The Gallery now enables egui-winit AccessKit, initializes the adapter before sho
 Controlled bridge checks cover activation/deactivation, stale-window rejection, ordered payload delivery and single consumption. Existing component tests provide modal, disabled and stable-ID behavior evidence. Core component semantics and the renderer lifecycle are unchanged.
 
 Remaining acceptance: record a representative real screen-reader interaction with exact platform/build identity. macOS VoiceOver, Windows UIA clients and Linux AT-SPI availability must be recorded separately. Unavailable platforms are explicit handoff gaps; build and synthetic events do not establish system acceptance. M1 Gallery aggregates the final platform matrix.
+
+## Waiting
+
+- Maintainer: complete one VoiceOver interaction on the identified macOS build: navigate to Interaction, announce and activate A once, confirm disabled actions cannot activate, then open and close Dialog A and check focus restoration. Automated GUI control was unavailable; the direct AX client verified delivery but cannot establish VoiceOver announcements/navigation. Record the result in docs/gallery.md. Windows/Linux observations remain separate platform gaps.
+
+## Related
+
+- [Dialog header semantics #29](https://github.com/shermerL/egui-prism/issues/29) - confirmed component semantic gap, separate from host adapter wiring
