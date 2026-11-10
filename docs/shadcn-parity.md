@@ -104,6 +104,8 @@ resource lifetimes. Their migration sections replace the earlier egui-style APIs
 | Select | [Selects](selects.md), [evidence and limits](selects.md#evidence-and-limits) | Caller-owned optional value, frame-local registration and ordered popup input. Adapter submission tests do not render framebuffer pixels. The browser geometry reference is at 100%; native 150% and narrow layouts are additional checks. |
 | Dialog | [Dialogs](dialogs.md), [evidence and limits](dialogs.md#evidence-and-limits) | Caller-owned open state and dismissal policy, scoped content and explicit drawing groups. The bounded scrolling body is an explicit extension; ordinary direct-painting egui controls are outside group opacity isolation. |
 
+| Tooltip | [Tooltips](tooltips.md) | Explicit trigger responses, host-supplied hint scope and drawing-only hints. Viewport-bounded long text is an explicit adaptation of the overflowing reference; browser/native observations and controlled tests are recorded separately. |
+
 ### Shared capabilities
 
 - [Semantic themes](themes.md#evidence-and-limits) and the
