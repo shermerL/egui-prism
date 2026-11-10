@@ -71,11 +71,41 @@ Do not change a reference token to satisfy a contrast assertion intended for a
 different role; component states require their own reference comparison.
 
 Call `egui_prism::theme::install_fonts(&context, fonts)` once during host setup to install
-the bundled Geist Regular, Medium, SemiBold, and Geist Mono Regular fonts. Pass the host's complete `egui::FontDefinitions` (or `FontDefinitions::default()`
-for a new host); setup transfers those definitions to the context. The supplied
-font data, fallback chains and custom named families are preserved. Default proportional text uses Geist;
-default button and heading styles use Medium and SemiBold. The host owns setup
-and may intentionally supply another font, but that is not the reference preset.
+the bundled Geist Regular, Medium, SemiBold, and Geist Mono Regular fonts. Pass
+the host's complete `egui::FontDefinitions`; setup transfers them to the context.
+Supplied font data, fallback chains and custom named families are preserved.
+Default proportional text uses Geist; default button and heading styles use
+Medium and SemiBold. The host owns setup and may intentionally supply another
+font, but that is not the reference preset.
+
+Geist has limited glyph coverage. The host owns fallback font selection, data,
+licensing and family chains for the characters its application needs.
+`FontDefinitions::default()` supplies fallback fonts only with egui's
+`default_fonts` feature enabled; without it, the definitions are empty. For
+feature-independent setup, start with `FontDefinitions::empty()` and explicitly
+populate the host fallback data and family chains before calling `install_fonts`.
+
+The theme test supplies Hack Regular from a test-only `epaint_default_fonts`
+dependency, with an explicit host family and fallback chains. It starts from
+`FontDefinitions::empty()`, so standalone and workspace runs use the same input:
+
+```sh
+cargo test --locked -p egui-prism --test theme
+cargo test --locked --workspace --test theme
+```
+
+The standalone graph has the font package only as a dev-dependency and does not
+enable egui's `default_fonts`. Workspace tests also include the Gallery's
+`default_fonts` selection. The core runtime graph stays free of default fonts:
+
+```sh
+cargo tree --locked -p egui-prism -e normal,build,features
+cargo tree --locked -p egui-prism -e features
+cargo tree --locked --workspace -e features
+```
+
+The glyph assertion covers the chosen fallback symbol, not all-language coverage
+or native CJK/IME acceptance.
 
 `Palette` adds `secondary`, `accent`, `input`, and `ring`. Applications constructing
 Palette literals must provide these fields; prefer customizing `Theme::light()`

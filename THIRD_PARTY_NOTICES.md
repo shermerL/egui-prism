@@ -96,9 +96,12 @@ DEALINGS IN THE SOFTWARE.
 
 ## Bundled default fonts
 
-The gallery enables eframe default fonts through epaint_default_fonts 0.37.0.
+The Gallery enables egui default fonts through epaint_default_fonts 0.37.0.
 Hack, Ubuntu Light, and the egui icon subset retain the following notices.
 The Gallery additionally installs the pinned Geist fonts described below.
+
+The egui-prism theme test also uses Hack Regular from this package as an explicit
+host fallback via a dev-dependency, under the Hack license below.
 
 ### Hack-Regular.txt
 

@@ -11,5 +11,8 @@ publish = false
 [dependencies]
 egui.workspace = true
 
+[dev-dependencies]
+epaint_default_fonts = "=0.37.0"
+
 [lints]
 workspace = true
