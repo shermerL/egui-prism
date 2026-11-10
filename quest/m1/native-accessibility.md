@@ -6,8 +6,8 @@ The native Gallery exposes existing component semantics and actions through the 
 
 ## Plan
 
-Baseline inspection shows controlled AccessKit tree/action tests but no egui-winit accesskit feature or native adapter initialization. Start at gallery/Cargo.toml, gallery/src/native.rs, gallery/src/input.rs and the official egui-winit 0.37 State::init_accesskit/on_accesskit_action_request integration. Use the official bridge; the host owns adapter/event-loop lifetime and application restart/close cleanup.
+The Gallery now enables egui-winit AccessKit, initializes the adapter before showing the window, forwards actions through the existing ordered input queue and publishes updates through the official platform output path. The runtime owns the adapter; events from replaced windows are rejected.
 
-Forward accessibility actions into the same ordered input path as other controls, and publish updates using the official platform output path. Preserve modal eligibility, disabled state and stable IDs. Component-owned roles/names/actions remain in their component work; fix only missing integration encountered here. No custom accessibility framework, parallel event dispatcher or blanket source audit.
+Controlled bridge checks cover activation/deactivation, stale-window rejection, ordered payload delivery and single consumption. Existing component tests provide modal, disabled and stable-ID behavior evidence. Core component semantics and the renderer lifecycle are unchanged.
 
-Acceptance: a controlled native adapter/action integration check, a compiling official host path, and an actual representative screen-reader interaction record with exact platform/build identity. Record macOS VoiceOver, Windows UIA client and Linux AT-SPI availability separately; one observed platform does not prove the others. Unavailable environments remain explicit handoff gaps. M1 Gallery aggregates the final platform matrix.
+Remaining acceptance: record a representative real screen-reader interaction with exact platform/build identity. macOS VoiceOver, Windows UIA clients and Linux AT-SPI availability must be recorded separately. Unavailable platforms are explicit handoff gaps; build and synthetic events do not establish system acceptance. M1 Gallery aggregates the final platform matrix.
