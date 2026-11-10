@@ -9,7 +9,12 @@ Rust for native and web applications. [shadcn/ui](https://ui.shadcn.com/docs)
 defines the component appearance, geometry, states, and interaction contract.
 egui-prism implements that contract in Rust, with native macOS, Windows and Linux as the primary targets.
 
-The library workspace and native engineering gallery are in development. Semantic light/dark themes, Button, IconButton, TextInput, Checkbox, Switch, Slider, Select, and Dialog have initial implementations undergoing strict shadcn parity correction. The gallery distinguishes Prism components from standard egui harness controls; other widgets are planned. There is no published crate or live component gallery yet.
+The library workspace and native engineering gallery remain in development.
+The workspace provides semantic light/dark themes. All eight core controls,
+Button, IconButton, TextInput, Checkbox, Switch, Slider, Select, and Dialog,
+are delivered at component level. The gallery distinguishes Prism components
+from standard egui harness controls; other widgets are planned.
+There is no published crate or live component gallery yet.
 
 Browser deployment is deferred and does not block native component acceptance.
 
@@ -57,9 +62,11 @@ scoped content and explicit drawing groups.
 
 Every component targets strict parity with the pinned shadcn source in appearance,
 geometry, state styling and interaction. egui is the rendering/input substrate.
-The current components are undergoing a full parity correction; existing test and
-CI results do not establish visual acceptance. See the [reference contract and
-component audit](docs/shadcn-parity.md) and [correction Quests](quest/m1/shadcn-parity/README.md).
+Component delivery does not establish acceptance on every target platform.
+Automated tests and CI do not establish visual acceptance;
+native platform, IME and assistive-technology gaps remain explicit. See the
+[reference contract and current evidence index](docs/shadcn-parity.md)
+and the [native Gallery acceptance work](quest/m1/native-gallery.md).
 
 The opt-in [ordered input integration](docs/input-compatibility.md) requires an
 application-root Cargo patch. Its [source inventory](vendor/README.md) and

@@ -81,5 +81,9 @@ and may intentionally supply another font, but that is not the reference preset.
 Palette literals must provide these fields; prefer customizing `Theme::light()`
 or `Theme::dark()`. Default button/input height is 36 points, padding 16 by 8, and
 medium radius 8. Other component dimensions come from their own reference source,
-not proportional scaling of this height. Previously implemented components are
-still undergoing their individual parity corrections.
+not proportional scaling of this height.
+
+All eight core controls are delivered at component level. See the
+[current parity evidence index](shadcn-parity.md#current-evidence-index) for their
+contracts, evidence and remaining acceptance gaps. Theme validation does not
+establish acceptance on every target platform.
