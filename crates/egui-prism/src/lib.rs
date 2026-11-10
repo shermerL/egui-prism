@@ -1,6 +1,6 @@
 //! Shared foundation for egui-prism components.
 //!
-//! Themes are in [`theme`], buttons in [`button`], editors in [`text_input`],
+//! Themes are in [`theme`], badges in [`badge`], buttons in [`button`], editors in [`text_input`],
 //! checkboxes in [`checkbox`], selects in [`select`], and dialogs in [`dialog`].
 //! Applications own their
 //! window, renderer, values, and resource lifecycles.
@@ -22,6 +22,7 @@ mod transition;
 
 pub mod theme;
 
+pub mod badge;
 pub mod button;
 pub mod text_input;
 

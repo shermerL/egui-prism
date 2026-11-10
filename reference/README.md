@@ -54,3 +54,8 @@ The `/?checkboxes` fixture isolates the boolean Checkbox with controlled values
 and counters, invalid and disabled states, reordered instances, long labels,
 three compositing backgrounds, light/dark themes, and 320px content. It renders
 the unmodified pinned component; use actual browser zoom for scale comparisons.
+
+The `/?badges` fixture renders all six static Badge variants from the pinned
+source, long text in a horizontal scroll area, and group opacity over a tinted
+surface. Light/dark and 100%/150% controls match the native Badges page.
+The Link variant remains a noninteractive span in both fixtures.

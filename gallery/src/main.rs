@@ -2,6 +2,7 @@
 
 mod native;
 
+mod badges;
 mod buttons;
 mod checkboxes;
 mod compositing;
@@ -21,6 +22,7 @@ use interaction::InteractionCase;
 enum Case {
     Theme,
     Buttons,
+    Badges,
     Inputs,
     Checkboxes,
     Sliders,
@@ -36,6 +38,7 @@ impl Case {
         match self {
             Self::Theme => "Theme",
             Self::Buttons => "Buttons",
+            Self::Badges => "Badges",
             Self::Inputs => "Inputs",
             Self::Checkboxes => "Checkboxes",
             Self::Sliders => "Sliders",
@@ -354,6 +357,7 @@ impl Gallery {
                             Case::Theme,
                             Case::Compositing,
                             Case::Buttons,
+                            Case::Badges,
                             Case::Inputs,
                             Case::Checkboxes,
                             Case::Sliders,
@@ -420,6 +424,7 @@ impl Gallery {
                     frame.label(ui, "Opaque disabled tokens are paired colors. Standard egui disabled controls use opacity.");
                 }
                 Case::Buttons => self.buttons.show(ui, &theme, frame),
+                Case::Badges => badges::show(ui, &theme, frame),
                 Case::Inputs => self.inputs.show(ui, &theme, frame),
                 Case::Checkboxes => self.checkboxes.show(ui, &theme, frame),
                 Case::Sliders => self.sliders.layout(ui, &theme, |case, ui, control| {
