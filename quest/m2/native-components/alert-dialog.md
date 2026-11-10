@@ -6,7 +6,7 @@ A confirmation dialog exposes explicit neutral/cancel/confirm results and safe f
 
 ## Plan
 
-Reference alert-dialog.tsx and the completed Dialog API. Match the reference ambient-dismissal and initial-focus behavior; a generic Dialog is not automatically a confirmation contract. Caller owns whether an action is destructive, whether confirmation is enabled and what it does. Never stop resources merely because the presentation closes.
+Reference alert-dialog.tsx and the completed [Dialog API](/docs/dialogs.md) for modal isolation, scoped content and focus restoration. Match the reference ambient-dismissal and initial-focus behavior; a generic Dialog is not automatically a confirmation contract. Caller owns whether an action is destructive, whether confirmation is enabled and what it does. Never stop resources merely because the presentation closes.
 
 Reuse Dialog content and group drawing rather than create another modal engine. Cover Escape/backdrop behavior, default focus on a safe action, long content, disabled confirmation, reopen and disappearing opener. Include a generic confirmation example without application-specific commands.
 

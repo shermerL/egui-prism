@@ -14,7 +14,8 @@ interaction, examples and relevant tests. The native Gallery validates their
 combined use on macOS, Windows and Linux.
 
 All eight controls now have merged component implementations and documented
-evidence. Integrated native Gallery acceptance, the native accessibility bridge,
+evidence. Shared parity closure, integrated native Gallery acceptance, the native
+accessibility bridge,
 the complete platform evidence matrix, the standalone font test contract and a
 clean external consumer remain open preparation work.
 Adding the rest of the shadcn catalog is not a first-release prerequisite. Native

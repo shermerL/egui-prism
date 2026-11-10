@@ -6,7 +6,7 @@ A caller-controlled nonmodal panel anchors to a trigger, remains inside the view
 
 ## Plan
 
-Follow [the fixed parity contract](/docs/shadcn-parity.md) and `registry/new-york-v4/ui/popover.tsx` at shadcn commit `8a3536678a528cc012b9e62484290e79d0be410f`. Start from the accepted Select and Dialog contracts and gallery/src/input.rs; preserve the accepted egui-only core and host-owned input, frame and GPU responsibilities.
+Follow [the fixed parity contract](/docs/shadcn-parity.md) and `registry/new-york-v4/ui/popover.tsx` at shadcn commit `8a3536678a528cc012b9e62484290e79d0be410f`. Start from the accepted Select contract, the [Dialog contract](/docs/dialogs.md) for scoped content and modal focus boundaries where applicable, and gallery/src/input.rs; preserve the accepted egui-only core and host-owned input, frame and GPU responsibilities.
 
 - The application owns open state and content values. Opening, outside dismissal, Escape and focus restoration must have explicit results; navigation does not own application sessions.
 - Reuse current layers, ordered events and group compositing. Match pinned placement, offsets, border, shadow, animation and supported content constraints.

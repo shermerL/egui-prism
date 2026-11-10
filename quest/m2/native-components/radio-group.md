@@ -6,7 +6,7 @@ A controlled group selects exactly one available item with reference-matching po
 
 ## Plan
 
-Follow [the fixed parity contract](/docs/shadcn-parity.md) and `registry/new-york-v4/ui/radio-group.tsx` at shadcn commit `8a3536678a528cc012b9e62484290e79d0be410f`. Start from accepted Checkbox input handling and existing stable-ID group patterns; preserve the accepted egui-only core and host-owned input, frame and GPU responsibilities.
+Follow [the fixed parity contract](/docs/shadcn-parity.md) and `registry/new-york-v4/ui/radio-group.tsx` at shadcn commit `8a3536678a528cc012b9e62484290e79d0be410f`. Start from the accepted [Checkbox contract](/docs/checkboxes.md) for selection geometry and ordered input, and existing stable-ID group patterns; preserve the accepted egui-only core and host-owned input, frame and GPU responsibilities.
 
 - Keep the selected value and options at the caller. Use stable item identities and preserve caller selection when items reorder; define removed/disabled selection behavior explicitly.
 - Match the pinned radio indicator, label hit behavior, focus-visible and disabled states; implement the observed orientation, arrow and Home/End behavior rather than inheriting checkbox activation.

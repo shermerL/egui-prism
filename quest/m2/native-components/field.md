@@ -6,7 +6,7 @@ Labels, help text, validation text and caller-owned controls form accessible, co
 
 ## Plan
 
-Reference field.tsx and label.tsx; start at accepted TextInput/Checkbox metadata and theme typography. A field owns its semantic association and layout, while the caller owns value, validation and submit policy. Support the reference horizontal/vertical composition needed by the Gallery setting example; long descriptions/errors must wrap without covering controls.
+Reference field.tsx and label.tsx; start at the accepted [TextInput contract](/docs/text-input.md) for label/error metadata and explicit drawing, the [Checkbox contract](/docs/checkboxes.md) for label activation and disabled behavior, and theme typography. A field owns its semantic association and layout, while the caller owns value, validation and submit policy. Support the reference horizontal/vertical composition needed by the Gallery setting example; long descriptions/errors must wrap without covering controls.
 
 Do not copy a product-specific 56/84-point settings row, add a schema/validation engine, or make Label steal child input. Label focus/activation must target the intended live control and preserve disabled state. Cover multiple fields, invalid/help combinations, long localized text, focus and narrow content. Verify accessible relationships, not only visible text.
 

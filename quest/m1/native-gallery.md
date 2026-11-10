@@ -6,7 +6,7 @@ A coherent runnable Gallery demonstrates accepted controls and their composition
 
 ## Plan
 
-Start at gallery/src/main.rs, native.rs, input.rs, interaction.rs, the per-component pages, docs/gallery.md and the existing CI workflows. Reuse the official winit/egui-winit/egui-wgpu host, ordered input and compositor. This task owns integration and cross-component acceptance, not reimplementation of each component.
+Start at gallery/src/main.rs, native.rs, input.rs, interaction.rs, the per-component pages, docs/gallery.md, the [Dialog contract](/docs/dialogs.md) and the existing CI workflows. Reuse the official winit/egui-winit/egui-wgpu host, ordered input and compositor. This task owns integration and cross-component acceptance, not reimplementation of each component.
 
 Provide compiling usage, clear component availability, exact build/source identity, licenses and actionable setup/device errors. Demonstrate an ordinary settings form and a modal with inputs, selection and fixed surrounding actions. Document host-provided multilingual fonts; check actual glyphs separately from Unicode values. Preserve caller business state when switching pages or closing a presentation surface.
 
@@ -14,5 +14,5 @@ At this planned integration review node, cover focus/pointer capture across comp
 
 ## Required
 
-- [Strict parity](/quest/m1/shadcn-parity/README.md) - accepted corrected controls and shared contract
+- [Strict parity](/quest/m1/shadcn-parity/README.md) - shared-contract closure
 - [Native accessibility](/quest/m1/native-accessibility.md) - official system bridge
