@@ -1,35 +1,18 @@
-# [M] Build and validate the native gallery
+# [M] Integrate and accept the native gallery
 
 ## Goal
 
-A runnable Gallery demonstrates accepted library components on macOS, Windows
-and Linux with reproducible build identity, usage examples and explicit evidence
-for each supported platform.
+A coherent runnable Gallery demonstrates accepted controls and their composition on macOS, Windows and Linux with an honest platform evidence matrix.
 
 ## Plan
 
-M1 prioritizes desktop native use. Build on the official winit, egui-winit and
-egui-wgpu host delivered by the compositing Quest; do not implement a second host
-or renderer lifecycle. This Quest owns the completed Gallery presentation,
-examples, consumer documentation and cross-platform acceptance after the shared
-host and components land.
+Start at gallery/src/main.rs, native.rs, input.rs, interaction.rs, the per-component pages, docs/gallery.md, the [Dialog contract](/docs/dialogs.md) and the existing CI workflows. Reuse the official winit/egui-winit/egui-wgpu host, ordered input and compositor. This task owns integration and cross-component acceptance, not reimplementation of each component.
 
-Follow /docs/shadcn-parity.md throughout the visible Gallery. Present real library
-components, themes, states and multiple-instance examples with compiling Rust
-usage. Label unfinished capabilities accurately. Include source/build identity,
-licenses and useful setup or unsupported-device errors. Do not add application
-business policy, telemetry, installers, signing or release publication.
+Provide compiling usage, clear component availability, exact build/source identity, licenses and actionable setup/device errors. Demonstrate an ordinary settings form and a modal with inputs, selection and fixed surrounding actions. Document host-provided multilingual fonts; check actual glyphs separately from Unicode values. Preserve caller business state when switching pages or closing a presentation surface.
 
-Verify startup, resize, scale changes, light/dark states, keyboard navigation,
-pointer input, focus loss/reentry, clipboard and actual text composition. Record
-macOS, Windows and Linux separately, including Linux display protocol where
-tested. CI/builds, controlled GPU tests and real GUI/IME observations are distinct
-evidence. Missing platform observation remains an explicit acceptance gap.
-
-Use the real pinned shadcn browser fixture for comparisons; Rust browser support
-and Pages deployment are not prerequisites. Preserve repeatable native build and
-test commands and read-only CI artifacts for all three desktop platforms.
+At this planned integration review node, cover focus/pointer capture across components, modal/popover layering, clipboard and real IME, resize/scale changes, focus loss/reentry, window suspend/close/restart, compositor error propagation and accessibility actions. Reuse unchanged component tests and host lifecycle evidence. macOS, Windows and Linux (with X11/Wayland identified) each need separate build, controlled GPU and real desktop evidence. No browser runtime, signing, installer, package publication or new host framework is required. Missing observations remain explicit acceptance gaps; do not silently lower the promised scope.
 
 ## Required
 
-- [Strict shadcn parity for existing components](/quest/m1/shadcn-parity/README.md)
+- [Strict parity](/quest/m1/shadcn-parity/README.md) - shared-contract closure
+- [Native accessibility](/quest/m1/native-accessibility.md) - official system bridge
