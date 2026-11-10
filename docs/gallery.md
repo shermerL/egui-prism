@@ -158,4 +158,4 @@ The Tooltips page attaches hints to ordinary harness triggers with explicit IDs.
 Compare keyboard focus, Escape, pointer transit, disabled triggers, long text,
 instance removal and activation counts against `reference/?tooltips`. The hints
 do not own trigger input or introduce a modal barrier. See [Tooltips](tooltips.md)
-for the bounded-text adaptation and observation limits.
+for natural text geometry, viewport drawing bounds and observation limits.

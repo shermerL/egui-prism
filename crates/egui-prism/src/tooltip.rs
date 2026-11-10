@@ -251,27 +251,29 @@ struct Geometry {
 
 impl Geometry {
     fn new(ui: &egui::Ui, text: &str, anchor: Rect, screen: Rect) -> Self {
-        let width = screen.width();
         let above = (anchor.top() - screen.top() - 10.0).max(0.0);
         let below = (screen.bottom() - anchor.bottom() - 10.0).max(0.0);
-        let room = above.max(below).min(screen.height()).max(1.0);
         let mut font = egui::TextStyle::Body.resolve(ui.style());
         font.size = 12.0;
+        // The pinned Popper wrapper has min-width: max-content. Preserve its
+        // natural text width; only the final drawing and allocation are clipped.
+        // CSS normal white-space collapses ASCII whitespace, but not NBSP.
+        let visible_text = text
+            .split([' ', '\t', '\n', '\r', '\u{000c}'])
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
         let mut job = egui::text::LayoutJob::simple(
-            text.to_owned(),
+            visible_text,
             font,
             egui::Color32::PLACEHOLDER,
-            (width - 24.0).max(1.0),
+            f32::INFINITY,
         );
-        job.wrap.max_rows = (((room - 12.0) / 16.0).floor() as usize).max(1);
         for section in &mut job.sections {
             section.format.line_height = Some(16.0);
         }
         let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
-        let size = egui::vec2(
-            (galley.size().x + 24.0).min(width).max(1.0),
-            (galley.size().y + 12.0).min(room).max(1.0),
-        );
+        let size = galley.size() + egui::vec2(24.0, 12.0);
         let use_above = size.y <= above || above >= below;
         let left = (anchor.center().x - size.x * 0.5)
             .clamp(screen.left(), (screen.right() - size.x).max(screen.left()));
@@ -729,11 +731,9 @@ impl TooltipRegistration<'_> {
         let transform = self.geometry.transform(&state, now);
         let mut items = Vec::new();
         let mut add = |clip: Rect, shape: egui::Shape| {
+            let clip = (transform * clip).intersect(self.screen);
             if clip.is_positive() {
-                let mut clipped = egui::epaint::ClippedShape::new(
-                    (transform * clip).intersect(self.screen),
-                    shape,
-                );
+                let mut clipped = egui::epaint::ClippedShape::new(clip, shape);
                 clipped.transform_after_tessellation = transform;
                 items.push(Item::Shape(clipped));
             }
@@ -749,7 +749,11 @@ impl TooltipRegistration<'_> {
                 colors.background,
             ),
         );
-        let group = Group::new(transform * bounds, opacity, items)?;
+        let visible_bounds = (transform * bounds).intersect(self.screen);
+        if !visible_bounds.is_positive() {
+            return Ok(output);
+        }
+        let group = Group::new(visible_bounds, opacity, items)?;
         let mut portal = painter.clone();
         portal.set_layer_id(egui::LayerId::new(
             egui::Order::Tooltip,

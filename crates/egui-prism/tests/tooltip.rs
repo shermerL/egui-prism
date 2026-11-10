@@ -449,21 +449,34 @@ fn clipped_hit_authority_and_fully_clipped_focus_cancellation() {
 }
 
 #[test]
-fn top_preference_flip_shift_and_long_text_are_viewport_bounded() {
+fn long_text_preserves_natural_width_with_viewport_bounded_drawing() {
     for (x, y) in [(0.0, 0.0), (400.0, 0.0), (0.0, 360.0), (400.0, 360.0)] {
         let mut h = Harness::new();
         h.text = "A long plain hint with words and an_unbroken_token_that_must_not_escape_the_viewport. ".repeat(100);
         h.rects[0] = egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(100.0, 36.0));
         h.hover(0.0, 0);
         let body = h.outputs[0].unwrap().content_rect.unwrap();
-        assert!(h.screen.contains_rect(body));
-        assert!(body.width() <= h.screen.width());
+        assert!(
+            body.width() > h.screen.width(),
+            "reference max-content width"
+        );
+        assert_eq!(body.height(), 28.0, "no added wrapping or truncation");
+        assert_eq!(body.left(), h.screen.left());
         if y == 0.0 {
             assert!(body.top() >= h.rects[0].bottom());
         } else {
             assert!(body.bottom() <= h.rects[0].top());
         }
         h.frame(0.2, vec![]);
+        assert!(
+            h.groups
+                .iter()
+                .all(|group| h.screen.contains_rect(group.bounds()))
+        );
+        assert_eq!(
+            h.descriptions[0].as_deref(),
+            Some(format!("Existing description\n{}", h.text).as_str())
+        );
         assert!(
             h.groups
                 .iter()

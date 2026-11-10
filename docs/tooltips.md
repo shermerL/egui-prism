@@ -128,12 +128,14 @@ The native observer follows the supplied Radix Tooltip implementation:
 The minimum placement API prefers top/center, flips to bottom for space, and
 shifts horizontally within the content viewport. There are no configurable side,
 alignment, arrow, portal or rich-content APIs. Body text is 12pt with 16pt line
-height and 12pt horizontal/6pt vertical padding; radius is 8pt. Width is bounded by
-the viewport, without an arbitrary component width cap. This is the Quest's
-explicit bounded-hint adaptation: the unmodified browser source can exceed a
-narrow viewport because its Popper wrapper uses `min-width: max-content`. Height/rows are bounded by the larger available side;
-excess text uses egui's layout truncation and clipping. Extremely small viewports
-may clip text and overlap the anchor rather than escape the screen.
+height and 12pt horizontal/6pt vertical padding; radius is 8pt. Like the pinned
+Popper wrapper's `min-width: max-content`, the body keeps the text's natural
+width, even when it exceeds the viewport. CSS ASCII whitespace is collapsed;
+there is no added wrapping, width cap or ellipsis. Collision positioning shifts
+the body to the viewport edge. Final shapes and the compositing Group bounds
+are clipped to the visible viewport intersection, so offscreen natural width
+does not allocate an oversized render target. The accessible description keeps
+the complete original text.
 
 The background pair is deliberately inverted: `theme.colors.background.foreground`
 is the hint surface and arrow, and `.background` is its text. Body, text and the
@@ -151,8 +153,7 @@ not make an inaccessible trigger accessible by itself.
 
 ## Limits and evidence
 
-This is an egui adaptation, not a browser layout engine. egui wrapping is not CSS
-`text-balance`; font rasterization, truncation, arrow tessellation and animated
+This is an egui adaptation, not a browser layout engine. Font rasterization, arrow tessellation and animated
 pixels require visual comparison. The scope is explicit rather than Radix's
 cross-document event broadcast. With no live scope members, no hidden provider
 retains its skip-delay window. Synthetic pointer events lack a pointer type, so
@@ -173,10 +174,11 @@ hide/reappear, reverse, delayed opening, long text, a permanently disabled trigg
 and an outside-action counter. Compare it with `reference/?tooltips` at matching
 light/dark theme and 100% scale; additionally inspect native 150%, narrow windows,
 viewport edges and scrolling. The macOS/Metal candidate was observed with keyboard focus opening, Escape
-dismissal, normal activation counters, long viewport-bounded content, light/dark
+dismissal, normal activation counters, long naturally sized content with viewport clipping, light/dark
 themes and 100/150% native scale. Chrome at 100% provided the unmodified source
 comparison: short body 97.49 by 28 CSS pixels, 10-pixel trigger gap, 8-pixel
 radius and 12/16-pixel text. At a 960-pixel viewport the original long hint
-remained 1377.4 pixels wide; the bounded native adaptation wraps it instead.
+remained 1377.4 pixels wide; the native implementation preserves that natural-width behavior and clips
+offscreen drawing and Group allocation to the viewport.
 These observations are not measured pixel-difference, animation-timing or
 screen-reader acceptance. Windows/Linux native observations remain unverified.
