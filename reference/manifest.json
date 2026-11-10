@@ -20,6 +20,7 @@
     "crates/egui-prism/fonts/Geist-Regular.ttf": "2c460a7a71063e53491f343d44b382267bc0cf496e31db64865f962af3152e68",
     "crates/egui-prism/fonts/Geist-SemiBold.ttf": "01923aa148e5202ae70a2e11b2ab4dc41b80bcc374aedccc913d47bb2f591c06",
     "crates/egui-prism/fonts/OFL.txt": "930853ee1daa68554d9e35c8a9175affb74f699fad9a5da6ee5ebe76379d9137",
-    "crates/egui-prism/fonts/GeistMono-Regular.ttf": "686914333e77a620c85b35481064788deb33fc25f69901bdbf296c1bbc26a7fe"
+    "crates/egui-prism/fonts/GeistMono-Regular.ttf": "686914333e77a620c85b35481064788deb33fc25f69901bdbf296c1bbc26a7fe",
+    "reference/src/ui/badge.tsx": "13a9380dfff853ee730c14a52df49f22aecd31f40f2998d7c1e7ec458b6e1650"
   }
 }
