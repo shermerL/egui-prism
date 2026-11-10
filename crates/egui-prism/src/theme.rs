@@ -116,6 +116,16 @@ const fn pair(background: u32, foreground: u32) -> ColorPair {
 }
 
 /// Install Geist into the host's complete font definitions and transfer them to the context.
+///
+/// The host owns fallback font data, licensing, and glyph coverage. Supplied
+/// font data and custom named families are preserved; Medium and SemiBold
+/// inherit the host's proportional fallback chain. Bundled Geist faces have
+/// limited glyph coverage and are not a general Unicode fallback.
+///
+/// `egui::FontDefinitions::default()` supplies fallback fonts only when egui's
+/// `default_fonts` feature is enabled. For setup independent of that feature,
+/// start with `egui::FontDefinitions::empty()` and populate the host's fallback
+/// font data and family chains before calling this function.
 pub fn install_fonts(context: &egui::Context, mut fonts: egui::FontDefinitions) {
     for (name, bytes, family) in [
         (

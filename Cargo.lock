@@ -483,6 +483,7 @@ name = "egui-prism"
 version = "0.1.0"
 dependencies = [
  "egui",
+ "epaint_default_fonts",
 ]
 
 [[package]]

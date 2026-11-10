@@ -40,6 +40,7 @@ def main():
         run("cargo", "run", "--locked", "-p", "egui-prism", "--example", "ordered_input")
         run("cargo", "run", "--locked", "-p", "egui-prism", "--example", "select")
         run("cargo", "check", "-p", "egui-prism", "--locked", "--no-default-features")
+        run("cargo", "test", "--locked", "-p", "egui-prism", "--test", "theme")
         run("cargo", "clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings")
         run("cargo", "test", "--workspace", "--locked")
         run("cargo", "doc", "--workspace", "--no-deps", "--locked")
