@@ -13,8 +13,10 @@ its API, caller-owned values, stable IDs, pinned shadcn appearance, states,
 interaction, examples and relevant tests. The native Gallery validates their
 combined use on macOS, Windows and Linux.
 
-TextInput and Checkbox still require their strict-parity corrections, and Dialog
-still requires its implementation.
+All eight controls now have merged component implementations and documented
+evidence. Integrated native Gallery acceptance, the native accessibility bridge,
+the complete platform evidence matrix, the standalone font test contract and a
+clean external consumer remain open preparation work.
 Adding the rest of the shadcn catalog is not a first-release prerequisite. Native
 desktop remains the target; browser delivery and Pages have separate deferred
 Quests. The pinned shadcn browser fixture remains a comparison source.
@@ -95,9 +97,10 @@ and consumer commands before reporting completion.
 | M1: Core components and native gallery | Eight controls and integrated native Gallery; source-candidate and first-publication planning retain separate evidence and approval |
 | M2: Complex components and platform completeness | Independently planned complex components, registry preparation and separately gated deferred platform delivery |
 
-Existing approved implementation work follows the repository Quest tree. New
-release and Quest candidates in this directory remain private. GitHub milestones
-contain stage rules only, with no detailed work or acceptance checklist.
+The repository Quest tree describes public, reusable implementation and release
+preparation work. Detailed execution schedules, consumer-specific analysis and
+operation records remain local. GitHub milestones contain stage rules only,
+with no detailed work or acceptance checklist.
 No delivery date is inferred from a milestone name. Component corrections stay
 in their current Quests; release preparation and external publication are separate
 because they have different completion evidence and approval boundaries.

@@ -14,7 +14,3 @@ Follow [the fixed parity contract](/docs/shadcn-parity.md) and `registry/new-yor
 - Cover same-batch open/close events, outside presses without click-through, viewport edges, disabled/disappearing triggers and multiple instances. Include an example using a few accepted form controls.
 
 Complete implementation, the compiling public API example, component documentation, native Gallery case and meaningful regressions in one PR. Compare a mature candidate with the actual pinned reference at matching scale and theme. Report controlled tests, native observations and untested platforms separately. Review only the changed component and affected shared paths; reuse unchanged evidence. No host/vendor architecture change, new dependency identity or publication is included.
-
-## Required
-
-- [Dialog](/quest/m1/dialog.md) - accepted scoped content and modal focus boundary to reuse where applicable

@@ -1,5 +1,9 @@
-use crate::input::{self, Draw, Layout};
-use egui_prism::{egui, text_input::TextInput, theme::Theme};
+use crate::input::{self, Draw, Layout, Phase};
+use egui_prism::{
+    egui,
+    text_input::{TextInput, TextInputOutput},
+    theme::Theme,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub(super) enum Control {
@@ -31,35 +35,7 @@ impl InputCase {
             Control::Reversed => ui
                 .checkbox(&mut self.reversed, "Reverse input instances")
                 .into(),
-            Control::Editor(index) => {
-                if self.disabled {
-                    ui.disable();
-                }
-                let mut input = TextInput::new(
-                    theme,
-                    &mut self.values[index],
-                    format!("Value {}", if index == 0 { "A" } else { "B" }),
-                )
-                .hint("Type or paste here");
-                if self.show_error {
-                    input = input.error("Caller-provided error: this description may wrap, and does not modify the value.");
-                }
-                let output = input.show(ui);
-                let frame = ui.ctx().cumulative_frame_nr();
-                if output.response.changed() && self.last_edit_frame[index] != Some(frame) {
-                    self.edits[index] += 1;
-                    self.last_edit_frame[index] = Some(frame);
-                }
-                let mut ids = vec![output.label.id];
-                if let Some(error) = output.error {
-                    ids.push(error.id);
-                }
-                Draw {
-                    response: output.response,
-                    ids,
-                    button: None,
-                }
-            }
+            Control::Editor(index) => self.editor(ui, theme, index).into(),
             Control::Count(index) => ui
                 .add(
                     egui::Label::new(
@@ -106,11 +82,9 @@ impl InputCase {
     pub(super) fn show(&mut self, ui: &mut egui::Ui, theme: &Theme, frame: &mut Layout) {
         frame.track(ui.heading("Prism text inputs"));
         frame.label(ui, "Type, select, paste, undo, or compose with the host input method. The caller owns both values and validation.");
-        ui.horizontal_wrapped(|ui| {
-            for control in [Control::Disabled, Control::Error, Control::Reversed] {
-                self.widget(ui, theme, frame, control);
-            }
-        });
+        for control in [Control::Disabled, Control::Error, Control::Reversed] {
+            self.widget(ui, theme, frame, control);
+        }
         for index in if self.reversed { [1, 0] } else { [0, 1] } {
             ui.push_id(("text-input-instance", index), |ui| {
                 self.widget(ui, theme, frame, Control::Editor(index));
@@ -121,9 +95,60 @@ impl InputCase {
         frame.track(ui.small("IME integration and glyph coverage depend on the host platform and fonts; synthetic events do not establish OS input-method acceptance."));
     }
 
+    fn editor(&mut self, ui: &mut egui::Ui, theme: &Theme, index: usize) -> TextInputOutput {
+        if self.disabled {
+            ui.disable();
+        }
+        let mut input = TextInput::new(
+            theme,
+            &mut self.values[index],
+            format!("Value {}", if index == 0 { "A" } else { "B" }),
+        )
+        .hint("Type or paste here");
+        if self.show_error {
+            input = input.error(
+                "Caller-provided error: this description may wrap, and does not modify the value.",
+            );
+        }
+        let output = input.show(ui);
+        let frame = ui.ctx().cumulative_frame_nr();
+        if output.response.changed() && self.last_edit_frame[index] != Some(frame) {
+            self.edits[index] += 1;
+            self.last_edit_frame[index] = Some(frame);
+        }
+        output
+    }
+
     fn widget(&mut self, ui: &mut egui::Ui, theme: &Theme, frame: &mut Layout, c: Control) {
+        let phase = frame.phase;
         frame.widget(ui, input::Control::Input(c), |ui| {
-            self.control(ui, theme, c)
+            if let Control::Editor(index) = c {
+                let painter = ui.painter().clone();
+                let mut output = self.editor(ui, theme, index);
+                if phase == Phase::Paint
+                    && let Some(drawing) = output.drawing.take()
+                {
+                    egui_prism::compositing::paint(&painter, drawing)
+                        .expect("text input compositor");
+                }
+                output.into()
+            } else {
+                self.control(ui, theme, c)
+            }
         });
+    }
+}
+
+impl From<TextInputOutput> for Draw {
+    fn from(output: TextInputOutput) -> Self {
+        let mut ids = vec![output.label.id];
+        if let Some(error) = output.error {
+            ids.push(error.id);
+        }
+        Self {
+            response: output.response,
+            ids,
+            button: None,
+        }
     }
 }

@@ -2,7 +2,7 @@
 
 The native macOS, Windows and Linux hosts use the same Rust gallery and library. The gallery
 demonstrates the theme API, Prism buttons, text inputs, checkboxes, switches, sliders,
-and selects, alongside standard egui harness controls. Other Prism widgets are planned.
+selects, and dialogs, alongside standard egui harness controls. Other Prism widgets are planned.
 A harness check is not a component acceptance result.
 
 ## Run and identify a build
@@ -33,6 +33,7 @@ Theme and case changes preserve caller text, checkboxes, selected values, and ac
 | Buttons | Prism roles, sizes, icon names, disabled actions, wrapping, and independent counts |
 | Inputs | Caller-owned text, editing, errors, disabled state, stable IDs, and IME diagnostics |
 | Selects | Independent controlled values, popup shielding, keyboard/typeahead, list variants, and idle counts |
+| Dialogs | Controlled A/B modals, neutral dismissal, body actions, focus isolation/restoration, and bounded long content |
 | Interaction | Independent A/B values, pointer activation, Tab/Enter, disabled actions, and idle counts |
 | Layout | The same instances and IDs with long wrapping action labels |
 
@@ -114,8 +115,9 @@ integration, touch, or another operating system's behavior. Actual GUI checks an
 the tested OS/backend are reported in each PR. Unobserved Windows/Linux GUI,
 CJK font coverage, IME, assistive technology, and a full DPI matrix remain open.
 
-The Checkboxes case tests box/label clicks, keyboard toggles, disabled editing,
-independent values after reordering, and long-label layout. Change counters must
+The Checkboxes case tests box/label clicks, Space-release activation, Enter no-op,
+keyboard focus, disabled and invalid states, independent values after reordering,
+long-label layout, and disabled compositing over three backgrounds. Change counters must
 advance once per activation and stay unchanged while idle or disabled.
 The Switches case checks track/label activation, keyboard focus, explicit value
 changes, disabled state, independent instances, and wrapped-label layout.

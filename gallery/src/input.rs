@@ -1,8 +1,9 @@
 //! Pass-local routing for the Gallery's explicit controls and scroll shells.
 use crate::{
-    Case, Gallery, buttons, checkboxes, compositing, egui, interaction, selects, sliders, switches,
-    text_inputs,
+    Case, Gallery, buttons, checkboxes, compositing, dialogs, egui, interaction, selects, sliders,
+    switches, text_inputs,
 };
+use egui_prism::checkbox::{Checkbox, CheckboxRegistration};
 use egui_prism::switch::{Switch, SwitchRegistration};
 use std::{collections::HashSet, sync::Arc};
 
@@ -19,6 +20,7 @@ pub(super) enum Control {
     Slider(sliders::Control),
     Switch(switches::Control),
     Select(selects::Control),
+    Dialog(dialogs::Control),
     Interaction(interaction::Control),
     Compositing(compositing::Control),
     Link(&'static str, &'static str),
@@ -30,10 +32,11 @@ impl Control {
             self,
             Self::Button(buttons::Control::PreviewCount | buttons::Control::Count(_))
                 | Self::Input(text_inputs::Control::Count(_))
-                | Self::Checkbox(checkboxes::Control::Count(_) | checkboxes::Control::Focus(_))
+                | Self::Checkbox(checkboxes::Control::Count(_))
                 | Self::Slider(sliders::Control::Value(_) | sliders::Control::Focus(_))
                 | Self::Switch(switches::Control::Count(_))
                 | Self::Select(selects::Control::Count(_) | selects::Control::OutsideCount)
+                | Self::Dialog(dialogs::Control::Count(_) | dialogs::Control::OutsideCount)
                 | Self::Interaction(
                     interaction::Control::Count(_) | interaction::Control::Focus(_)
                 )
@@ -54,7 +57,9 @@ impl Control {
             | Self::Checkbox(
                 checkboxes::Control::Disabled
                 | checkboxes::Control::Reversed
-                | checkboxes::Control::Long,
+                | checkboxes::Control::Long
+                | checkboxes::Control::Invalid
+                | checkboxes::Control::Compositing,
             )
             | Self::Slider(
                 sliders::Control::Disabled
@@ -80,6 +85,12 @@ impl Control {
                 | selects::Control::Empty
                 | selects::Control::AllDisabled
                 | selects::Control::Tinted,
+            )
+            | Self::Dialog(
+                dialogs::Control::Long
+                | dialogs::Control::Reverse
+                | dialogs::Control::KeepOpen
+                | dialogs::Control::Tinted,
             )
             | Self::Interaction(
                 interaction::Control::Disabled
@@ -207,6 +218,7 @@ pub(super) struct Entry {
     pub response: egui::Response,
     pub button: Option<egui_prism::button::ButtonOutput>,
     pub switch: Option<SwitchRegistration>,
+    pub checkbox: Option<CheckboxRegistration>,
     local: Option<LocalUi>,
     ids: HashSet<egui::Id>,
 }
@@ -264,6 +276,7 @@ impl Layout {
             response,
             button: None,
             switch: None,
+            checkbox: None,
             local: None,
             ids: HashSet::from([id]),
         });
@@ -304,6 +317,7 @@ impl Layout {
             response: output.response,
             button: output.button,
             switch: None,
+            checkbox: None,
             local: Some(local),
             ids,
         });
@@ -335,6 +349,33 @@ impl Layout {
             }
         });
         self.entries.last_mut().expect("switch entry").switch = registration;
+    }
+
+    pub fn checkbox_widget<'a>(
+        &mut self,
+        ui: &mut egui::Ui,
+        control: checkboxes::Control,
+        build: impl FnOnce(&mut egui::Ui) -> Checkbox<'a, 'a>,
+    ) {
+        let phase = self.phase;
+        let mut registration = None;
+        self.widget(ui, Control::Checkbox(control), |ui| {
+            let painter = (phase == Phase::Paint).then(|| ui.painter().clone());
+            let checkbox = build(ui);
+            if let Some(painter) = painter {
+                checkbox
+                    .show(ui)
+                    .paint(&painter)
+                    .expect("checkbox compositor")
+                    .into()
+            } else {
+                let registered = checkbox.register(ui);
+                let response = registered.response.clone();
+                registration = Some(registered);
+                response.into()
+            }
+        });
+        self.entries.last_mut().expect("checkbox entry").checkbox = registration;
     }
 
     pub fn scroll(
@@ -382,6 +423,9 @@ impl Layout {
         for entry in &self.entries {
             if let Some(button) = &entry.button {
                 button.cancel_unfocused();
+            }
+            if let Some(checkbox) = &entry.checkbox {
+                checkbox.cancel_unfocused();
             }
             if let Some(switch) = &entry.switch {
                 switch.cancel_unfocused();
@@ -504,10 +548,11 @@ impl Gallery {
             Control::Selected => ui.selectable_label(true, "Selected foreground").into(),
             Control::Button(control) => self.buttons.control(ui, &theme, *control),
             Control::Input(control) => self.inputs.control(ui, &theme, *control),
-            Control::Checkbox(control) => self.checkboxes.control(ui, &theme, *control),
+            Control::Checkbox(control) => self.checkboxes.control(ui, *control),
             Control::Slider(control) => self.sliders.stock(ui, *control).into(),
             Control::Switch(control) => self.switches.control(ui, *control),
             Control::Select(control) => self.selects.control(ui, *control),
+            Control::Dialog(control) => self.dialogs.control(ui, *control),
             Control::Interaction(control) => {
                 self.interaction
                     .control(ui, *control, self.case == Case::Layout)

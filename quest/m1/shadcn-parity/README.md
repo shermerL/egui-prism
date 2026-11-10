@@ -1,4 +1,4 @@
-# Strict shadcn parity
+# [S] Close shared shadcn parity evidence
 
 ## Goal
 

@@ -15,5 +15,4 @@ At this planned integration review node, cover focus/pointer capture across comp
 ## Required
 
 - [Strict parity](/quest/m1/shadcn-parity/README.md) - accepted corrected controls and shared contract
-- [Dialog](/quest/m1/dialog.md) - modal content and input isolation
 - [Native accessibility](/quest/m1/native-accessibility.md) - official system bridge
