@@ -5,7 +5,8 @@
     "@radix-ui/react-slider": "1.3.6",
     "@radix-ui/react-checkbox": "1.3.3",
     "@radix-ui/react-switch": "1.2.6",
-    "@radix-ui/react-select": "2.2.6"
+    "@radix-ui/react-select": "2.2.6",
+    "@radix-ui/react-separator": "1.1.7"
   },
   "sha256": {
     "reference/src/ui/button.tsx": "79dd6f75f8136394442202d6b8b922fb269eaad0a5dba579397c9d5b41f893bb",
@@ -21,6 +22,7 @@
     "crates/egui-prism/fonts/Geist-SemiBold.ttf": "01923aa148e5202ae70a2e11b2ab4dc41b80bcc374aedccc913d47bb2f591c06",
     "crates/egui-prism/fonts/OFL.txt": "930853ee1daa68554d9e35c8a9175affb74f699fad9a5da6ee5ebe76379d9137",
     "crates/egui-prism/fonts/GeistMono-Regular.ttf": "686914333e77a620c85b35481064788deb33fc25f69901bdbf296c1bbc26a7fe",
-    "reference/src/ui/badge.tsx": "13a9380dfff853ee730c14a52df49f22aecd31f40f2998d7c1e7ec458b6e1650"
+    "reference/src/ui/badge.tsx": "13a9380dfff853ee730c14a52df49f22aecd31f40f2998d7c1e7ec458b6e1650",
+    "reference/src/ui/separator.tsx": "ad7d5403fe337160e41dbf04147896e448ae3a747b8d06660d627d74d60021bc"
   }
 }

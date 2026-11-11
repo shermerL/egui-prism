@@ -59,3 +59,8 @@ The `/?badges` fixture renders all six static Badge variants from the pinned
 source, long text in a horizontal scroll area, and group opacity over a tinted
 surface. Light/dark and 100%/150% controls match the native Badges page.
 The Link variant remains a noninteractive span in both fixtures.
+
+The `/?separators` fixture uses the unmodified pinned Separator and locked Radix
+1.1.7 primitive. It matches the native Separators page: both directions and
+semantic modes, 320px width, 48px height, 160px clipping and tinted parent opacity,
+with light/dark themes and 100%/150% scale.

@@ -250,6 +250,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ## shadcn/ui reference and adapted component specifications
 
+The unmodified reference components include Separator at
+`apps/v4/registry/new-york-v4/ui/separator.tsx`; source hashes are in
+`reference/manifest.json`.
+
 Source: https://github.com/shadcn-ui/ui/tree/8a3536678a528cc012b9e62484290e79d0be410f
 
 MIT License
