@@ -60,6 +60,11 @@ source, long text in a horizontal scroll area, and group opacity over a tinted
 surface. Light/dark and 100%/150% controls match the native Badges page.
 The Link variant remains a noninteractive span in both fixtures.
 
+The `/?cards` fixture renders the pinned Card header, description, content and
+footer with caller-owned text/actions, long and empty content, 320px width,
+light/dark, 100%/150% scale and tinted group opacity. Its ordinary HTML editor
+is an interaction fixture, not an appearance match for the Gallery egui editor.
+
 The `/?tooltips` fixture compares explicitly identified pointer and keyboard
 triggers, immediate and delayed opening, hoverable plain-text content, disabled
 triggers, viewport collisions and long bounded text. It uses the unmodified
