@@ -55,6 +55,9 @@ source. The Rust text engine is not a CSS engine: exact CSS `text-balance`,
 line-breaking/min-content rules and raster parity are not established. The
 current minimum-width estimate uses space-delimited words, so CJK, punctuation
 and browser-specific break opportunities are not implemented as CSS equivalents.
+Only the trailing action group wraps as a unit; the leading icon and copy remain
+on the first row. The source flex container can wrap those items separately at
+extreme widths, which this finite layout does not implement.
 Description balancing minimizes egui wrap width while retaining its natural line
 count (up to six), then visibly clamps to two lines. This bounded algorithm is
 not a claim of browser `text-balance` equivalence. Long unbreakable content and
