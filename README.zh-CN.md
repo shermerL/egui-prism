@@ -26,7 +26,7 @@ nix develop --command cargo run --locked -p egui-prism-gallery
 
 原生构建与完整检查步骤见 [CONTRIBUTING.md](CONTRIBUTING.md)。[Gallery 验收说明](docs/gallery.md) 列出了交互、布局、缩放和截图场景。
 
-核心库依赖 egui；Gallery 管理自己的 winit 窗口和显式 wgpu 渲染循环，由 egui-winit 对接操作系统输入、输入法和剪贴板。应用也可以在自己的宿主程序中使用组件库。
+核心库依赖 egui；Gallery 管理自己的 winit 窗口和显式 wgpu 渲染循环，由 egui-winit 对接操作系统输入、输入法、剪贴板和原生 AccessKit 辅助功能桥。应用也可以在自己的宿主程序中使用组件库。事件契约与各平台独立验收要求见 [辅助功能检查](docs/gallery.md#native-accessibility)。
 
 `install_fonts` 安装的内置 Geist 字体只覆盖有限字符。回退字体的数据、许可和字体族链由宿主负责；未启用 egui 的 `default_fonts` 特性时，`FontDefinitions::default()` 不包含字体。详见[主题设置](docs/themes.md)。
 

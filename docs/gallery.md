@@ -100,6 +100,66 @@ at 100% first; do not add CSS zoom to the browser reference.
 See [Select integration](selects.md) for the caller-owned value, frame-local
 borrow, all-event forwarding, and unregister-before-replacement contracts.
 
+## Native accessibility
+
+The Gallery enables the official `egui-winit` AccessKit bridge. It creates the
+window hidden, installs the adapter, then shows the window. The runtime owns
+`egui_winit::State` and its adapter; suspension, initialization failure and exit
+drop them before the window. Events naming a replaced window are ignored.
+
+An initial-tree request enables egui accessibility and requests a redraw. Action
+requests enter `State::on_accesskit_action_request`, preserving their position
+among ordinary input events. The existing ordered Gallery input pass applies
+component eligibility, including disabled controls and modal isolation. The host
+publishes trees through `handle_platform_output_with_event_loop`; it does not
+maintain a second semantic tree or action dispatcher. Deactivation disables tree
+generation, and a later initial-tree request enables it again.
+
+For a representative system check, record the OS version, architecture, native
+backend, exact build ID and assistive client. Navigate to Interaction using the
+client, read an action's name/role, activate A once and verify only A's count
+changes. Disable actions and verify they cannot activate. On Dialogs, open A,
+inspect its title/body and close action, dismiss it and verify focus returns to
+the opener. Record what the client actually exposes and announces, independently
+of pointer or keyboard interaction.
+
+macOS VoiceOver, Windows UIA clients and Linux AT-SPI clients require separate
+observations. A native build or synthetic AccessKit request is not a screen-reader
+pass. The bridge tests in `gallery/src/native.rs` cover activation/deactivation,
+stale-window rejection, payload/order preservation and one-time queue draining
+using the real egui-winit state without a platform adapter. Existing component
+tests cover stable IDs, disabled eligibility and modal actions. Actual platform
+adapter construction and system interaction must be recorded separately.
+
+### Staged bridge delivery
+
+The native bridge is an implementation-stage delivery, not completed platform
+accessibility acceptance. The Gallery maintainer owns the retained
+[native accessibility Quest](../quest/m1/native-accessibility.md): representative
+VoiceOver speech/navigation and focus restoration, and separately recorded
+Windows UIA/Linux AT-SPI observations. Unobserved cases remain NOT RUN, not PASS.
+The implementation may land before those specialist observations; this does not
+waive component semantic defects such as issue #29 or final Gallery acceptance.
+
+### Bridge observation record
+
+On 2026-11-10, build `540123943492bb59dbf52abedfeaf2c3c4b072b8`
+(debug, Apple M3 / Metal) ran on macOS 26.6.2 (25G83). A system AX client
+observed the native tree after its initial request and the embedded build ID.
+AXPress navigated to Interaction, activated A once (A=1, B=0), and enabled
+Disable actions. Both action nodes reported disabled; another AXPress left
+both counts unchanged. In Dialogs, AXPress opened A, an Outside action request
+left its count at zero, and Close incremented only A's dismissal count once.
+The OS window close action also exited the process successfully.
+
+This establishes native adapter/tree/action delivery for those cases, not
+VoiceOver speech or navigation. VoiceOver and system focus restoration remain
+unverified; Windows UIA and Linux AT-SPI were not observed. Dialog title and
+description are currently absent from the system tree, tracked separately in
+[issue #29](https://github.com/shermerL/egui-prism/issues/29); the header is painted
+without component semantic nodes. The host does not synthesize missing component
+semantics.
+
 ## Automated coverage
 
 The private interaction module is called by both the app and the tests. Synthetic

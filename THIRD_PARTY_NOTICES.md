@@ -94,6 +94,19 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
+## AccessKit native adapters
+
+The Gallery uses the official AccessKit winit and platform adapters through
+`egui-winit`. AccessKit is licensed under Apache-2.0.
+
+Copyright 2022 The AccessKit Authors. All rights reserved.
+
+Source: https://github.com/AccessKit/accesskit
+
+The Apache-2.0 license text is retained in
+[LICENSE-APACHE](vendor/egui/LICENSE-APACHE). Dependency versions and platform
+packages are recorded in `Cargo.lock`; no AccessKit source is modified or vendored.
+
 ## Bundled default fonts
 
 The Gallery enables egui default fonts through epaint_default_fonts 0.37.0.
