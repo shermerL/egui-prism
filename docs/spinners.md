@@ -43,6 +43,7 @@ host submission. `cargo run --locked -p egui-prism --example spinner` is a compi
 collector-host example, not a rendered window.
 
 Open the Gallery Spinners case and the actual pinned reference `/?spinners`.
-The [Spinner Quest](../quest/m2/native-components/spinner.md) defines the remaining
-real-browser/native/assistive-technology acceptance. Automated shape and tree
+The [Spinner Quest](../quest/m2/native-components/spinner.md) records the deferred
+real-browser/native/assistive-technology specialist acceptance, outside the
+implementation-stage merge gate by the maintainer's scope decision. Automated shape and tree
 checks do not establish pixel parity, native frame pacing or announcement quality.
