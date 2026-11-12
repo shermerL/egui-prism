@@ -18,6 +18,7 @@ function measure(element: HTMLElement) {
   const text = node.textContent!;
   const lines: { top: number; left: number; right: number; text: string }[] = [];
   const unpositioned: { offset: number; text: string }[] = [];
+  const glyphRanges: { offset: number; text: string; rects: { x: number; y: number; width: number; height: number }[] }[] = [];
   let offset = 0;
   for (const character of text) {
     const range = document.createRange();
@@ -25,6 +26,7 @@ function measure(element: HTMLElement) {
     offset += character.length;
     range.setEnd(node, offset);
     const rects = range.getClientRects();
+    glyphRanges.push({ offset: offset - character.length, text: character, rects: Array.from(rects, rect => ({ x: rect.x, y: rect.y, width: rect.width, height: rect.height })) });
     if (rects.length === 0) { unpositioned.push({ offset: offset - character.length, text: character }); continue; }
     const rect = range.getBoundingClientRect();
     // Collapsed trailing spaces can have zero width; retain their source text
@@ -43,7 +45,7 @@ function measure(element: HTMLElement) {
   const rect = element.getBoundingClientRect();
   const parentRect = parent.getBoundingClientRect();
   return {
-    text, unpositioned, descriptionWidth: rect.width, alertWidth: parentRect.width,
+    text, unpositioned, glyphRanges, descriptionWidth: rect.width, alertWidth: parentRect.width,
     alertHeight: parentRect.height, scrollWidth: element.scrollWidth,
     overflowX: style.overflowX, font: style.font, lineHeight: style.lineHeight,
     whiteSpace: style.whiteSpace, wordBreak: style.wordBreak,

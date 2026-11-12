@@ -16,7 +16,8 @@ cargo test --locked -p egui-prism --test alert_wrapping -- --nocapture
 ```
 
 The normal workspace test command runs this test in CI. It checks outer width
-and preservation of complete laid-out text, not CSS line counts. The 56 samples
+and preservation of the complete layout input plus non-space row characters
+and NBSP, not CSS line counts or every inter-word space. The 56 samples
 cover 448/320/160/24 logical points at 1x/1.5x. Capture the `ALERT_CASE` and
 `ALERT_ROW` TSV records. Text fields are UTF-8 hexadecimal, so spaces and NBSP
 remain distinguishable; decode with Python `bytes.fromhex(value).decode()`.
@@ -39,8 +40,11 @@ controls, then select **Measure loaded reference**. Save the displayed JSON
 alongside the repository commit/tree, OS/browser version, zoom, fonts and source
 hash verification. It waits for Geist and measures original text nodes with DOM
 Ranges, not inserted per-character spans that would change grid layout.
-The output includes raw line strings, widths, element/grid dimensions, overflow,
+The output includes raw per-character Range rectangles, inferred line strings,
+widths, element/grid dimensions, overflow,
 typography, viewport and DPR. Missing Range positions are explicitly listed.
+Line grouping by Range top can be ambiguous with mixed fallback metrics; inspect
+the raw rectangles before accepting any inferred line counts.
 The UI deliberately labels output `MEASURED_NOT_ACCEPTED`, not PASS.
 
 Compare native and browser at matching width/scale: line count and non-collapsed
