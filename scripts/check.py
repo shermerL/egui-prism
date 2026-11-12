@@ -39,6 +39,7 @@ def main():
         run(sys.executable, "scripts/check_input_consumer.py")
         run("cargo", "run", "--locked", "-p", "egui-prism", "--example", "ordered_input")
         run("cargo", "run", "--locked", "-p", "egui-prism", "--example", "select")
+        run("cargo", "run", "--locked", "-p", "egui-prism", "--example", "tooltip")
         run("cargo", "check", "-p", "egui-prism", "--locked", "--no-default-features")
         run("cargo", "test", "--locked", "-p", "egui-prism", "--test", "theme")
         run("cargo", "clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings")

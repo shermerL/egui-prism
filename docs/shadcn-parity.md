@@ -106,6 +106,8 @@ resource lifetimes. Their migration sections replace the earlier egui-style APIs
 | Separator | [Separators](separators.md) | Noninteractive, caller-bounded geometry with decorative or oriented semantic output. Native visual and assistive-technology acceptance remain pending. |
 | Badge | [Badges](badges.md) | Static caller-owned text with six variants, natural width, accessible text and explicit drawing. Platform observations are recorded separately from contract tests. |
 
+| Tooltip | [Tooltips](tooltips.md) | Explicit trigger responses, host-supplied hint scope and drawing-only hints. Natural text width matches the reference while drawing and Group allocation are clipped to the viewport; browser/native observations and controlled tests are recorded separately. |
+
 ### Shared capabilities
 
 - [Semantic themes](themes.md#evidence-and-limits) and the

@@ -34,3 +34,4 @@ pub mod dialog;
 pub mod select;
 pub mod separator;
 pub mod slider;
+pub mod tooltip;

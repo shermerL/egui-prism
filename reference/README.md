@@ -60,6 +60,12 @@ source, long text in a horizontal scroll area, and group opacity over a tinted
 surface. Light/dark and 100%/150% controls match the native Badges page.
 The Link variant remains a noninteractive span in both fixtures.
 
+The `/?tooltips` fixture compares explicitly identified pointer and keyboard
+triggers, immediate and delayed opening, hoverable plain-text content, disabled
+triggers, viewport collisions and long bounded text. It uses the unmodified
+pinned Tooltip source and Radix Tooltip 1.2.8; the shadcn provider defaults to
+zero delay and the content defaults to zero side offset.
+
 The `/?separators` fixture uses the unmodified pinned Separator and locked Radix
 1.1.7 primitive. It matches the native Separators page: both directions and
 semantic modes, 320px width, 48px height, 160px clipping and tinted parent opacity,
