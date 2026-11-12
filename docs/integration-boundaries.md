@@ -185,7 +185,7 @@ It runs in all native cargo CI jobs.
 
 After one warm-up pass registers two ordinary Buttons, the same ordered pointer
 stream clicks the first then the second. With one `Context::run_ui` call,
-observed actions are `[0, 1]` and the UI callback runs once. Splitting at the click
+observed per-button activation counts are `[0, 1]` and the UI callback runs once. Splitting at the click
 boundary into two public calls at the same timestamp produces `[1, 1]`, but the
 UI callback runs twice. This is an observed mismatch, not a compile-error proxy.
 
