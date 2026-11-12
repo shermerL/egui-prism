@@ -1,3 +1,4 @@
+import { AlertWrapping } from "./alert-wrapping";
 import { AlertCases } from "./alert-cases";
 import { BadgeCases } from "./badge-cases";
 import * as React from "react";
@@ -39,4 +40,4 @@ function App() {
  </div></main>;
 }
 const query = new URLSearchParams(location.search);
-createRoot(document.getElementById("root")!).render(query.has("alerts") ? <AlertCases/> : query.has("tooltips") ? <TooltipCases/> : query.has("badges") ? <BadgeCases/> : query.has("dialogs") ? <DialogCases/> : query.has("inputs") ? <InputCases/> : query.has("checkboxes") ? <CheckboxFixture/> : query.has("selects") ? <SelectCases/> : query.has("sliders") ? <SliderCases/> : query.has("compositing") ? <Compositing/> : <App/>);
+createRoot(document.getElementById("root")!).render(query.has("alert-wrapping") ? <AlertWrapping/> : query.has("alerts") ? <AlertCases/> : query.has("tooltips") ? <TooltipCases/> : query.has("badges") ? <BadgeCases/> : query.has("dialogs") ? <DialogCases/> : query.has("inputs") ? <InputCases/> : query.has("checkboxes") ? <CheckboxFixture/> : query.has("selects") ? <SelectCases/> : query.has("sliders") ? <SliderCases/> : query.has("compositing") ? <Compositing/> : <App/>);
