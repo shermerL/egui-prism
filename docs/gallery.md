@@ -161,7 +161,7 @@ description-only content, decorative icons, 160-point wrapping and ellipsis,
 at the same light/dark theme and scale. See [the component contract](alerts.md).
 No new native or assistive-technology acceptance is recorded by adding this page.
 
-### Tooltip comparison
+## Tooltip comparison
 
 The Tooltips page attaches hints to ordinary harness triggers with explicit IDs.
 Compare keyboard focus, Escape, pointer transit, disabled triggers, long text,
