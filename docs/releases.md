@@ -14,10 +14,12 @@ interaction, examples and relevant tests. The native Gallery validates their
 combined use on macOS, Windows and Linux.
 
 All eight controls now have merged component implementations and documented
-evidence. Shared parity closure, integrated native Gallery acceptance, the native
-accessibility bridge,
-the complete platform evidence matrix, the standalone font test contract and a
-clean external consumer remain open preparation work.
+evidence. Shared parity documentation and the standalone font test contract
+have landed. Integrated native Gallery acceptance, the native accessibility
+bridge, the complete platform evidence matrix and a clean external consumer
+remain open preparation work. Dialog's known title/description semantics defect
+is tracked in [Issue 29](https://github.com/shermerL/egui-prism/issues/29);
+using that component carries its repair and applicable verification obligation.
 Adding the rest of the shadcn catalog is not a first-release prerequisite. Native
 desktop remains the target; browser delivery and Pages have separate deferred
 Quests. The pinned shadcn browser fixture remains a comparison source.
@@ -50,6 +52,55 @@ and verify their extracted/downloaded payloads on the promised targets.
 does not currently list Cargo among its supported registries. An empty Packages
 section is not a release defect. Rust registry distribution is planned separately
 for an appropriate Cargo registry such as crates.io.
+
+## Version support contract
+
+Each Prism release declares one validated combination of dependency sources,
+input protocol, rendering configuration and platform scope. A consumer pins one
+candidate and validates upgrades separately. A Prism update does not require an
+egui update; this policy does not promise parallel support for older baselines.
+Fixed source candidates use the same record, clearly marked as candidates with
+missing evidence rather than advertised as fully accepted releases.
+
+Prism owns this public contract. This section is the canonical record schema;
+input and compositor documentation define their detailed protocols. Candidate
+records and recipes reference these sources rather than copying independent
+support tables. Record:
+
+- Exact Prism commit/tag, intentional dirty changes if any, matching core and
+  compositor sources/features, and commands needed to reconstruct the candidate.
+- Upstream egui baseline/archive identity and checksum, controlled patch identity,
+  consumer root patch configuration, and resolved egui/epaint/integration-crate
+  graph and features, including fonts and accessibility bridges.
+- Declared minimum Rust version, actual minimum-version check results and exact
+  toolchains used for each observation, separately. A toolchain file is not proof
+  of a successful minimum-version check on every platform.
+- Context/viewport input scope, enablement, registration/event/paint phases,
+  Time triggers, structural layout refresh and mixed-widget/plugin limitations.
+- Supported attachment formats, sampling, alpha/filtering and device/renderer
+  relationships; image production, uploads, preparation, encoding, submission,
+  handle retention and cleanup order, including failure and restart.
+- Platform/window/backend scope and known defects, with build, controlled input,
+  framebuffer, native GUI, IME/clipboard and assistive-technology evidence
+  distinguished by source and environment. Application media/performance results
+  remain consumer evidence, not a general Prism product guarantee.
+- External consumption commands, resource/license contents, migration effects
+  and which changed boundaries invalidate prior evidence. Source and registry
+  consumption require their own checks.
+
+Separate normative requirements, tested configurations, untested configurations
+and unsupported configurations. A planned target is not an observed PASS. Pin
+critical dependency identities and retain a reproducible consumer lockfile;
+this does not require exact-pinning every transitive dependency in library
+manifests or copying the Gallery lockfile into applications.
+
+The boundary assessment maintains the contract's source/API responsibilities;
+the canonical consumer recipe demonstrates its use. Source-preview freezes the
+actual release candidate and its evidence; registry preparation checks a package
+route against the same contract. Consumer-fit selects and assesses a combination,
+while the application implements that choice and owns product acceptance.
+An internal pilot may precede public release preparation without reducing M1's
+eight-control, three-platform completion or publication approval requirements.
 
 ## Consumer and dependency gate
 

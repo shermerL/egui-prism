@@ -18,11 +18,20 @@ workspace-only paths, private tooling or unpublished generated files. Document
 the exact compiler, dependencies, supported targets and build commands. Prove
 that the external application's root configuration selects one controlled egui
 source for Prism, the official native host and the compositor. Include required
-patch sources, notices, fonts and licenses, with a compiling consumer example.
+patch sources, notices, fonts and licenses. Build the canonical consumer example
+against the extracted candidate rather than maintaining another installation
+recipe. Keep its documented dependency and host configuration consistent with
+the actual archive.
 
 Prepare release notes, the proposed version and exact commit, archive contents,
-checksums and the platform evidence matrix. Record known limitations and API
-migration requirements. Use read-only CI to prepare candidates; publishing
+checksums and the platform evidence matrix. Freeze the library-owned support
+contract from /docs/releases.md for this exact candidate: source/patch identity,
+resolved graph/features, declared and tested compiler requirements, input/render
+configuration, known defects and layered platform evidence. Distinguish required,
+tested, untested and unsupported configurations. Reference the canonical protocol
+documents and refresh only evidence invalidated by changed boundaries; do not
+assemble one accepted candidate from unrelated branch observations. Record known
+limitations and API migration requirements. Use read-only CI to prepare candidates; publishing
 credentials do not belong in PR jobs. Debug CI artifacts are not release assets.
 Include runnable Gallery binaries only for explicit targets whose downloaded or
 equivalent extracted payloads have been validated, with signing status stated.
@@ -33,4 +42,5 @@ deploy Pages, or create a public dependency fork as part of preparation.
 
 ## Required
 
+- [Consumer examples](/quest/m1/consumer-examples.md) - canonical external integration to validate against the source candidate
 - [Build and validate the native gallery](/quest/m1/native-gallery.md)
