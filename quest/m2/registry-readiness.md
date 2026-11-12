@@ -8,6 +8,8 @@ relying on the repository workspace.
 
 ## Plan
 
+Use the [source-backed integration boundary assessment](/docs/integration-boundaries.md) for current compatibility responsibilities and explicitly unresolved alternatives.
+
 Use the verified source consumer to evaluate registry distribution separately
 from the M1 source preview. Cargo applies patches at the consumer workspace root;
 publishing a library does not propagate its local patch configuration. A registry
@@ -46,7 +48,3 @@ package or container just to populate the repository's Packages section.
 ## Required
 
 - [Prepare a reproducible source preview](/quest/m1/source-preview.md)
-
-## Related
-
-- [Integration boundaries](/quest/m0/integration-boundaries.md) - source/API compatibility evidence, without preselecting a published fork

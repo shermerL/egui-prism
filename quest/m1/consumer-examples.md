@@ -8,6 +8,8 @@ and documentation that stays consistent with that source.
 
 ## Plan
 
+Use the [source-backed integration boundary assessment](/docs/integration-boundaries.md) for current compatibility responsibilities and explicitly unresolved alternatives.
+
 This extracts example ownership from source-preview preparation so useful
 consumer evidence can land before final Gallery and release acceptance. Use the
 merged public APIs and the existing tests/input-consumer dependency contract.
@@ -82,5 +84,4 @@ egui; the pinned shadcn contract remains the visual and interaction authority.
 
 ## Related
 
-- [Integration boundaries](/quest/m0/integration-boundaries.md) - evidence can inform the assessment without waiting for its completion
 - [Native gallery](/quest/m1/native-gallery.md) - integrated platform acceptance; share applicable workflows and evidence without making it a prerequisite for this example
