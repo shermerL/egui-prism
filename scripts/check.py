@@ -38,6 +38,7 @@ def main():
         run(sys.executable, "scripts/check_upstream_boundaries.py")
         run("cargo", "test", "--manifest-path", "vendor/egui/Cargo.toml", "--locked", "--lib", "--features", "serde", "--target-dir", "target/vendor-egui")
         run(sys.executable, "scripts/check_input_consumer.py")
+        run(sys.executable, "scripts/check_settings_example.py")
         run("cargo", "run", "--locked", "-p", "egui-prism", "--example", "ordered_input")
         run("cargo", "run", "--locked", "-p", "egui-prism", "--example", "select")
         run("cargo", "run", "--locked", "-p", "egui-prism", "--example", "tooltip")

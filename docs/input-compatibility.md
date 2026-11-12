@@ -281,3 +281,11 @@ acceptance. The native host and component Quests own those end-to-end checks.
 When upgrading egui, reconstruct the new upstream source, review each boundary,
 port the patch and run all regressions. Remove a patch only after the unpatched
 upstream passes its relevant contract; do not retain an unnecessary workaround.
+
+## External executable recipe
+
+The [standalone settings application](../examples/settings/README.md) pins its
+own dependency graph and demonstrates public host/compositor integration,
+caller-owned editing, a stock Modal and a selected third-party Button. It is a
+separate consumer workspace, not an import of private Gallery code. Its build,
+controlled input and native observation evidence must remain distinct.
