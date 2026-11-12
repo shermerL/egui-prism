@@ -34,6 +34,7 @@ Theme and case changes preserve caller text, checkboxes, selected values, and ac
 | Buttons | Prism roles, sizes, icon names, disabled actions, wrapping, and independent counts |
 | Inputs | Caller-owned text, editing, errors, disabled state, stable IDs, and IME diagnostics |
 | Selects | Independent controlled values, popup shielding, keyboard/typeahead, list variants, and idle counts |
+| Tooltips | Pointer/focus hints, controlled delay, long plain text, disabled triggers and viewport edges |
 | Dialogs | Controlled A/B modals, neutral dismissal, body actions, focus isolation/restoration, and bounded long content |
 | Interaction | Independent A/B values, pointer activation, Tab/Enter, disabled actions, and idle counts |
 | Layout | The same instances and IDs with long wrapping action labels |
@@ -159,3 +160,11 @@ description-only content, decorative icons, 160-point wrapping and ellipsis,
 320-point parent clipping and grouped opacity. Compare with `reference/?alerts`
 at the same light/dark theme and scale. See [the component contract](alerts.md).
 No new native or assistive-technology acceptance is recorded by adding this page.
+
+### Tooltip comparison
+
+The Tooltips page attaches hints to ordinary harness triggers with explicit IDs.
+Compare keyboard focus, Escape, pointer transit, disabled triggers, long text,
+instance removal and activation counts against `reference/?tooltips`. The hints
+do not own trigger input or introduce a modal barrier. See [Tooltips](tooltips.md)
+for natural text geometry, viewport drawing bounds and observation limits.

@@ -12,6 +12,14 @@ Provide compiling usage, clear component availability, exact build/source identi
 
 At this planned integration review node, cover focus/pointer capture across components, modal/popover layering, clipboard and real IME, resize/scale changes, focus loss/reentry, window suspend/close/restart, compositor error propagation and accessibility actions. Reuse unchanged component tests and host lifecycle evidence. macOS, Windows and Linux (with X11/Wayland identified) each need separate build, controlled GPU and real desktop evidence. No browser runtime, signing, installer, package publication or new host framework is required. Missing observations remain explicit acceptance gaps; do not silently lower the promised scope.
 
+Reuse the canonical consumer example's caller-state and mixed-widget checks when
+available. Keep Gallery platform acceptance separate from external setup evidence;
+neither a successful Gallery run nor a source archive proves production adoption.
+
 ## Required
 
 - [Native accessibility](/quest/m1/native-accessibility.md) - official system bridge
+
+## Related
+
+- [Consumer examples](/quest/m1/consumer-examples.md) - public integration checks that can land before final Gallery acceptance

@@ -19,3 +19,7 @@ Complete implementation, the compiling public API example, component documentati
 - Text layout: reconcile CSS min-content sizing and hyphen, punctuation and non-Latin line-break opportunities without introducing a new dependency or vendor boundary. Space-delimited unbreakable runs and NBSP are covered; broader line-breaking parity remains open.
 
 - Native validation: compare the Alerts Gallery page with the actual pinned `?alerts` reference at matching size, font, light/dark theme and 100%/150% scale. Record real platform/backend and screen-reader observations separately from controlled metadata/layout tests. The headless implementation environment cannot establish these observations.
+
+## Related
+
+- [Targeted acceptance](/quest/m2/native-components/alert-acceptance.md) - trace missing tests and native evidence without waiving this component quest.

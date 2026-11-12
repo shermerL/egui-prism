@@ -61,6 +61,7 @@ See [switches](docs/switches.md) for controlled boolean changes and interaction.
 See [sliders](docs/sliders.md) for range, step, geometry, and caller-owned values.
 See [selects](docs/selects.md) for controlled option values, frame-local registration,
 ordered popup input, and the native Gallery cases.
+See [tooltips](docs/tooltips.md) for bounded pointer and keyboard hints tied to explicit triggers.
 See [dialogs](docs/dialogs.md) for controlled modal state, neutral dismissal,
 scoped content and explicit drawing groups.
 

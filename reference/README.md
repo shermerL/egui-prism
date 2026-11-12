@@ -64,3 +64,9 @@ The `/?alerts` fixture uses the unchanged pinned Alert source for default and
 destructive notices, optional icons/titles/descriptions, 448/160/320-pixel widths,
 clipping and 60% parent opacity. Its descriptions are direct plain text children.
 Light/dark and 100%/150% controls match the native Alerts page.
+
+The `/?tooltips` fixture compares explicitly identified pointer and keyboard
+triggers, immediate and delayed opening, hoverable plain-text content, disabled
+triggers, viewport collisions and long bounded text. It uses the unmodified
+pinned Tooltip source and Radix Tooltip 1.2.8; the shadcn provider defaults to
+zero delay and the content defaults to zero side offset.
