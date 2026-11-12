@@ -6,6 +6,9 @@ Each controlled egui extension has a source-backed necessity assessment, and con
 
 ## Plan
 
+The source-backed matrix and consumer responsibility assessment are in /docs/integration-boundaries.md. Keep its classifications provisional until the disputed equivalence experiments below are observed. Existing regressions are specifications, not a new unmodified-egui failure demonstration.
+
+
 Start from vendor/README.md, the controlled patch, docs/input-compatibility.md, the compositor integration guide and existing behavior regressions. Map each extension family to its observable requirement and a minimal failure case in unmodified egui. Reuse current tests rather than auditing every component again. A passing patched test alone does not prove that no public upstream API can satisfy the requirement.
 
 Evaluate official egui extension points against the same causal, focus, capture, modal and lifecycle requirements. Classify each family as retain, narrow, replaceable or unresolved, with evidence and maintenance implications. Separate a different behavior contract from an equivalent implementation. Do not assume that restoring ordinary Widget syntax preserves same-batch event ordering or permits replaying arbitrary application closures.
@@ -25,3 +28,8 @@ Acceptance is a reviewable necessity/compatibility matrix, targeted evidence for
 - [Consumer examples](/quest/m1/consumer-examples.md) - independent external usage evidence; neither task waits for the other's final report
 - [Compositing baseline](/quest/m0/compositing-baseline.md) - rendering costs and correctness evidence, not input-policy authority
 - [Consumer fit](/quest/m2/consumer-fit.md) - application-specific adoption assessment
+
+## Waiting
+
+- Assessment owner: execute the smallest unmodified-egui public-API equivalence experiments, recording exact source, inputs, outputs and failures. Do not claim patch inevitability from missing symbols or patched-only tests.
+- Reviewer: independently review the assessment and concrete remaining alternatives against the exact PR head. No patch removal or architecture migration is authorized by this report.
