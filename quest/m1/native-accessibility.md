@@ -10,6 +10,8 @@ The Gallery now enables egui-winit AccessKit, initializes the adapter before sho
 
 Controlled bridge checks cover activation/deactivation, stale-window rejection, ordered payload delivery and single consumption. Existing component tests provide modal, disabled and stable-ID behavior evidence. Core component semantics and the renderer lifecycle are unchanged.
 
+The bridge implementation may land separately from specialist acceptance. This Quest remains open: the Gallery maintainer owns the remaining platform observations and must not report the bridge as fully accepted until they are recorded. Issue #29 remains a separate component defect, not resolved by host transport.
+
 Remaining acceptance: record a representative real screen-reader interaction with exact platform/build identity. macOS VoiceOver, Windows UIA clients and Linux AT-SPI availability must be recorded separately. Unavailable platforms are explicit handoff gaps; build and synthetic events do not establish system acceptance. M1 Gallery aggregates the final platform matrix.
 
 ## Waiting

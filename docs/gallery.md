@@ -131,6 +131,16 @@ using the real egui-winit state without a platform adapter. Existing component
 tests cover stable IDs, disabled eligibility and modal actions. Actual platform
 adapter construction and system interaction must be recorded separately.
 
+### Staged bridge delivery
+
+The native bridge is an implementation-stage delivery, not completed platform
+accessibility acceptance. The Gallery maintainer owns the retained
+[native accessibility Quest](../quest/m1/native-accessibility.md): representative
+VoiceOver speech/navigation and focus restoration, and separately recorded
+Windows UIA/Linux AT-SPI observations. Unobserved cases remain NOT RUN, not PASS.
+The implementation may land before those specialist observations; this does not
+waive component semantic defects such as issue #29 or final Gallery acceptance.
+
 ### Bridge observation record
 
 On 2026-11-10, build `540123943492bb59dbf52abedfeaf2c3c4b072b8`
