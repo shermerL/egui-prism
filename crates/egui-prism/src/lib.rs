@@ -22,6 +22,7 @@ mod transition;
 
 pub mod theme;
 
+pub mod alert;
 pub mod badge;
 pub mod button;
 pub mod text_input;

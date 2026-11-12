@@ -2,6 +2,7 @@
 
 mod native;
 
+mod alerts;
 mod badges;
 mod buttons;
 mod checkboxes;
@@ -23,6 +24,7 @@ enum Case {
     Theme,
     Buttons,
     Badges,
+    Alerts,
     Inputs,
     Checkboxes,
     Sliders,
@@ -39,6 +41,7 @@ impl Case {
             Self::Theme => "Theme",
             Self::Buttons => "Buttons",
             Self::Badges => "Badges",
+            Self::Alerts => "Alerts",
             Self::Inputs => "Inputs",
             Self::Checkboxes => "Checkboxes",
             Self::Sliders => "Sliders",
@@ -59,6 +62,7 @@ struct Gallery {
     case: Case,
     narrow: bool,
     interaction: InteractionCase,
+    alerts: alerts::AlertCase,
     buttons: buttons::ButtonCase,
     inputs: text_inputs::InputCase,
     checkboxes: checkboxes::CheckboxCase,
@@ -88,6 +92,7 @@ impl Gallery {
             },
             narrow: false,
             interaction: InteractionCase::default(),
+            alerts: alerts::AlertCase::new(context),
             buttons: buttons::ButtonCase::new(context),
             inputs: text_inputs::InputCase::default(),
             checkboxes: checkboxes::CheckboxCase::default(),
@@ -358,6 +363,7 @@ impl Gallery {
                             Case::Compositing,
                             Case::Buttons,
                             Case::Badges,
+                            Case::Alerts,
                             Case::Inputs,
                             Case::Checkboxes,
                             Case::Sliders,
@@ -425,6 +431,7 @@ impl Gallery {
                 }
                 Case::Buttons => self.buttons.show(ui, &theme, frame),
                 Case::Badges => badges::show(ui, &theme, frame),
+                Case::Alerts => self.alerts.show(ui, &theme, frame),
                 Case::Inputs => self.inputs.show(ui, &theme, frame),
                 Case::Checkboxes => self.checkboxes.show(ui, &theme, frame),
                 Case::Sliders => self.sliders.layout(ui, &theme, |case, ui, control| {

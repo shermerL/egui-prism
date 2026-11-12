@@ -59,3 +59,8 @@ The `/?badges` fixture renders all six static Badge variants from the pinned
 source, long text in a horizontal scroll area, and group opacity over a tinted
 surface. Light/dark and 100%/150% controls match the native Badges page.
 The Link variant remains a noninteractive span in both fixtures.
+
+The `/?alerts` fixture uses the unchanged pinned Alert source for default and
+destructive notices, optional icons/titles/descriptions, 448/160/320-pixel widths,
+clipping and 60% parent opacity. Its descriptions are direct plain text children.
+Light/dark and 100%/150% controls match the native Alerts page.

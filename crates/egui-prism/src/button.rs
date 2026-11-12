@@ -491,7 +491,7 @@ impl ButtonOutput {
 }
 
 // Build image primitives without passing through a painter that may already be faded.
-fn image_shapes(ui: &Ui, image: &Image<'_>, rect: egui::Rect) -> Vec<egui::Shape> {
+pub(crate) fn image_shapes(ui: &Ui, image: &Image<'_>, rect: egui::Rect) -> Vec<egui::Shape> {
     use egui::emath::GuiRounding as _;
     let rect = rect.round_to_pixels(ui.pixels_per_point());
     let image = image
@@ -514,7 +514,7 @@ fn image_shapes(ui: &Ui, image: &Image<'_>, rect: egui::Rect) -> Vec<egui::Shape
                 assert_eq!(
                     options.corner_radius,
                     egui::CornerRadius::ZERO,
-                    "rotated button images cannot also have rounded corners"
+                    "rotated images cannot also have rounded corners"
                 );
                 let mut mesh = egui::Mesh::with_texture(texture.id);
                 mesh.add_rect_with_uv(rect, options.uv, options.tint);
