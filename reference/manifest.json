@@ -25,6 +25,7 @@
     "crates/egui-prism/fonts/GeistMono-Regular.ttf": "686914333e77a620c85b35481064788deb33fc25f69901bdbf296c1bbc26a7fe",
     "reference/src/ui/badge.tsx": "13a9380dfff853ee730c14a52df49f22aecd31f40f2998d7c1e7ec458b6e1650",
     "reference/src/ui/tooltip.tsx": "611e4305879b2773eafe76bf3c5caa69d8e47367fd97887a71634a27828f4433",
-    "reference/src/ui/separator.tsx": "ad7d5403fe337160e41dbf04147896e448ae3a747b8d06660d627d74d60021bc"
+    "reference/src/ui/separator.tsx": "ad7d5403fe337160e41dbf04147896e448ae3a747b8d06660d627d74d60021bc",
+    "reference/src/ui/spinner.tsx": "5d040fc49cb54c0296070644053b5a8840ddbfca89a430546bf308df3fffad65"
   }
 }

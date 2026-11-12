@@ -87,3 +87,5 @@ The optional [`egui-prism-wgpu`](docs/compositing.md) host adapter provides isol
 group opacity with the official wgpu renderer. The core remains egui-only; hosts own
 renderer initialization, texture lifetimes and explicit shutdown. The Gallery
 includes a dedicated final-framebuffer conformance fixture.
+
+See [spinners](docs/spinners.md) for caller-controlled passive busy status and motion.
