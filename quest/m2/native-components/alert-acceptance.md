@@ -10,10 +10,10 @@ Use the [fixed parity contract](/docs/shadcn-parity.md). The implementation and 
 
 The [shared acceptance protocol](/docs/component-acceptance.md) defines source identity, environment, oracle, evidence rows, integration invalidation and exit gates. Every result must name the tested head and distinguish tests, rendered browser/native observations, and AT. Use the unmodified pinned reference and matched font/theme/scale. Do not replace a required observation with a successful CI job.
 
-1. 补 reference-driven 断行矩阵：448/320/160pt 和小于 padding+icon 宽度；`alpha-beta/gamma`、URL/长无空格词、NBSP、中文标点/中英混排、带重音字符。先记录 browser min-content/行数/词边界及原生实测，再修复 hyphen/punctuation/CJK 支持范围；异常窄容器的“强制 clip”与 CSS overflow 不一致也必须记录、解决或经明确范围决策，不能因为已有文档就视为通过。
-2. default/destructive，icon/title/description 有无组合，长 title ellipsis、完整 accessible label，light/dark与 opacity。与现有九项测试做映射，仅新增未覆盖断言。
-3. 在原生 AT 打开后动态插入 notice、只变 description、只变 title、连续相同帧、移除再重建、两个独立 ID。预期每个真实内容改变有完整 title+body 通知，相同稳定帧无重复通知，焦点不被夺走，描述不漏读或重复。比较同环境 browser role=alert，记录 AT 合并/打断机制，不以精确毫秒要求异步语音。异常去查系统桥接/宿主，不改组件成自带播报队列。
-4. 与旁边 caller Button 交互：真实 click/Enter/Space各一次只触发一次；disabled零次；notice 不自己 retry/dismiss。CSS缺口及遗漏通知为合并前阻塞。桥接 unavailable 记依赖既有 native-accessibility，不伪造通过。
+1. Compare wrapping at 448/320/160pt and below padding-plus-icon width: `alpha-beta/gamma`, URLs/long unbroken words, NBSP, CJK punctuation/mixed text and accented characters. Record browser min-content, line counts and word boundaries against native output before fixing supported hyphen/punctuation/CJK behavior. Forced clipping that differs from CSS overflow needs resolution or an explicit scope decision; existing documentation is not a pass.
+2. Cover default/destructive, optional icon/title/description combinations, long-title ellipsis with complete accessible labels, light/dark and opacity. Map the existing nine tests and add only missing assertions.
+3. With native AT active, insert a notice, change only description/title, repeat stable frames, remove/recreate and use two independent IDs. Expect complete title/body notifications for real content changes, no duplicate stable-frame notifications or stolen focus, and no omitted/repeated description. Compare browser role=alert in the same environment; record AT coalescing/interruption rather than imposing exact speech timing. Investigate bridge/host failures without adding a component-owned announcement queue.
+4. Exercise a neighboring caller Button with actual click/Enter/Space: one action per valid activation, zero while disabled. The notice does not retry/dismiss itself. CSS gaps and omitted required notifications block landing; unavailable bridging remains an explicit native-accessibility dependency.
 
 Before completion, include the automatable supported-case assertions in CI, provide native/reference captures and measured comparisons, record AT/input observations, link the applicable exact-head CI and independent review, and map every original requirement to PASS or a specifically retained blocking owner. FAIL, NOT RUN and BLOCKED rows prevent this Quest being called complete. No silent scope reduction or after-merge deferral of known parity defects. Only an explicit maintainer scope decision can permit staged landing; record the deferred requirements and owners without marking them PASS or deleting incomplete Quests.
 
@@ -21,8 +21,7 @@ Refresh evidence after affected implementation, reference, host or integration c
 
 ## Waiting
 
-- Validation executor: provide an accessible native desktop with the pinned browser reference and relevant screen reader; the current headless environment cannot supply GUI or speech observations. Capture OS/backend/window-system, browser/AT versions, fonts, scale, source SHA and raw artifacts.
-- Maintainer: authorize any Codex or GitHub automated-review task separately if required. No task launch or review request is implied by this Quest; the assistant must never merge a PR.
+- Validation executor: obtain the missing GUI/speech observations on an accessible native desktop with the pinned browser and relevant screen reader. Record OS/backend/window-system, browser/AT versions, fonts, scale, source SHA and artifacts; unavailable observations remain blocked.
 
 ## Related
 

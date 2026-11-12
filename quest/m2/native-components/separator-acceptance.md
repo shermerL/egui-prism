@@ -10,9 +10,9 @@ Use the [fixed parity contract](/docs/shadcn-parity.md). The implementation and 
 
 The [shared acceptance protocol](/docs/component-acceptance.md) defines source identity, environment, oracle, evidence rows, integration invalidation and exit gates. Every result must name the tested head and distinguish tests, rendered browser/native observations, and AT. Use the unmodified pinned reference and matched font/theme/scale. Do not replace a required observation with a successful CI job.
 
-1. 保留现有 7 个回归。native `Separators` 与 `?separators`：两方向 × decorative/semantic；普通和 justified parent；正常/极窄/零 extent；部分裁切；60% parent opacity tinted surface；100%/150%。水平/竖直线 1pt，extent 等于 caller 提供范围，hover/accessible bounds 不扩大，AA 不意外截断，无额外 margin。
-2. 对比 framebuffer 的 fractional-scale 细线和裁切边缘，补当前只有几何断言的渲染证据。装饰线不入可交互 tab 序列；语义线暴露正确 role/orientation、无 activate/drag/focus。原生 AT 验证暴露和阅读行为，允许平台读法不同但不能把装饰线读成控件。
-3. 合并前阻塞：匹配视觉和语义证据、`79b860a` 或更新 head 的有效独立集成 review。无已证新实现缺陷，不要预设修复代码。已通过的 macOS受控测试不重新描述成 GUI。
+1. Preserve the seven regressions. Compare native `Separators` and reference `?separators`: both orientations, decorative/semantic, ordinary/justified parents, normal/narrow/zero extents, partial clipping, tinted surfaces at 60% parent opacity, and 100%/150% scale. Lines are 1pt with caller-provided extent, unchanged hover/accessibility bounds, no unintended AA clipping and no extra margin.
+2. Compare fractional-scale thin lines and clip edges in framebuffer output, adding rendering evidence beyond geometry assertions. Decorative lines are not interactive Tab stops; semantic lines expose correct role/orientation without activate/drag/focus actions. Observe native AT exposure/reading; platform phrasing may vary, but decorative lines must not become controls.
+3. Matched visual/semantic evidence and a valid independent integration review of `79b860a` or a newer candidate block landing. No new implementation defect is established; do not invent a fix requirement. Existing controlled macOS tests are not GUI evidence.
 
 Before completion, include the automatable supported-case assertions in CI, provide native/reference captures and measured comparisons, record AT/input observations, link the applicable exact-head CI and independent review, and map every original requirement to PASS or a specifically retained blocking owner. FAIL, NOT RUN and BLOCKED rows prevent this Quest being called complete. No silent scope reduction or after-merge deferral of known parity defects. Only an explicit maintainer scope decision can permit staged landing; record the deferred requirements and owners without marking them PASS or deleting incomplete Quests.
 
@@ -20,8 +20,7 @@ Refresh evidence after affected implementation, reference, host or integration c
 
 ## Waiting
 
-- Validation executor: provide an accessible native desktop with the pinned browser reference and relevant screen reader; the current headless environment cannot supply GUI or speech observations. Capture OS/backend/window-system, browser/AT versions, fonts, scale, source SHA and raw artifacts.
-- Maintainer: authorize any Codex or GitHub automated-review task separately if required. No task launch or review request is implied by this Quest; the assistant must never merge a PR.
+- Validation executor: obtain the missing GUI/speech observations on an accessible native desktop with the pinned browser and relevant screen reader. Record OS/backend/window-system, browser/AT versions, fonts, scale, source SHA and artifacts; unavailable observations remain blocked.
 
 ## Related
 

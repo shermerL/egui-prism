@@ -10,11 +10,11 @@ Use the [fixed parity contract](/docs/shadcn-parity.md). The implementation and 
 
 The [shared acceptance protocol](/docs/component-acceptance.md) defines source identity, environment, oracle, evidence rows, integration invalidation and exit gates. Every result must name the tested head and distinguish tests, rendered browser/native observations, and AT. Use the unmodified pinned reference and matched font/theme/scale. Do not replace a required observation with a successful CI job.
 
-1. viewport 767/768/769 logical pt × container 140/320/宽屏，固定宽容器横跨断点时 root padding应24/48，由viewport而非container决定；实际150% zoom重新记录viewport，不能只做 CSS transform。light/dark、icon有无、空文本/省略section、full/long copy，header/content最大384pt、icon40/24pt与自然高度。
-2. 文本比较必须包含 `office office office`、NBSP、长词、CJK/标点，以及原生会超过浏览器 balancing 行数限制的长段。每个案例记录 line count/每行文本/宽度，零 whitespace-only行、零截掉的合法内容。修复 deterministic balancing 与 CSS 的实测差异，不能把2304几何探针当 browser parity。
-3. 真窗口演示 empty→loading→failed→empty，重复20次；click/keyboard后状态只由caller改变，消失button立即退出input/AT树，旧焦点/ID不激活隐藏动作，无额外网络、timer或业务状态。disabled动作0次。Page切换与focus loss/reentry再执行一轮。
-4. 原生 AT 中 empty copy保持 passive，既无 fabricated alert/busy/live语义，也不抢焦点；caller明确的loading/error呈现分别检查，不能要求Empty自带播报。parent opacity显式group和direct painting边界要按文档分别验，不声称捕获任意GPU callback。
-5. CSS balancing/Unicode、stale action、错误断点为合并前阻塞；不同模型独立性未证仍记录 review gate。
+1. Cross viewport widths 767/768/769 logical points with containers 140/320/wide. Root padding changes between 24/48 at the viewport breakpoint, not container width. Record the actual viewport under 150% zoom rather than using CSS transforms. Cover light/dark, optional icons, empty/omitted sections, complete/long copy, 384pt header/content maximum width, 40/24pt icon geometry and natural height.
+2. Compare `office office office`, NBSP, long words, CJK/punctuation and paragraphs exceeding the browser balancing line limit. Record count/text/width of each line; allow no whitespace-only lines or truncated valid content. Resolve measured deterministic-balancing/CSS differences; 2,304 geometry probes do not establish browser parity.
+3. In an actual window repeat empty-to-loading-to-failed-to-empty 20 times. Click/keyboard changes state only through the caller; disappearing buttons leave input/AT trees, and old focus/IDs cannot activate hidden actions. Add no network/timer/business state. Disabled actions produce zero commands. Repeat after page return and focus loss/reentry.
+4. Native AT keeps empty copy passive, with no fabricated alert/busy/live semantics or focus stealing. Check caller-provided loading/error presentations separately; Empty does not own announcements. Verify documented explicit-Group opacity and direct-paint boundaries separately, without claiming arbitrary GPU callback capture.
+5. CSS balancing/Unicode defects, stale actions and incorrect breakpoints block landing. Unverified different-model independence remains a review gap unless explicitly excepted for that exact task.
 
 Before completion, include the automatable supported-case assertions in CI, provide native/reference captures and measured comparisons, record AT/input observations, link the applicable exact-head CI and independent review, and map every original requirement to PASS or a specifically retained blocking owner. FAIL, NOT RUN and BLOCKED rows prevent this Quest being called complete. No silent scope reduction or after-merge deferral of known parity defects. Only an explicit maintainer scope decision can permit staged landing; record the deferred requirements and owners without marking them PASS or deleting incomplete Quests.
 
@@ -22,8 +22,7 @@ Refresh evidence after affected implementation, reference, host or integration c
 
 ## Waiting
 
-- Validation executor: provide an accessible native desktop with the pinned browser reference and relevant screen reader; the current headless environment cannot supply GUI or speech observations. Capture OS/backend/window-system, browser/AT versions, fonts, scale, source SHA and raw artifacts.
-- Maintainer: authorize any Codex or GitHub automated-review task separately if required. No task launch or review request is implied by this Quest; the assistant must never merge a PR.
+- Validation executor: obtain the missing GUI/speech observations on an accessible native desktop with the pinned browser and relevant screen reader. Record OS/backend/window-system, browser/AT versions, fonts, scale, source SHA and artifacts; unavailable observations remain blocked.
 
 ## Related
 

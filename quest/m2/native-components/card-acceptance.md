@@ -10,10 +10,10 @@ Use the [fixed parity contract](/docs/shadcn-parity.md). The implementation and 
 
 The [shared acceptance protocol](/docs/component-acceptance.md) defines source identity, environment, oracle, evidence rows, integration invalidation and exit gates. Every result must name the tested head and distinguish tests, rendered browser/native observations, and AT. Use the unmodified pinned reference and matched font/theme/scale. Do not replace a required observation with a successful CI job.
 
-1. 用同一长词/Unicode corpus 验证 header wrapping；空/短/长 section，省略 description，overflow content，短/混合/小数 footer height、accent glyph。测 header/content/footer坐标、24pt padding/gap、14pt radius，overflow 不扩后续 section，closure只运行一次。保留 15 项回归，新增 CSS oracle 对照而非自我比较。
-2. 重点 GPU+真实视觉：双层 shadow-sm 在 light/dark、浅/深/tinted背景和60% group opacity；parent clip 和 rounded border内排除；与 Button shadow-xs并排确认共用 helper 未回归。两层几何存在不等于 blur 像素接近参考。
-3. 原生 input：nested Save Button 与 editor，Tab/Shift-Tab、Enter/Space/click、disabled、重复渲染、page切换回来、focus loss/reentry。每次有效输入一次动作，禁用零次，editor值不因 card绘制/切页丢失，hit bounds与视觉一致；无 shell click/focus 冒充 child。AT 不新增交互容器，child label/order可用。
-4. 标准 egui editor不是 Prism TextInput，不要求将其外观误验为 shadcn输入。CardAction slot不是已实现公共能力，不把其无关扩展混进本验收。header实现缺口、shadow明显差异、输入错位为合并前阻塞。
+1. Use the same long-word/Unicode corpus for header wrapping. Cover empty/short/long sections, omitted description, overflowing content, short/mixed/fractional footer heights and accented glyphs. Measure header/content/footer coordinates, 24pt padding/gap and 14pt radius; overflow must not enlarge later sections, and each closure runs once. Preserve the 15 regressions and add CSS-oracle comparisons, not implementation self-comparisons.
+2. Compare GPU and actual visual output for two-layer shadow-sm in light/dark, light/dark/tinted backgrounds and 60% Group opacity; check parent clipping and exclusion inside the rounded border. Compare Button shadow-xs alongside it to detect shared-helper regressions. Two shadow geometries do not prove matching blur pixels.
+3. Exercise nested Save Button/editor through native Tab/Shift-Tab, Enter/Space/click, disabled state, repeated rendering, page return and focus loss/reentry. Each valid input produces one action, disabled produces none, editor values survive drawing/page changes, and hit/visual bounds agree. The shell does not impersonate child click/focus. AT exposes child labels/order without fabricating an interactive container.
+4. A stock egui editor is not Prism TextInput; its appearance need not match a shadcn input. CardAction is not an implemented public slot and is not added by this acceptance work. Header defects, visibly incorrect shadows and displaced input block landing.
 
 Before completion, include the automatable supported-case assertions in CI, provide native/reference captures and measured comparisons, record AT/input observations, link the applicable exact-head CI and independent review, and map every original requirement to PASS or a specifically retained blocking owner. FAIL, NOT RUN and BLOCKED rows prevent this Quest being called complete. No silent scope reduction or after-merge deferral of known parity defects. Only an explicit maintainer scope decision can permit staged landing; record the deferred requirements and owners without marking them PASS or deleting incomplete Quests.
 
@@ -21,8 +21,7 @@ Refresh evidence after affected implementation, reference, host or integration c
 
 ## Waiting
 
-- Validation executor: provide an accessible native desktop with the pinned browser reference and relevant screen reader; the current headless environment cannot supply GUI or speech observations. Capture OS/backend/window-system, browser/AT versions, fonts, scale, source SHA and raw artifacts.
-- Maintainer: authorize any Codex or GitHub automated-review task separately if required. No task launch or review request is implied by this Quest; the assistant must never merge a PR.
+- Validation executor: obtain the missing GUI/speech observations on an accessible native desktop with the pinned browser and relevant screen reader. Record OS/backend/window-system, browser/AT versions, fonts, scale, source SHA and artifacts; unavailable observations remain blocked.
 
 ## Related
 
