@@ -12,7 +12,10 @@ Use the verified source consumer to evaluate registry distribution separately
 from the M1 source preview. Cargo applies patches at the consumer workspace root;
 publishing a library does not propagate its local patch configuration. A registry
 consumer and docs.rs build must resolve every required API from the published
-dependency graph. Removing publish=false is not a distribution design.
+dependency graph. Removing publish=false is not a distribution design. Reuse
+the canonical consumer example to test the proposed package route, including
+its documented host, input and mixed-widget requirements; do not create a second
+recipe that hides integration steps.
 
 Compare compatible upstream support, an explicitly maintained published patch,
 and retaining source distribution. Document type identity across egui, egui-winit
@@ -39,3 +42,7 @@ package or container just to populate the repository's Packages section.
 ## Required
 
 - [Prepare a reproducible source preview](/quest/m1/source-preview.md)
+
+## Related
+
+- [Integration boundaries](/quest/m0/integration-boundaries.md) - source/API compatibility evidence, without preselecting a published fork

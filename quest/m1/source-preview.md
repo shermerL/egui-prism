@@ -18,7 +18,10 @@ workspace-only paths, private tooling or unpublished generated files. Document
 the exact compiler, dependencies, supported targets and build commands. Prove
 that the external application's root configuration selects one controlled egui
 source for Prism, the official native host and the compositor. Include required
-patch sources, notices, fonts and licenses, with a compiling consumer example.
+patch sources, notices, fonts and licenses. Build the canonical consumer example
+against the extracted candidate rather than maintaining another installation
+recipe. Keep its documented dependency and host configuration consistent with
+the actual archive.
 
 Prepare release notes, the proposed version and exact commit, archive contents,
 checksums and the platform evidence matrix. Record known limitations and API
@@ -33,4 +36,5 @@ deploy Pages, or create a public dependency fork as part of preparation.
 
 ## Required
 
+- [Consumer examples](/quest/m1/consumer-examples.md) - canonical external integration to validate against the source candidate
 - [Build and validate the native gallery](/quest/m1/native-gallery.md)
