@@ -66,3 +66,9 @@ empty/loading/error presentations, disabled actions, long localized copy, a
 widths around 768px for `md:p-12`, even when content is only 320px wide. Use
 actual browser zoom for 100%/150%, not CSS zoom. `text-balance` and script-specific
 line breaks require rendered comparison; a successful build is not that evidence.
+
+The `/?tooltips` fixture compares explicitly identified pointer and keyboard
+triggers, immediate and delayed opening, hoverable plain-text content, disabled
+triggers, viewport collisions and long bounded text. It uses the unmodified
+pinned Tooltip source and Radix Tooltip 1.2.8; the shadcn provider defaults to
+zero delay and the content defaults to zero side offset.

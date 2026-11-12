@@ -30,3 +30,7 @@ requires a concrete prototype and maintainer decision.
 
 - Native validation: run the Gallery and pinned reference on an accessible desktop with matching width/theme/font/scale and record real input and visual observations. The current headless execution environment has no native display; headless tests cannot establish these observations.
 - Maintainer: authorize any desired GitHub automated-review task separately. The user has only authorized draft PR publication and prohibited merging; no Codex or automated-review task is started here.
+
+## Related
+
+- [Targeted acceptance](/quest/m2/native-components/empty-acceptance.md) - trace missing tests and native evidence without waiving this component quest.
