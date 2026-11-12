@@ -11,3 +11,16 @@ Reference item.tsx and accepted Button/IconButton/Tooltip contracts. The caller 
 Cover long text and accessible full names, optional leading content, trailing buttons, disabled actions and constrained width. Distinguish a passive Item from an explicitly interactive Item and from selection controls. Reserve action space using real content measurements. Use the fixed reference presentation; any needed interactive extension requires a concrete reference and declared public scope.
 
 Complete the implementation, compiling caller example, component documentation, native Gallery case and meaningful regressions in the same PR. Use /docs/shadcn-parity.md and the fixed shadcn source at 8a3536678a528cc012b9e62484290e79d0be410f. Include supported states, stable identities, caller ownership, clipping and accessible semantics; do not claim unsupported variants. Compare a mature candidate at matching theme and scale, then revisit only affected behavior after fixes. Keep source, controlled tests, real native input/GUI and untested platforms distinct. Reuse unchanged review evidence; final changed code still needs applicable independent/GitHub review and CI. Core stays egui-only; the host owns event order, fonts, frame/GPU lifetime and application policy. A materially new public boundary requires a concrete prototype and maintainer decision. No generic widget framework, application state manager or publication is included.
+
+### Design checkpoint
+
+The [public-path probe and proposed boundary](/docs/item-design.md) records actual
+nested-action sizes and registration effects. The source's flex-wrap/min-content
+and balanced two-line description remain implementation work, not just missing
+visual tests. Under the maintainer's scope decision, real desktop/browser/AT
+specialist validation can follow separately; basic geometry and action correctness
+remain this implementation's responsibility.
+
+## Waiting
+
+- Maintainer: approve a pure prepared Button/IconButton layout value consumed at final registration (recommended), or explicitly restrict Item to finite action descriptors. Existing registration is not pure measurement; this shared public boundary needs a decision before production implementation.
