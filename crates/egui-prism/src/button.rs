@@ -484,14 +484,18 @@ impl ButtonOutput {
     /// Cancel a pending Space activation after widget/window focus or enablement is lost.
     ///
     /// During ordered dispatch, call for every event, including untargeted window-focus events.
+    /// Ordinary batch input retains focus/enablement cleanup without interpreting event history.
     pub fn cancel_unfocused(&self) {
         let context = &self.response.ctx;
-        if context.input(|input| {
-            input
-                .events
-                .iter()
-                .any(|event| matches!(event, egui::Event::WindowFocused(false)))
-        }) || !context.memory(|memory| memory.has_focus(self.response.id))
+        let window_blurred = context.options(|options| options.ordered_input)
+            && context.input(|input| {
+                input
+                    .events
+                    .iter()
+                    .any(|event| matches!(event, egui::Event::WindowFocused(false)))
+            });
+        if window_blurred
+            || !context.memory(|memory| memory.has_focus(self.response.id))
             || !context
                 .read_response(self.response.id)
                 .is_some_and(|response| response.enabled())

@@ -912,3 +912,49 @@ fn ordered_window_blur_cancels_space_without_consuming_neighboring_intents() {
         .drop_without_applying_deltas();
     assert_eq!(activations, [1, 7]);
 }
+
+#[test]
+fn ordinary_batch_focus_history_does_not_cancel_a_new_space_intent() {
+    let context = egui::Context::default();
+    let theme = Theme::light();
+    let mut id = None;
+    context
+        .run_ui(Default::default(), |ui| {
+            id = Some(Button::new(&theme, "Action").show(ui).response.id);
+        })
+        .drop_without_applying_deltas();
+    context.memory_mut(|memory| memory.request_focus(id.unwrap()));
+    let key = |pressed| egui::Event::Key {
+        key: egui::Key::Space,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    };
+    let mut activations = 0;
+    for events in [
+        vec![
+            egui::Event::WindowFocused(false),
+            egui::Event::WindowFocused(true),
+            key(true),
+        ],
+        vec![key(false)],
+        vec![],
+    ] {
+        context
+            .run_ui(
+                egui::RawInput {
+                    focused: true,
+                    events,
+                    ..Default::default()
+                },
+                |ui| {
+                    let button = Button::new(&theme, "Action").show(ui);
+                    activations += usize::from(button.response.clicked());
+                    button.cancel_unfocused();
+                },
+            )
+            .drop_without_applying_deltas();
+    }
+    assert_eq!(activations, 1);
+}
