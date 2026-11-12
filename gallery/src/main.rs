@@ -10,6 +10,7 @@ mod dialogs;
 mod input;
 mod interaction;
 mod selects;
+mod separators;
 mod sliders;
 mod spinners;
 mod switches;
@@ -25,6 +26,7 @@ enum Case {
     Theme,
     Buttons,
     Badges,
+    Separators,
     Spinners,
     Inputs,
     Checkboxes,
@@ -43,6 +45,7 @@ impl Case {
             Self::Theme => "Theme",
             Self::Buttons => "Buttons",
             Self::Badges => "Badges",
+            Self::Separators => "Separators",
             Self::Spinners => "Spinners",
             Self::Inputs => "Inputs",
             Self::Checkboxes => "Checkboxes",
@@ -379,6 +382,7 @@ impl Gallery {
                             Case::Compositing,
                             Case::Buttons,
                             Case::Badges,
+                            Case::Separators,
                             Case::Spinners,
                             Case::Inputs,
                             Case::Checkboxes,
@@ -449,6 +453,7 @@ impl Gallery {
                 }
                 Case::Buttons => self.buttons.show(ui, &theme, frame),
                 Case::Badges => badges::show(ui, &theme, frame),
+                Case::Separators => separators::show(ui, &theme, frame),
                 Case::Spinners => self.spinners.show(ui, &theme, frame),
                 Case::Inputs => self.inputs.show(ui, &theme, frame),
                 Case::Checkboxes => self.checkboxes.show(ui, &theme, frame),

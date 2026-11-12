@@ -62,6 +62,9 @@ egui update; this policy does not promise parallel support for older baselines.
 Fixed source candidates use the same record, clearly marked as candidates with
 missing evidence rather than advertised as fully accepted releases.
 
+The [integration boundary assessment](integration-boundaries.md) explains source,
+input and renderer responsibilities without replacing this schema.
+
 Prism owns this public contract. This section is the canonical record schema;
 input and compositor documentation define their detailed protocols. Candidate
 records and recipes reference these sources rather than copying independent

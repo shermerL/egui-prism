@@ -66,6 +66,11 @@ triggers, viewport collisions and long bounded text. It uses the unmodified
 pinned Tooltip source and Radix Tooltip 1.2.8; the shadcn provider defaults to
 zero delay and the content defaults to zero side offset.
 
+The `/?separators` fixture uses the unmodified pinned Separator and locked Radix
+1.1.7 primitive. It matches the native Separators page: both directions and
+semantic modes, 320px width, 48px height, 160px clipping and tinted parent opacity,
+with light/dark themes and 100%/150% scale.
+
 Open `/?spinners` for the unmodified pinned Spinner with caller-owned visibility,
 reduced motion, inline/button-adjacent status and translucent-parent samples. Use
 real 100%/150% browser zoom. A successful fixture build is not visual acceptance.
