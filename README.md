@@ -51,6 +51,7 @@ The versioned [quest tree](quest/README.md) is the source of planned work.
 
 See [semantic themes](docs/themes.md) for the theme API, color pairs, spacing ownership, and validation limits.
 
+See [empty states](docs/empty-states.md) for caller-owned copy, icons and actions.
 See [badges](docs/badges.md) for compact static text and the six pinned variants.
 See [buttons](docs/buttons.md) for roles, sizes, icons, and caller-owned actions.
 See [text input](docs/text-input.md) for editing, validation, IDs, and IME evidence.

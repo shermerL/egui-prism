@@ -7,6 +7,7 @@ mod buttons;
 mod checkboxes;
 mod compositing;
 mod dialogs;
+mod empty_states;
 mod input;
 mod interaction;
 mod selects;
@@ -23,6 +24,7 @@ enum Case {
     Theme,
     Buttons,
     Badges,
+    Empty,
     Inputs,
     Checkboxes,
     Sliders,
@@ -39,6 +41,7 @@ impl Case {
             Self::Theme => "Theme",
             Self::Buttons => "Buttons",
             Self::Badges => "Badges",
+            Self::Empty => "Empty states",
             Self::Inputs => "Inputs",
             Self::Checkboxes => "Checkboxes",
             Self::Sliders => "Sliders",
@@ -66,6 +69,7 @@ struct Gallery {
     switches: switches::SwitchCase,
     selects: selects::SelectCase,
     dialogs: dialogs::DialogCase,
+    empty: empty_states::EmptyCase,
 }
 
 impl Gallery {
@@ -95,6 +99,7 @@ impl Gallery {
             switches: switches::SwitchCase::default(),
             selects: selects::SelectCase::default(),
             dialogs: dialogs::DialogCase::default(),
+            empty: empty_states::EmptyCase::new(context),
         };
         gallery.apply_theme(context);
         Ok(gallery)
@@ -170,10 +175,12 @@ impl Gallery {
                 }
                 let response = if let Some(button) = &entry.button {
                     let response = button.handle(&event);
-                    if response.clicked()
-                        && let Control::Button(control) = control
-                    {
-                        self.buttons.activated(control);
+                    if response.clicked() {
+                        match control {
+                            Control::Button(control) => self.buttons.activated(control),
+                            Control::Empty(control) => self.empty.activated(control),
+                            _ => {}
+                        }
                     }
                     response
                 } else if let Some(registration) = &entry.checkbox {
@@ -358,6 +365,7 @@ impl Gallery {
                             Case::Compositing,
                             Case::Buttons,
                             Case::Badges,
+                            Case::Empty,
                             Case::Inputs,
                             Case::Checkboxes,
                             Case::Sliders,
@@ -425,6 +433,7 @@ impl Gallery {
                 }
                 Case::Buttons => self.buttons.show(ui, &theme, frame),
                 Case::Badges => badges::show(ui, &theme, frame),
+                Case::Empty => self.empty.show(ui, &theme, frame),
                 Case::Inputs => self.inputs.show(ui, &theme, frame),
                 Case::Checkboxes => self.checkboxes.show(ui, &theme, frame),
                 Case::Sliders => self.sliders.layout(ui, &theme, |case, ui, control| {
