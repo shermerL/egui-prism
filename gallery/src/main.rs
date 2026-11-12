@@ -4,6 +4,7 @@ mod native;
 
 mod badges;
 mod buttons;
+mod cards;
 mod checkboxes;
 mod compositing;
 mod dialogs;
@@ -23,6 +24,7 @@ enum Case {
     Theme,
     Buttons,
     Badges,
+    Cards,
     Inputs,
     Checkboxes,
     Sliders,
@@ -39,6 +41,7 @@ impl Case {
             Self::Theme => "Theme",
             Self::Buttons => "Buttons",
             Self::Badges => "Badges",
+            Self::Cards => "Cards",
             Self::Inputs => "Inputs",
             Self::Checkboxes => "Checkboxes",
             Self::Sliders => "Sliders",
@@ -60,6 +63,7 @@ struct Gallery {
     narrow: bool,
     interaction: InteractionCase,
     buttons: buttons::ButtonCase,
+    cards: cards::CardCase,
     inputs: text_inputs::InputCase,
     checkboxes: checkboxes::CheckboxCase,
     sliders: sliders::SliderCase,
@@ -89,6 +93,7 @@ impl Gallery {
             narrow: false,
             interaction: InteractionCase::default(),
             buttons: buttons::ButtonCase::new(context),
+            cards: cards::CardCase::default(),
             inputs: text_inputs::InputCase::default(),
             checkboxes: checkboxes::CheckboxCase::default(),
             sliders: sliders::SliderCase::default(),
@@ -174,6 +179,11 @@ impl Gallery {
                         && let Control::Button(control) = control
                     {
                         self.buttons.activated(control);
+                    }
+                    if response.clicked()
+                        && let Control::Card(control) = control
+                    {
+                        self.cards.activated(control);
                     }
                     response
                 } else if let Some(registration) = &entry.checkbox {
@@ -358,6 +368,7 @@ impl Gallery {
                             Case::Compositing,
                             Case::Buttons,
                             Case::Badges,
+                            Case::Cards,
                             Case::Inputs,
                             Case::Checkboxes,
                             Case::Sliders,
@@ -425,6 +436,7 @@ impl Gallery {
                 }
                 Case::Buttons => self.buttons.show(ui, &theme, frame),
                 Case::Badges => badges::show(ui, &theme, frame),
+                Case::Cards => self.cards.show(ui, &theme, frame),
                 Case::Inputs => self.inputs.show(ui, &theme, frame),
                 Case::Checkboxes => self.checkboxes.show(ui, &theme, frame),
                 Case::Sliders => self.sliders.layout(ui, &theme, |case, ui, control| {

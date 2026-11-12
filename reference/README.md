@@ -59,3 +59,8 @@ The `/?badges` fixture renders all six static Badge variants from the pinned
 source, long text in a horizontal scroll area, and group opacity over a tinted
 surface. Light/dark and 100%/150% controls match the native Badges page.
 The Link variant remains a noninteractive span in both fixtures.
+
+The `/?cards` fixture renders the pinned Card header, description, content and
+footer with caller-owned text/actions, long and empty content, 320px width,
+light/dark, 100%/150% scale and tinted group opacity. Its ordinary HTML editor
+is an interaction fixture, not an appearance match for the Gallery egui editor.

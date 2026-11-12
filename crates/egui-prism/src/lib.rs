@@ -24,6 +24,7 @@ pub mod theme;
 
 pub mod badge;
 pub mod button;
+pub mod card;
 pub mod text_input;
 
 pub mod checkbox;
