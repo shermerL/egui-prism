@@ -1,6 +1,7 @@
 # Item composition: implementation boundary
 
-This is a design checkpoint, not an implemented Item or a parity result.
+This records the implementation design and its measured boundaries. It is not a
+full CSS parity result; see [Items](items.md) for the implemented finite interface.
 
 ## Fixed source and supported semantics
 
@@ -39,12 +40,12 @@ registration would leave input geometry inconsistent.
 
 ## Internal preparation is viable
 
-A second, unpublished prototype extracted the existing Button measurement block
+The internal preparation path extracted the existing Button measurement block
 into a private `layout(&Ui)` helper, reused by ordinary registration. It did not
 add a public API or change the host contract. A controlled test covered all four
 Button sizes, primary/outline/link roles and IconButton: preparation preserves
 the next automatic ID, registers no hit response, and returns the same size as
-subsequent registration. That test and all 21 existing Button tests passed.
+subsequent registration. That test and all 21 existing Button tests passed before integration.
 
 Therefore absence of a public sizing method is **not** a demonstrated blocker
 and does not by itself require a maintainer decision. Prefer crate-private
@@ -56,8 +57,9 @@ basic Item need not promise arbitrary effectful UI closures.
 
 ## Remaining implementation work
 
-Establish deterministic width/wrap and balanced two-line description behavior
-with full accessible names and explicit supported slots. The constrained-width
+The candidate now implements explicit action-group wrapping, egui-based balanced
+two-line descriptions, full accessible names and finite supported slots. Exact
+CSS text-balance and min-content behavior remain implementation limitations. The constrained-width
 probe demonstrates why a fixed right-hand action width is insufficient; it is
 not a browser oracle or proof of CSS flex/min-content parity. Keep these actual
 layout requirements distinct from specialist browser/native/AT testing, which

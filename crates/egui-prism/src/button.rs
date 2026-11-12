@@ -65,6 +65,16 @@ pub struct Button<'theme, 'a> {
     invalid: bool,
 }
 
+struct ButtonLayout {
+    label: String,
+    galley: Option<std::sync::Arc<egui::Galley>>,
+    size: egui::Vec2,
+    content_width: f32,
+    border_width: f32,
+    icon_size: f32,
+    gap: f32,
+}
+
 impl<'theme, 'a> Button<'theme, 'a> {
     /// Create a primary text button using the borrowed theme.
     pub fn new(theme: &'theme Theme, text: impl Into<WidgetText>) -> Self {
@@ -102,7 +112,11 @@ impl<'theme, 'a> Button<'theme, 'a> {
         self
     }
 
-    fn draw(self, ui: &mut Ui, icon_name: Option<&str>, handle_input: bool) -> ButtonOutput {
+    pub(crate) fn intrinsic_size(&self, ui: &Ui) -> egui::Vec2 {
+        self.layout(ui, None).size
+    }
+
+    fn layout(&self, ui: &Ui, icon_name: Option<&str>) -> ButtonLayout {
         let (height, padding, icon_padding, gap, icon_size) = match self.size {
             ButtonSize::ExtraSmall => (24.0, 8.0, 6.0, 4.0, 12.0),
             ButtonSize::Small => (32.0, 12.0, 10.0, 6.0, 16.0),
@@ -121,12 +135,12 @@ impl<'theme, 'a> Button<'theme, 'a> {
         if self.size == ButtonSize::ExtraSmall {
             font.size -= 2.0;
         }
-        let galley = self.text.map(|text| {
+        let galley = self.text.as_ref().map(|text| {
             let mut style = std::borrow::Cow::Borrowed(ui.style().as_ref());
             if style.visuals.override_text_color.is_some() {
                 style.to_mut().visuals.override_text_color = None;
             }
-            text.into_galley_impl(
+            text.clone().into_galley_impl(
                 ui.ctx(),
                 &style,
                 egui::text::TextWrapping::from_wrap_mode_and_width(
@@ -157,6 +171,27 @@ impl<'theme, 'a> Button<'theme, 'a> {
             content_width + 2.0 * if has_icon { icon_padding } else { padding } + 2.0 * border_width
         };
         let size = egui::vec2(width, height);
+        ButtonLayout {
+            label,
+            galley,
+            size,
+            content_width,
+            border_width,
+            icon_size,
+            gap,
+        }
+    }
+
+    fn draw(self, ui: &mut Ui, icon_name: Option<&str>, handle_input: bool) -> ButtonOutput {
+        let ButtonLayout {
+            label,
+            galley,
+            size,
+            content_width,
+            border_width,
+            icon_size,
+            gap,
+        } = self.layout(ui, icon_name);
         let (id, allocated_rect) = ui.allocate_space(size);
         let rect = ui.layout().align_size_within_rect(size, allocated_rect);
         let mut response = ui.interact(rect, id, egui::Sense::click());
@@ -446,10 +481,17 @@ impl ButtonOutput {
         response
     }
 
-    /// Cancel a pending Space activation after focus or enablement is lost.
+    /// Cancel a pending Space activation after widget/window focus or enablement is lost.
+    ///
+    /// During ordered dispatch, call for every event, including untargeted window-focus events.
     pub fn cancel_unfocused(&self) {
         let context = &self.response.ctx;
-        if !context.memory(|memory| memory.has_focus(self.response.id))
+        if context.input(|input| {
+            input
+                .events
+                .iter()
+                .any(|event| matches!(event, egui::Event::WindowFocused(false)))
+        }) || !context.memory(|memory| memory.has_focus(self.response.id))
             || !context
                 .read_response(self.response.id)
                 .is_some_and(|response| response.enabled())
@@ -491,7 +533,7 @@ impl ButtonOutput {
 }
 
 // Build image primitives without passing through a painter that may already be faded.
-fn image_shapes(ui: &Ui, image: &Image<'_>, rect: egui::Rect) -> Vec<egui::Shape> {
+pub(crate) fn image_shapes(ui: &Ui, image: &Image<'_>, rect: egui::Rect) -> Vec<egui::Shape> {
     use egui::emath::GuiRounding as _;
     let rect = rect.round_to_pixels(ui.pixels_per_point());
     let image = image
@@ -608,6 +650,10 @@ impl<'theme, 'a> IconButton<'theme, 'a> {
 }
 
 impl IconButton<'_, '_> {
+    pub(crate) fn intrinsic_size(&self, ui: &Ui) -> egui::Vec2 {
+        self.button.layout(ui, Some(&self.name)).size
+    }
+
     /// Register an image action without handling input; submit only the final drawing.
     pub fn register(self, ui: &mut Ui) -> ButtonOutput {
         let mut output = self.button.draw(ui, Some(&self.name), false);
@@ -734,7 +780,7 @@ impl ButtonState {
 }
 
 // Tailwind's default timing function: cubic-bezier(0.4, 0, 0.2, 1).
-fn css_ease(x: f32) -> f32 {
+pub(crate) fn css_ease(x: f32) -> f32 {
     let mut low = 0.0;
     let mut high = 1.0;
     for _ in 0..16 {
@@ -748,4 +794,44 @@ fn css_ease(x: f32) -> f32 {
     }
     let t = (low + high) / 2.0;
     3.0 * (1.0 - t) * t * t + t * t * t
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::*;
+    #[test]
+    fn pure_internal_layout_matches_registration_without_touching_hit_state() {
+        egui::__run_test_ui(|ui| {
+            let theme = Theme::light();
+            for size in [
+                ButtonSize::ExtraSmall,
+                ButtonSize::Small,
+                ButtonSize::Medium,
+                ButtonSize::Large,
+            ] {
+                for role in [ButtonRole::Primary, ButtonRole::Outline, ButtonRole::Link] {
+                    let button = Button::new(&theme, "Download original archive")
+                        .size(size)
+                        .role(role);
+                    let id = ui.next_auto_id();
+                    assert!(ui.ctx().read_response(id).is_none());
+                    let measured = button.layout(ui, None);
+                    assert_eq!(ui.next_auto_id(), id);
+                    assert!(ui.ctx().read_response(id).is_none());
+                    let output = button.register(ui);
+                    assert_eq!(measured.size, output.response.rect.size());
+                }
+            }
+            let icon = IconButton::new(
+                &theme,
+                (egui::TextureId::User(1), egui::vec2(16., 16.)),
+                "Open",
+            );
+            let id = ui.next_auto_id();
+            let measured = icon.button.layout(ui, Some(&icon.name));
+            assert_eq!(ui.next_auto_id(), id);
+            assert!(ui.ctx().read_response(id).is_none());
+            assert_eq!(measured.size, icon.register(ui).response.rect.size());
+        });
+    }
 }
