@@ -23,7 +23,10 @@ an unfaded `Group` for composition; parent opacity is applied once by submission
 The host supplies finite frame time. Each ID has its own one-second clockwise
 rotation epoch. Omission for a frame and re-enabling motion restart it; clipping
 pauses repaint requests, not elapsed time. Repeated layout passes do not restart
-motion. Repaint is requested only for visible animated nonzero-opacity drawing.
+motion. Repaint is requested only for visible animated drawing with nonzero UI
+painter opacity. A parent `Group` assembled later is not visible to the widget;
+if that parent is hidden or transparent, the caller must omit `show` or disable
+animation rather than expect the widget to infer its final opacity.
 
 The pinned Lucide LoaderCircle arc has a two-unit rounded stroke in a 24-unit
 viewbox, scaled to 16 points. Geometry is one antialiased mesh, avoiding overlapping
