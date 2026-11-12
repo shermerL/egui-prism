@@ -36,7 +36,10 @@ For native builds and complete checks, see [CONTRIBUTING.md](CONTRIBUTING.md).
 The [acceptance gallery](docs/gallery.md) documents the interaction, layout, scale,
 and screenshot cases.
 The core library depends on egui; the gallery owns its winit window and explicit wgpu rendering
-loop, with egui-winit handling OS input, IME and clipboard. Applications can use the library with their own host.
+loop, with egui-winit handling OS input, IME, clipboard and the native AccessKit
+accessibility bridge. Applications can use the library with their own host.
+See the [accessibility checks](docs/gallery.md#native-accessibility) for the event
+contract and separate platform acceptance requirements.
 
 `install_fonts` adds bundled Geist faces with limited glyph coverage. Hosts own
 fallback font data, licensing and family chains; `FontDefinitions::default()`
