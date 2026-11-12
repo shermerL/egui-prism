@@ -33,3 +33,4 @@ pub mod compositing;
 pub mod dialog;
 pub mod select;
 pub mod slider;
+pub mod tooltip;

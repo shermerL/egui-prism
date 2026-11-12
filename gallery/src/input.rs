@@ -1,7 +1,7 @@
 //! Pass-local routing for the Gallery's explicit controls and scroll shells.
 use crate::{
     Case, Gallery, buttons, checkboxes, compositing, dialogs, egui, interaction, selects, sliders,
-    switches, text_inputs,
+    switches, text_inputs, tooltips,
 };
 use egui_prism::checkbox::{Checkbox, CheckboxRegistration};
 use egui_prism::switch::{Switch, SwitchRegistration};
@@ -20,6 +20,7 @@ pub(super) enum Control {
     Slider(sliders::Control),
     Switch(switches::Control),
     Select(selects::Control),
+    Tooltip(tooltips::Control),
     Dialog(dialogs::Control),
     Interaction(interaction::Control),
     Compositing(compositing::Control),
@@ -36,6 +37,7 @@ impl Control {
                 | Self::Slider(sliders::Control::Value(_) | sliders::Control::Focus(_))
                 | Self::Switch(switches::Control::Count(_))
                 | Self::Select(selects::Control::Count(_) | selects::Control::OutsideCount)
+                | Self::Tooltip(tooltips::Control::Count(_) | tooltips::Control::OutsideCount)
                 | Self::Dialog(dialogs::Control::Count(_) | dialogs::Control::OutsideCount)
                 | Self::Interaction(
                     interaction::Control::Count(_) | interaction::Control::Focus(_)
@@ -85,6 +87,13 @@ impl Control {
                 | selects::Control::Empty
                 | selects::Control::AllDisabled
                 | selects::Control::Tinted,
+            )
+            | Self::Tooltip(
+                tooltips::Control::Disabled
+                | tooltips::Control::Hidden
+                | tooltips::Control::Long
+                | tooltips::Control::Reverse
+                | tooltips::Control::Delayed,
             )
             | Self::Dialog(
                 dialogs::Control::Long
@@ -552,6 +561,7 @@ impl Gallery {
             Control::Slider(control) => self.sliders.stock(ui, *control).into(),
             Control::Switch(control) => self.switches.control(ui, *control),
             Control::Select(control) => self.selects.control(ui, *control),
+            Control::Tooltip(control) => self.tooltips.control(ui, *control),
             Control::Dialog(control) => self.dialogs.control(ui, *control),
             Control::Interaction(control) => {
                 self.interaction

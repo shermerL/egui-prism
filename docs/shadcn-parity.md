@@ -105,6 +105,8 @@ resource lifetimes. Their migration sections replace the earlier egui-style APIs
 | Dialog | [Dialogs](dialogs.md), [evidence and limits](dialogs.md#evidence-and-limits) | Caller-owned open state and dismissal policy, scoped content and explicit drawing groups. The bounded scrolling body is an explicit extension; ordinary direct-painting egui controls are outside group opacity isolation. |
 | Badge | [Badges](badges.md) | Static caller-owned text with six variants, natural width, accessible text and explicit drawing. Platform observations are recorded separately from contract tests. |
 
+| Tooltip | [Tooltips](tooltips.md) | Explicit trigger responses, host-supplied hint scope and drawing-only hints. Natural text width matches the reference while drawing and Group allocation are clipped to the viewport; browser/native observations and controlled tests are recorded separately. |
+
 ### Shared capabilities
 
 - [Semantic themes](themes.md#evidence-and-limits) and the
