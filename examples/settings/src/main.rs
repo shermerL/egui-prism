@@ -294,11 +294,13 @@ impl Runtime {
         );
         let mut actions = Vec::new();
         let mut platform_failure = None;
+        let mut quit = false;
         for (id, viewport) in std::mem::take(&mut output.viewport_output) {
             if id != egui::ViewportId::ROOT {
                 platform_failure = Some("This recipe supports only the root viewport");
                 continue;
             }
+            quit |= requests_quit(&viewport.commands);
             let mut info = self.context.input(|input| input.viewport().clone());
             egui_winit::process_viewport_commands(
                 &self.context,
@@ -321,6 +323,12 @@ impl Runtime {
             output.drop_without_applying_deltas();
             return Err(error.into());
         }
+        if quit {
+            // Keyboard/app Close has the same unconditional policy as the OS close event.
+            output.drop_without_applying_deltas();
+            events.exit();
+            return Ok(());
+        }
         let view = surface_image.texture.create_view(&Default::default());
         self.drawing.render(
             output,
@@ -338,6 +346,13 @@ impl Runtime {
             .request_repaint_after(Duration::from_millis(500));
         Ok(())
     }
+}
+
+// Closing is application policy, not a side effect of mutating a temporary ViewportInfo.
+fn requests_quit(commands: &[egui::ViewportCommand]) -> bool {
+    commands
+        .iter()
+        .any(|command| matches!(command, egui::ViewportCommand::Close))
 }
 
 struct Target<'a> {
@@ -529,6 +544,60 @@ impl GpuImage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ordered_quit_shortcut_reaches_host_close_policy() {
+        for consume in [false, true] {
+            let context = egui::Context::default();
+            context.options_mut(|options| {
+                options.ordered_input = true;
+                options.max_passes = 1.try_into().unwrap();
+                options.quit_shortcuts = vec![egui::KeyboardShortcut::new(
+                    egui::Modifiers::CTRL,
+                    egui::Key::Q,
+                )];
+            });
+            let input = egui::RawInput {
+                events: vec![egui::Event::Key {
+                    key: egui::Key::Q,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::CTRL,
+                }],
+                time: Some(0.0),
+                ..Default::default()
+            };
+            let output = context.run_ui(input, |_| {
+                context.begin_input();
+                while context.next_input_event().is_some() {
+                    if consume {
+                        context.input_mut(|input| input.events.clear());
+                    }
+                }
+            });
+            assert_eq!(
+                requests_quit(&output.viewport_output[&egui::ViewportId::ROOT].commands),
+                !consume
+            );
+            output.drop_without_applying_deltas();
+            let output = context.run_ui(
+                egui::RawInput {
+                    time: Some(1.0),
+                    ..Default::default()
+                },
+                |_| {
+                    context.begin_input();
+                    while context.next_input_event().is_some() {}
+                },
+            );
+            assert!(
+                !requests_quit(&output.viewport_output[&egui::ViewportId::ROOT].commands),
+                "quit must not replay on an unrelated frame"
+            );
+            output.drop_without_applying_deltas();
+        }
+    }
 
     #[test]
     #[ignore = "requires a native adapter; Linux CI runs this with Mesa software Vulkan"]
