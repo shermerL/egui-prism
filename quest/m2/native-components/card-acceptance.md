@@ -15,6 +15,35 @@ The [shared acceptance protocol](/docs/component-acceptance.md) defines source i
 3. Exercise nested Save Button/editor through native Tab/Shift-Tab, Enter/Space/click, disabled state, repeated rendering, page return and focus loss/reentry. Each valid input produces one action, disabled produces none, editor values survive drawing/page changes, and hit/visual bounds agree. The shell does not impersonate child click/focus. AT exposes child labels/order without fabricating an interactive container.
 4. A stock egui editor is not Prism TextInput; its appearance need not match a shadcn input. CardAction is not an implemented public slot and is not added by this acceptance work. Header defects, visibly incorrect shadows and displaced input block landing.
 
+### Executor handoff
+
+Run the targeted `cargo test --locked -p egui-prism --test card`, then run
+Gallery in the pinned development shell and select Cards. The compiling
+`card` example and its recording compositor are not a real window. Build and
+serve `reference/` following its README and open `/?cards` for the actual
+pinned component. Keep the fixture's own scale control at 100% while testing
+actual browser zoom at 100%/150%: its 150% button applies CSS `zoom`, not browser
+zoom. Record viewport, DPR, application scale, fonts and both source SHAs.
+
+For each theme and narrow/normal container, capture the ordinary and long-copy
+Card plus the empty Card and tinted 60%-opacity sample. Record the same logical
+bounds in native and browser output before judging padding, radius and shadows.
+Use the existing native Save counter and browser Saved counter as independent
+observations: one valid click/Enter/Space increments once, repeated idle frames
+and disabled activation do not. Preserve the editor value through focus/page
+return. Capture a short input trace or recording with expected/actual counts;
+a screenshot alone does not establish keyboard behavior.
+
+The current fixture does not supply every Unicode/min-content or mixed-height
+case above. Add those missing samples to the harness without modifying the
+pinned Card source, then record raw line/bounds measurements and original
+screenshots for comparison. Do not cite the Alert fixture as Card evidence:
+Card has different fonts, widths and section layout. Record missing sample,
+font, shadow or AT observations as NOT RUN/BLOCKED with an executor and next
+step; keep known header and input defects as blockers. Report the exact tested
+head (and synthetic merge SHA if CI was used), artifacts and residual risk
+before requesting any maintainer staged-landing scope decision.
+
 Before completion, include the automatable supported-case assertions in CI, provide native/reference captures and measured comparisons, record AT/input observations, link the applicable exact-head CI and independent review, and map every original requirement to PASS or a specifically retained blocking owner. FAIL, NOT RUN and BLOCKED rows prevent this Quest being called complete. No silent scope reduction or after-merge deferral of known parity defects. Only an explicit maintainer scope decision can permit staged landing; record the deferred requirements and owners without marking them PASS or deleting incomplete Quests.
 
 Refresh evidence after affected implementation, reference, host or integration changes. Preserve original implementation attribution and test/evidence attribution separately. Written by dot (AI).
