@@ -79,3 +79,39 @@ compositor submission, justified-layout registration, and actual tessellated geo
 Automated checks, browser
 observations, native windows, and screen-reader acceptance are separate evidence.
 Native macOS/Windows/Linux GUI and assistive-technology observations remain pending.
+
+### Automated framebuffer regression evidence
+
+The `egui-prism-wgpu` test
+`tests::current_frame_producers_cleanup_and_revocation` now includes 96
+Separator framebuffer cases: light/dark tinted surfaces, both orientations,
+1x/1.5x scale, 32/0.25/0-point extents, partial clipping, and 100%/60% parent
+opacity. It reads back actual GPU pixels and compares the component compositor
+against an independently constructed one-point polygon rendered directly by
+egui, with parent opacity applied once to the oracle image. RGB rounding allows
+three byte values; opaque alpha and zero-extent background are exact.
+
+Reproduce using the existing Linux CI software-Vulkan setup:
+
+```sh
+cargo test --locked -p egui-prism-wgpu tests::current_frame_producers_cleanup_and_revocation -- --ignored --exact --nocapture
+```
+
+On 2026-11-12, the candidate based on
+`11ce1474157c21216dd47a9a4c640781babcc1a4` passed this matrix on Linux,
+Rust 1.96.0, Mesa 25.0.7-2+deb13u1 llvmpipe (LLVM 19.1.7), Vulkan.
+The evidence applies to the test added with this document, not the base alone.
+Removing the production antialiasing-bounds expansion temporarily made the
+new test fail at horizontal/1x/32-point/unclipped/full-opacity; restoring the
+original source restored the passing result. A second mutation suppressing only
+0.25-point component painting also failed (horizontal/1x/unclipped/full-opacity),
+confirming the matrix detects complete subpixel-line loss. Both mutations were
+reverted. No production change is included.
+The existing CI GPU-contract step executes this test; exact-head CI and review
+results belong in PR #32.
+
+This oracle shares egui's rasterizer, not Separator's emitted Group. It tests
+compositor coverage, clipping and opacity, **not** browser CSS parity, native
+window presentation, decorative/semantic AT exposure, or real keyboard input.
+Those observations and cross-platform captures remain blocking acceptance work.
+Written by dot (AI).
