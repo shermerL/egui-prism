@@ -15,7 +15,11 @@ consumer and docs.rs build must resolve every required API from the published
 dependency graph. Removing publish=false is not a distribution design. Reuse
 the canonical consumer example to test the proposed package route, including
 its documented host, input and mixed-widget requirements; do not create a second
-recipe that hides integration steps.
+recipe that hides integration steps. Validate the package route against the
+same library-owned support contract in /docs/releases.md, including exact source,
+features/type graph, compiler and rendering constraints. Registry readiness does
+not extend the platform support promise or turn a consumer's media results into
+a library guarantee.
 
 Compare compatible upstream support, an explicitly maintained published patch,
 and retaining source distribution. Document type identity across egui, egui-winit

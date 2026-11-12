@@ -24,8 +24,14 @@ recipe. Keep its documented dependency and host configuration consistent with
 the actual archive.
 
 Prepare release notes, the proposed version and exact commit, archive contents,
-checksums and the platform evidence matrix. Record known limitations and API
-migration requirements. Use read-only CI to prepare candidates; publishing
+checksums and the platform evidence matrix. Freeze the library-owned support
+contract from /docs/releases.md for this exact candidate: source/patch identity,
+resolved graph/features, declared and tested compiler requirements, input/render
+configuration, known defects and layered platform evidence. Distinguish required,
+tested, untested and unsupported configurations. Reference the canonical protocol
+documents and refresh only evidence invalidated by changed boundaries; do not
+assemble one accepted candidate from unrelated branch observations. Record known
+limitations and API migration requirements. Use read-only CI to prepare candidates; publishing
 credentials do not belong in PR jobs. Debug CI artifacts are not release assets.
 Include runnable Gallery binaries only for explicit targets whose downloaded or
 equivalent extracted payloads have been validated, with signing status stated.

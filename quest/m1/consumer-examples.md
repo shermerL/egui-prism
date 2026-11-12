@@ -15,8 +15,19 @@ Keep that narrow type-compatibility fixture useful; a larger example does not
 replace its focused regression. Preserve the egui-only core, official native
 host and independent compositor; no new facade or host framework is required.
 
+Before implementation, record the exact source candidate and the selected modal,
+third-party widget and supported rendering configuration in the implementation
+PR. Follow the library-owned support contract in /docs/releases.md; list missing
+evidence explicitly. Do not combine successes from different branch heads into
+acceptance of the selected candidate.
+
 Provide one complete settings application with a modal editing flow using the
-accepted controls. Show caller-owned values, stable IDs, explicit drawing,
+accepted controls. If it uses Prism Dialog, include repair and applicable
+verification of the known title/description semantics defect in
+[Issue 29](https://github.com/shermerL/egui-prism/issues/29). Ordinary egui Modal
+is an allowed explicit alternative only with ordered-input behavior evidence;
+it does not complete Prism Dialog acceptance. Missing platform observations
+remain distinct from an unrepaired known component defect. Show caller-owned values, stable IDs, explicit drawing,
 ordered native input, fonts and host/compositor initialization and cleanup.
 Consume public Prism, compositor and official host APIs; do not import private
 Gallery modules or test-only component setters. Explain root Cargo patch setup
@@ -39,6 +50,16 @@ regressions; add only gaps exposed by this composition. Compile the documented n
 platform CI and report controlled interaction evidence separately from OS IME,
 screen-reader, GPU and visual acceptance owned by native-gallery.
 
+Add a bounded synthetic current-frame GPU image producer using the existing
+adapter conformance approach. Show ordinary image shapes in a Group and an
+overlay consuming the current content. Identify who produces/uploads the image,
+registers and retains the source, borrows the renderer for compositor preparation,
+encodes and submits, then releases registrations on success, failure and restart.
+Verify production precedes offscreen consumption and retained resources survive
+submission. Do not introduce decoding, network sessions, device policy or a new
+rendering contract; reuse unchanged GPU regressions rather than reproducing the
+full conformance suite.
+
 Give each complete recipe a stable source identity and distinguish it from
 partial API snippets. Documentation should link to the canonical source; where
 a runnable listing is repeated, check that its bounded source region matches.
@@ -51,7 +72,9 @@ workflow regression, current documentation links/listings and explicit limits
 on the observations made. Record the actual setup and migration steps, separating required consumer work
 from reusable library integration. This delivers consumer examples, not a release
 candidate or production-application migration. Do not add media, networking or
-application-specific policy to establish this generic integration.
+application-specific policy to establish this generic integration. If the recipe
+requires a larger input patch, new host facade or unsupported render target,
+stop expansion with minimal failure evidence and a concrete design choice.
 
 Use [GPUI Kit's executable recipe practice](https://github.com/longbridge/gpui-kit/blob/8650093ccee70317fe96d48d53ead459620d38f0/examples/ai_recipes/README.md)
 as an engineering reference. Adapt the ownership and evidence principles to
