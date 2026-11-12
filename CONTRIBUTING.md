@@ -1,8 +1,13 @@
 # Contributing
 
 The workspace contains the egui-only library in `crates/egui-prism` and the
-native winit/wgpu host in `gallery`. The host displays semantic themes, Prism buttons and text inputs, and labeled egui harness
-controls. Other components are subsequent quests.
+native winit/wgpu host in `gallery`. The host presents semantic light/dark themes
+and all eight core controls, Button, IconButton, TextInput, Checkbox, Switch,
+Slider, Select, and Dialog, alongside labeled standard egui harness controls.
+These controls are delivered at component level; native platform, IME and
+assistive-technology acceptance have separate evidence requirements.
+See the [current parity evidence](docs/shadcn-parity.md#current-evidence-index)
+and [native Gallery acceptance work](quest/m1/native-gallery.md).
 The [quest tree](quest/README.md) is the task source.
 
 ## Development tools

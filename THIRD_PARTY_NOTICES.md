@@ -109,9 +109,12 @@ packages are recorded in `Cargo.lock`; no AccessKit source is modified or vendor
 
 ## Bundled default fonts
 
-The gallery enables eframe default fonts through epaint_default_fonts 0.37.0.
+The Gallery enables egui default fonts through epaint_default_fonts 0.37.0.
 Hack, Ubuntu Light, and the egui icon subset retain the following notices.
 The Gallery additionally installs the pinned Geist fonts described below.
+
+The egui-prism theme test also uses Hack Regular from this package as an explicit
+host fallback via a dev-dependency, under the Hack license below.
 
 ### Hack-Regular.txt
 
@@ -391,10 +394,12 @@ Sources:
 - https://www.npmjs.com/package/@radix-ui/react-slider/v/1.3.6
 - https://www.npmjs.com/package/@radix-ui/react-select/v/2.2.6
 - https://www.npmjs.com/package/@radix-ui/react-dialog/v/1.1.15
+- https://www.npmjs.com/package/@radix-ui/react-tooltip/v/1.2.8
 
 Slider step, pointer and thumb-position rules and Select popup placement,
 keyboard navigation, typeahead and pointer-selection rules, and Dialog dismissal
-and focus-presence behavior are adapted from these primitives.
+and focus-presence behavior, and Tooltip hover/focus/transit rules are adapted
+from these primitives.
 
 MIT License
 

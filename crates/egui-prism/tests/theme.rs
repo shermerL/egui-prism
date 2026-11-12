@@ -70,6 +70,26 @@ fn neutral_tokens_match_pinned_css_and_preserve_dark_alpha() {
 
 #[test]
 fn font_setup_retains_host_families_and_installs_each_weight_once() {
+    // A negative control ensures this symbol exercises fallback, not Geist.
+    let geist_only = egui::Context::default();
+    egui_prism::theme::install_fonts(&geist_only, egui::FontDefinitions::empty());
+    geist_only
+        .run_ui(Default::default(), |ui| {
+            ui.label("Geist");
+        })
+        .drop_without_applying_deltas();
+    geist_only.fonts_mut(|fonts| {
+        for name in ["prism-geist-medium", "prism-geist-semibold"] {
+            assert!(
+                !fonts.has_glyph(
+                    &egui::FontId::new(14.0, egui::FontFamily::Name(name.into())),
+                    '⅖'
+                ),
+                "the {name} chain without host fallbacks must lack '⅖'"
+            );
+        }
+    });
+
     let context = egui::Context::default();
     let custom = egui::TextStyle::Name("host-caption".into());
     context.all_styles_mut(|style| {
@@ -77,8 +97,21 @@ fn font_setup_retains_host_families_and_installs_each_weight_once() {
             .text_styles
             .insert(custom.clone(), egui::FontId::monospace(15.0));
     });
-    let mut definitions = egui::FontDefinitions::default();
-    let original_fallbacks = definitions.families[&egui::FontFamily::Proportional].clone();
+    let mut definitions = egui::FontDefinitions::empty();
+    definitions.font_data.insert(
+        "host-hack".into(),
+        egui::FontData::from_static(epaint_default_fonts::HACK_REGULAR).into(),
+    );
+    let host_family = egui::FontFamily::Name("host-symbols".into());
+    for family in [
+        egui::FontFamily::Proportional,
+        egui::FontFamily::Monospace,
+        host_family.clone(),
+    ] {
+        definitions
+            .families
+            .insert(family, vec!["host-hack".into()]);
+    }
     for _ in 0..2 {
         egui_prism::theme::install_fonts(&context, definitions);
         context
@@ -87,38 +120,44 @@ fn font_setup_retains_host_families_and_installs_each_weight_once() {
             })
             .drop_without_applying_deltas();
         definitions = context.fonts(|fonts| fonts.definitions().clone());
-    }
-    context.fonts(|fonts| {
-        let defs = fonts.definitions();
-        let proportional = &defs.families[&egui::FontFamily::Proportional];
-        assert_eq!(proportional[0], "prism-geist-regular");
+
+        assert_eq!(definitions.font_data.len(), 5);
         assert_eq!(
-            proportional
-                .iter()
-                .filter(|name| *name == "prism-geist-regular")
-                .count(),
-            1
+            definitions.font_data["host-hack"].font.as_ref().as_ref(),
+            epaint_default_fonts::HACK_REGULAR
         );
-        assert_eq!(
-            defs.families[&egui::FontFamily::Monospace][0],
-            "prism-geist-mono"
-        );
-        for name in ["prism-geist-medium", "prism-geist-semibold"] {
-            let chain = &defs.families[&egui::FontFamily::Name(name.into())];
-            assert_eq!(chain[0], name);
-            assert!(
-                original_fallbacks
-                    .iter()
-                    .all(|fallback| chain.contains(fallback))
-            );
+        for (family, expected) in [
+            (
+                egui::FontFamily::Proportional,
+                vec!["prism-geist-regular", "host-hack"],
+            ),
+            (
+                egui::FontFamily::Monospace,
+                vec!["prism-geist-mono", "host-hack"],
+            ),
+            (
+                egui::FontFamily::Name("prism-geist-medium".into()),
+                vec!["prism-geist-medium", "prism-geist-regular", "host-hack"],
+            ),
+            (
+                egui::FontFamily::Name("prism-geist-semibold".into()),
+                vec!["prism-geist-semibold", "prism-geist-regular", "host-hack"],
+            ),
+            (host_family.clone(), vec!["host-hack"]),
+        ] {
+            assert_eq!(definitions.families[&family], expected, "{family:?}");
         }
-    });
+    }
     context.fonts_mut(|fonts| {
-        for name in ["prism-geist-medium", "prism-geist-semibold"] {
-            assert!(fonts.has_glyph(
-                &egui::FontId::new(14.0, egui::FontFamily::Name(name.into())),
-                '⅖'
-            ));
+        for family in [
+            host_family.clone(),
+            egui::FontFamily::Name("prism-geist-medium".into()),
+            egui::FontFamily::Name("prism-geist-semibold".into()),
+        ] {
+            assert!(
+                fonts.has_glyph(&egui::FontId::new(14.0, family.clone()), '⅖'),
+                "'⅖' should resolve through the host fallback for {family:?}"
+            );
         }
     });
     assert_eq!(

@@ -9,7 +9,12 @@ Rust for native and web applications. [shadcn/ui](https://ui.shadcn.com/docs)
 defines the component appearance, geometry, states, and interaction contract.
 egui-prism implements that contract in Rust, with native macOS, Windows and Linux as the primary targets.
 
-The library workspace and native engineering gallery are in development. Semantic light/dark themes, Button, IconButton, TextInput, Checkbox, Switch, Slider, Select, and Dialog have initial implementations undergoing strict shadcn parity correction. The gallery distinguishes Prism components from standard egui harness controls; other widgets are planned. There is no published crate or live component gallery yet.
+The library workspace and native engineering gallery remain in development.
+The workspace provides semantic light/dark themes. All eight core controls,
+Button, IconButton, TextInput, Checkbox, Switch, Slider, Select, and Dialog,
+are delivered at component level. The gallery distinguishes Prism components
+from standard egui harness controls; other widgets are planned.
+There is no published crate or live component gallery yet.
 
 Browser deployment is deferred and does not block native component acceptance.
 
@@ -36,6 +41,11 @@ accessibility bridge. Applications can use the library with their own host.
 See the [accessibility checks](docs/gallery.md#native-accessibility) for the event
 contract and separate platform acceptance requirements.
 
+`install_fonts` adds bundled Geist faces with limited glyph coverage. Hosts own
+fallback font data, licensing and family chains; `FontDefinitions::default()`
+contains no fonts without egui's `default_fonts` feature. See
+[theme setup](docs/themes.md).
+
 ## Development
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the pinned Quest setup and current
@@ -44,6 +54,7 @@ The versioned [quest tree](quest/README.md) is the source of planned work.
 
 See [semantic themes](docs/themes.md) for the theme API, color pairs, spacing ownership, and validation limits.
 
+See [badges](docs/badges.md) for compact static text and the six pinned variants.
 See [buttons](docs/buttons.md) for roles, sizes, icons, and caller-owned actions.
 See [text input](docs/text-input.md) for editing, validation, IDs, and IME evidence.
 
@@ -53,6 +64,7 @@ See [switches](docs/switches.md) for controlled boolean changes and interaction.
 See [sliders](docs/sliders.md) for range, step, geometry, and caller-owned values.
 See [selects](docs/selects.md) for controlled option values, frame-local registration,
 ordered popup input, and the native Gallery cases.
+See [tooltips](docs/tooltips.md) for bounded pointer and keyboard hints tied to explicit triggers.
 See [dialogs](docs/dialogs.md) for controlled modal state, neutral dismissal,
 scoped content and explicit drawing groups.
 
@@ -60,9 +72,11 @@ scoped content and explicit drawing groups.
 
 Every component targets strict parity with the pinned shadcn source in appearance,
 geometry, state styling and interaction. egui is the rendering/input substrate.
-The current components are undergoing a full parity correction; existing test and
-CI results do not establish visual acceptance. See the [reference contract and
-component audit](docs/shadcn-parity.md) and [correction Quests](quest/m1/shadcn-parity/README.md).
+Component delivery does not establish acceptance on every target platform.
+Automated tests and CI do not establish visual acceptance;
+native platform, IME and assistive-technology gaps remain explicit. See the
+[reference contract and current evidence index](docs/shadcn-parity.md)
+and the [native Gallery acceptance work](quest/m1/native-gallery.md).
 
 The opt-in [ordered input integration](docs/input-compatibility.md) requires an
 application-root Cargo patch. Its [source inventory](vendor/README.md) and

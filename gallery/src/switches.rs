@@ -239,6 +239,8 @@ mod tests {
             .run_ui(raw(Vec::new()), |ui| {
                 let resources = crate::selects::Resources::new();
                 let mut select_live = crate::selects::Live::default();
+                let tooltip_resources = crate::tooltips::Resources::new();
+                let mut tooltip_live = crate::tooltips::Live::default();
                 context.begin_input();
                 let root = LocalUi::named(ui, ui.make_persistent_id("gallery-root"));
                 let page = gallery.layout(
@@ -247,6 +249,7 @@ mod tests {
                     Default::default(),
                     &resources,
                     &mut select_live,
+                    (&tooltip_resources, &mut tooltip_live),
                 );
                 rects.extend(
                     page.chrome

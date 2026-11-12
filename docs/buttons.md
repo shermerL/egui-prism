@@ -120,7 +120,7 @@ opacity, identity, accessible names and explicit formatting. Native/browser
 observations and untested platforms are reported separately in the PR; metadata
 and screenshots do not establish assistive-technology acceptance.
 
-## Remaining parity work
+## Compositing and ordered-input evidence
 
 Disabled drawing now uses the shared host compositor. The GPU regression renders
 actual Button output over light and dark colored backgrounds, comparing it with

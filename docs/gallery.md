@@ -2,7 +2,7 @@
 
 The native macOS, Windows and Linux hosts use the same Rust gallery and library. The gallery
 demonstrates the theme API, Prism buttons, text inputs, checkboxes, switches, sliders,
-selects, and dialogs, alongside standard egui harness controls. Other Prism widgets are planned.
+selects, dialogs, and static badges, alongside standard egui harness controls. Other Prism widgets are planned.
 A harness check is not a component acceptance result.
 
 ## Run and identify a build
@@ -30,9 +30,11 @@ Theme and case changes preserve caller text, checkboxes, selected values, and ac
 | Case | What to inspect |
 |---|---|
 | Theme | Light/dark foreground/background pairs and selected foreground |
+| Badges | Six static variants, long text scrolling, light/dark, 100%/150% scale, and parent opacity |
 | Buttons | Prism roles, sizes, icon names, disabled actions, wrapping, and independent counts |
 | Inputs | Caller-owned text, editing, errors, disabled state, stable IDs, and IME diagnostics |
 | Selects | Independent controlled values, popup shielding, keyboard/typeahead, list variants, and idle counts |
+| Tooltips | Pointer/focus hints, controlled delay, long plain text, disabled triggers and viewport edges |
 | Dialogs | Controlled A/B modals, neutral dismissal, body actions, focus isolation/restoration, and bounded long content |
 | Interaction | Independent A/B values, pointer activation, Tab/Enter, disabled actions, and idle counts |
 | Layout | The same instances and IDs with long wrapping action labels |
@@ -200,3 +202,11 @@ cargo test --locked -p egui-prism-gallery -- --ignored --nocapture
 The standard check script also runs the core `select` example's assertions.
 These automated checks are not native GUI or Windows/Linux acceptance and do
 not establish screenshot parity or real assistive-technology behavior.
+
+### Tooltip comparison
+
+The Tooltips page attaches hints to ordinary harness triggers with explicit IDs.
+Compare keyboard focus, Escape, pointer transit, disabled triggers, long text,
+instance removal and activation counts against `reference/?tooltips`. The hints
+do not own trigger input or introduce a modal barrier. See [Tooltips](tooltips.md)
+for natural text geometry, viewport drawing bounds and observation limits.

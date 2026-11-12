@@ -2,6 +2,7 @@
 
 mod native;
 
+mod badges;
 mod buttons;
 mod checkboxes;
 mod compositing;
@@ -12,6 +13,7 @@ mod selects;
 mod sliders;
 mod switches;
 mod text_inputs;
+mod tooltips;
 
 use egui_prism::{egui, theme::Theme};
 use input::{Control, Layout, LocalUi, PageLayout, Phase};
@@ -21,11 +23,13 @@ use interaction::InteractionCase;
 enum Case {
     Theme,
     Buttons,
+    Badges,
     Inputs,
     Checkboxes,
     Sliders,
     Switches,
     Selects,
+    Tooltips,
     Dialogs,
     Interaction,
     Layout,
@@ -36,11 +40,13 @@ impl Case {
         match self {
             Self::Theme => "Theme",
             Self::Buttons => "Buttons",
+            Self::Badges => "Badges",
             Self::Inputs => "Inputs",
             Self::Checkboxes => "Checkboxes",
             Self::Sliders => "Sliders",
             Self::Switches => "Switches",
             Self::Selects => "Selects",
+            Self::Tooltips => "Tooltips",
             Self::Dialogs => "Dialogs",
             Self::Interaction => "Interaction",
             Self::Layout => "Layout",
@@ -62,6 +68,7 @@ struct Gallery {
     sliders: sliders::SliderCase,
     switches: switches::SwitchCase,
     selects: selects::SelectCase,
+    tooltips: tooltips::TooltipCase,
     dialogs: dialogs::DialogCase,
 }
 
@@ -91,6 +98,7 @@ impl Gallery {
             sliders: sliders::SliderCase::default(),
             switches: switches::SwitchCase::default(),
             selects: selects::SelectCase::default(),
+            tooltips: tooltips::TooltipCase::default(),
             dialogs: dialogs::DialogCase::default(),
         };
         gallery.apply_theme(context);
@@ -127,6 +135,8 @@ impl Gallery {
         // Both themes and every option variant survive all same-batch rebuilds.
         let select_resources = selects::Resources::new();
         let mut select_live = selects::Live::default();
+        let tooltip_resources = tooltips::Resources::new();
+        let mut tooltip_live = tooltips::Live::default();
         context.begin_input();
         let root = LocalUi::named(ui, ui.make_persistent_id("gallery-root"));
         let mut page = self.layout(
@@ -135,6 +145,7 @@ impl Gallery {
             sliders::Live::default(),
             &select_resources,
             &mut select_live,
+            (&tooltip_resources, &mut tooltip_live),
         );
 
         let dialog_themes = [Theme::light(), Theme::dark()];
@@ -156,6 +167,8 @@ impl Gallery {
                     .handle(live, &dialog_themes[usize::from(self.dark)], &event);
             }
             let select_changed = self.selects.handle_all(&mut select_live, &event);
+            // Hints observe every event but never consume ordinary activation.
+            tooltip_live.handle(&event);
             let scrolled = input::scroll_opportunity(&event) && page.body.scroll_event(&context);
 
             let handled = event.target.and_then(|id| {
@@ -221,6 +234,7 @@ impl Gallery {
                     live.unregister();
                 }
                 select_live.unregister();
+                tooltip_live.unregister();
                 context.input_layout(|| {
                     // Re-capture the root style after a theme change.
                     let mut root_ui = root.open(&context);
@@ -231,6 +245,7 @@ impl Gallery {
                         sliders::Live::default(),
                         &select_resources,
                         &mut select_live,
+                        (&tooltip_resources, &mut tooltip_live),
                     );
                     page.retire(&context, &next);
                     page = next;
@@ -245,6 +260,7 @@ impl Gallery {
                     .is_some_and(|(control, response)| control.changes_layout(response))
             {
                 select_live.unregister();
+                tooltip_live.unregister();
                 context.input_layout(|| {
                     let next = self.body(
                         &mut page.body_ui.open(&context),
@@ -252,6 +268,7 @@ impl Gallery {
                         sliders::Live::default(),
                         &select_resources,
                         &mut select_live,
+                        (&tooltip_resources, &mut tooltip_live),
                     );
                     page.body.retire(&context, &next);
                     page.body = next;
@@ -289,6 +306,7 @@ impl Gallery {
             page.body.slider_live,
             &select_resources,
             &mut select_live,
+            (&tooltip_resources, &mut tooltip_live),
         );
         if let Some(live) = dialog_live {
             self.dialogs
@@ -333,6 +351,7 @@ impl Gallery {
         slider_live: sliders::Live,
         select_resources: &'a selects::Resources,
         select_live: &mut selects::Live<'a>,
+        tooltip: (&'a tooltips::Resources, &mut tooltips::Live<'a>),
     ) -> PageLayout {
         let theme = self.theme();
         let automatic = self.compositing.automatic();
@@ -354,11 +373,13 @@ impl Gallery {
                             Case::Theme,
                             Case::Compositing,
                             Case::Buttons,
+                            Case::Badges,
                             Case::Inputs,
                             Case::Checkboxes,
                             Case::Sliders,
                             Case::Switches,
                             Case::Selects,
+                            Case::Tooltips,
                             Case::Dialogs,
                             Case::Interaction,
                             Case::Layout,
@@ -381,7 +402,7 @@ impl Gallery {
 
                 let body_ui = LocalUi::named(ui, ui.make_persistent_id("gallery-body"));
                 let mut child = body_ui.open(ui.ctx());
-                let body = self.body(&mut child, phase, slider_live, select_resources, select_live);
+                let body = self.body(&mut child, phase, slider_live, select_resources, select_live, tooltip);
                 ui.advance_cursor_after_rect(child.min_rect());
                 PageLayout {
                     chrome,
@@ -399,6 +420,7 @@ impl Gallery {
         mut slider_live: sliders::Live,
         select_resources: &'a selects::Resources,
         select_live: &mut selects::Live<'a>,
+        tooltip: (&'a tooltips::Resources, &mut tooltips::Live<'a>),
     ) -> Layout {
         let theme = self.theme();
         let mut frame = Layout::new(phase);
@@ -420,6 +442,7 @@ impl Gallery {
                     frame.label(ui, "Opaque disabled tokens are paired colors. Standard egui disabled controls use opacity.");
                 }
                 Case::Buttons => self.buttons.show(ui, &theme, frame),
+                Case::Badges => badges::show(ui, &theme, frame),
                 Case::Inputs => self.inputs.show(ui, &theme, frame),
                 Case::Checkboxes => self.checkboxes.show(ui, &theme, frame),
                 Case::Sliders => self.sliders.layout(ui, &theme, |case, ui, control| {
@@ -432,6 +455,7 @@ impl Gallery {
                 }),
                 Case::Switches => self.switches.show(ui, &theme, frame),
                 Case::Selects => self.selects.show(ui, select_resources, self.dark, frame, select_live),
+                Case::Tooltips => self.tooltips.show(ui, tooltip.0, self.dark, frame, tooltip.1),
                 Case::Dialogs => self.dialogs.show(ui, &theme, frame),
                 Case::Interaction | Case::Layout => {
                     frame.track(ui.heading("Harness controls (egui)"));

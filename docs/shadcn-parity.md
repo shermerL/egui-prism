@@ -40,8 +40,8 @@ The [host compositing capability](/docs/compositing.md)
 keeps the core egui-only and adds a separately installed wgpu adapter. The native
 Gallery directly integrates official winit, egui-winit and egui-wgpu; the host
 owns windows, GPU resources, current-frame texture preparation and ordered command
-submission. Backend setup failures are explicit. Component implementation and
-acceptance stay with their own Quests. The shared capability has native Metal
+submission. Backend setup failures are explicit. Component contracts and evidence remain in the
+[current evidence index](#current-evidence-index). The shared capability has native Metal
 framebuffer regressions and software Vulkan GPU contract coverage; these do not
 establish component parity or Windows/Linux desktop acceptance. Full native
 platform input, IME, clipboard and OS DPI observations remain in the
@@ -54,9 +54,10 @@ controlled egui 0.37.0 patch for current-pass focus policy, ordered events and
 authoritative hit/capture ownership inside egui. Consumers select one egui source
 from their application root Cargo configuration and migrate to host-owned
 registration, event handling and painting. Source reconstruction, boundary tests
-and an independent consumer verify the shared implementation. Component Quests
-still own adoption, strict interaction/visual parity and actual platform input/IME
-acceptance; the patch does not establish OS-level pointer capture.
+and an independent consumer verify the shared implementation. Each component documents its adoption and
+strict interaction/visual parity evidence separately. Actual platform input/IME
+acceptance remains in the native Gallery work; the patch does not establish
+OS-level pointer capture.
 
 ## Platform scope
 
@@ -81,21 +82,82 @@ unfinished while required visual or behavioral gaps
 remain. Keep the real rendered reference available for comparison; do not replace
 it with an independently approximated HTML mock.
 
-## Audit of the previous candidates
+## Current evidence index
 
-These are known gaps, not an exhaustive acceptance result.
+All eight core controls are delivered at component level. This index connects
+their contracts and existing evidence; shared documentation completion does not
+establish acceptance on every target platform. Results and observations retain
+the revision, platform and scope recorded in their sources. A documented check
+or fixture is not evidence that it ran for a later revision.
 
-| Area | Pinned reference | Previous implementation | Work |
-| --- | --- | --- | --- |
-| Shared theme and type | Reference neutral tokens, Geist, component-specific dimensions, translucent neutral focus rings | Different background/colors, blue focus/selection, Ubuntu Light, generic 32-point height | Foundation parity Quest |
-| Button and IconButton | Default height 36; xs 24, sm 32, lg 40; exact padding, role colors, shadows, 3-point focus ring | Height scaling from 32, approximate role/hover styling, missing variants | Button parity Quest |
-| Input | Height 36, input border, transparent/light and alpha/dark fills, padding, primary selection, invalid/focus rings | Themed default TextEdit appearance and geometry | Input parity Quest |
-| Checkbox | 16-point square, 4-point radius, 14-point indicator, exact checked/invalid/disabled states | Native egui path replaced by explicit drawing and controlled ordered input | [Checkbox evidence and limits](checkboxes.md#evidence-and-limits) |
-| Switch | Default 32 by 18.4 track and 16-point thumb; small 24 by 14 and 12-point thumb; exact translation/states | 36 by 20 track, approximate colors and outline | Existing Switch Quest/PR |
-| Slider | 6-point rounded rail, 16-point round white thumb, primary fill, hover/focus ring and reference keyboard/value mapping | Rectangular egui handle, blue fill, egui geometry and keyboard mapping | Existing Slider Quest/PR |
-| Select | Reference popup geometry, states, focus and dismissal | Previously absent; now controlled ordered-input implementation | [Select evidence and limits](selects.md#evidence-and-limits) |
-| Dialog | Reference modal geometry, states, focus and dismissal | Controlled modal shell with scoped explicit drawing and bounded content | [Dialog evidence and limits](dialogs.md#evidence-and-limits) |
-| Gallery | Consistent reference typography and component presentation | Default egui harness controls dominate the visible page | Foundation and Gallery Quests |
+The component documents define caller ownership, stable identity, frame-local
+registrations and outputs, ordered host integration, and explicit drawing and
+resource lifetimes. Their migration sections replace the earlier egui-style APIs.
+
+| Controls | Contract and evidence | Scope and limits |
+| --- | --- | --- |
+| Button and IconButton | [Buttons](buttons.md), [compositing and ordered-input evidence](buttons.md#compositing-and-ordered-input-evidence), [delivery PR](https://github.com/shermerL/egui-prism/pull/13) | Caller-owned actions and images, fixed roles/sizes and explicit drawing. The PR records macOS/Metal observations separately from automated checks. |
+| TextInput | [Text input](text-input.md), [evidence and limits](text-input.md#evidence-and-limits) | Caller-owned text and validation, stable editor identity and explicit drawing. Recorded macOS/Metal and browser comparisons cover editing, geometry and states; they are not measured pixel differences. |
+| Checkbox | [Checkbox](checkboxes.md), [evidence and limits](checkboxes.md#evidence-and-limits) | Caller-owned boolean, ordered activation and explicit drawing. Revision-specific checks and macOS/Metal and Chrome observations include the rich-label correction and 150% comparison. |
+| Switch | [Switch](switches.md), [reference and validation](switches.md#reference-and-validation), [delivery PR](https://github.com/shermerL/egui-prism/pull/8) | Caller-owned boolean, default/small geometry, ordered activation and transitions. The PR records browser and macOS/Metal observations and framebuffer checks separately. |
+| Slider | [Slider](sliders.md), [comparison and evidence](sliders.md#comparison-and-evidence), [delivery PR](https://github.com/shermerL/egui-prism/pull/9) | Caller-owned value, ordered input and explicit drawing. Single-thumb horizontal LTR scope includes a documented 16-point Rust layout minimum. Browser, macOS/Metal and framebuffer evidence are separate. |
+| Select | [Selects](selects.md), [evidence and limits](selects.md#evidence-and-limits) | Caller-owned optional value, frame-local registration and ordered popup input. Adapter submission tests do not render framebuffer pixels. The browser geometry reference is at 100%; native 150% and narrow layouts are additional checks. |
+| Dialog | [Dialogs](dialogs.md), [evidence and limits](dialogs.md#evidence-and-limits) | Caller-owned open state and dismissal policy, scoped content and explicit drawing groups. The bounded scrolling body is an explicit extension; ordinary direct-painting egui controls are outside group opacity isolation. |
+| Badge | [Badges](badges.md) | Static caller-owned text with six variants, natural width, accessible text and explicit drawing. Platform observations are recorded separately from contract tests. |
+
+| Tooltip | [Tooltips](tooltips.md) | Explicit trigger responses, host-supplied hint scope and drawing-only hints. Natural text width matches the reference while drawing and Group allocation are clipped to the viewport; browser/native observations and controlled tests are recorded separately. |
+
+### Shared capabilities
+
+- [Semantic themes](themes.md#evidence-and-limits) and the
+  [pinned reference fixture](../reference/README.md) define tokens, typography
+  and comparison sources. Hosts own font installation and theme choice.
+  Token/font checks do not establish component parity or accessibility certification.
+- [Input compatibility](input-compatibility.md#verification-and-maintenance) and
+  the [source inventory](../vendor/README.md) document the opt-in application-root
+  Cargo patch, unified dependency source and host-owned input phases. Boundary
+  and consumer checks do not establish OS capture or native input/IME acceptance.
+- [Group compositing](compositing.md) defines renderer initialization,
+  texture/resource lifetime, submission and shutdown ownership. Metal framebuffer
+  regressions and software Vulkan contract checks do not establish every
+  component's pixel parity or Windows/Linux desktop acceptance.
+- [Gallery cases](gallery.md) and the [native Gallery acceptance work](../quest/m1/native-gallery.md)
+  retain cross-component integration and the platform evidence matrix. macOS,
+  Windows and Linux need separate build, controlled GPU and real desktop
+  evidence, with X11/Wayland identified for Linux.
+
+### Remaining acceptance limits
+
+Windows/Linux GUI and assistive-technology acceptance remain unverified in the
+component evidence above. Tests, CI, reviews, accessibility metadata and synthetic
+actions do not substitute for visual comparison, native event delivery or
+screen-reader observation.
+
+TextInput's recorded macOS IME preedit and commit do not establish Chinese glyph
+coverage or candidate-panel placement: the Gallery displayed missing glyph boxes.
+Dialog's real IME interaction inside bodies remains unverified. Settled screenshots
+do not establish frame-by-frame animation behavior or pixel-identical rasterization.
+
+The native Gallery work retains cross-component focus/capture, modal/popover
+layering, clipboard and real IME, multilingual glyphs, resize/scale and OS DPI,
+focus loss/reentry, host lifecycle, compositor error propagation and accessibility
+actions. Existing component observations do not close missing integration or
+platform evidence.
+
+## Historical baseline before parity corrections
+
+The [original audit](https://github.com/shermerL/egui-prism/pull/11) was a
+non-exhaustive review of pre-correction candidates, not an acceptance result.
+It recorded different palette tokens, blue focus/selection, Ubuntu Light and a
+generic 32-point control-height baseline. Button sizing scaled from that baseline,
+TextInput relied on themed default TextEdit appearance, Switch used a 36 by 20
+track, and Slider used egui handle geometry and keyboard mapping. Select was
+absent from that early baseline, and standard egui harness controls dominated
+the Gallery presentation.
+
+These findings explain the foundation and component corrections; they are not a
+current defect list. Use the current evidence index for delivered contracts,
+recorded observations and remaining acceptance limits.
 
 The original behavior tests remain useful regression evidence, but they must not
 preserve egui-specific behavior when it conflicts with the reference. Keep caller

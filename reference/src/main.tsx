@@ -1,3 +1,4 @@
+import { BadgeCases } from "./badge-cases";
 import * as React from "react";
 import { Compositing } from "./compositing";
 import { createRoot } from "react-dom/client";
@@ -13,6 +14,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from ".
 import "./reference.css";
 import { DialogCases } from "./dialog-cases";
 import { SelectCases } from "./select-cases";
+import { TooltipCases } from "./tooltip-cases";
 import { SliderCases } from "./slider-cases";
 import { CheckboxCases, CheckboxFixture } from "./checkbox-cases";
 import { SwitchCases } from "./switch-cases";
@@ -36,4 +38,4 @@ function App() {
  </div></main>;
 }
 const query = new URLSearchParams(location.search);
-createRoot(document.getElementById("root")!).render(query.has("dialogs") ? <DialogCases/> : query.has("inputs") ? <InputCases/> : query.has("checkboxes") ? <CheckboxFixture/> : query.has("selects") ? <SelectCases/> : query.has("sliders") ? <SliderCases/> : query.has("compositing") ? <Compositing/> : <App/>);
+createRoot(document.getElementById("root")!).render(query.has("badges") ? <BadgeCases/> : query.has("tooltips") ? <TooltipCases/> : query.has("dialogs") ? <DialogCases/> : query.has("inputs") ? <InputCases/> : query.has("checkboxes") ? <CheckboxFixture/> : query.has("selects") ? <SelectCases/> : query.has("sliders") ? <SliderCases/> : query.has("compositing") ? <Compositing/> : <App/>);
