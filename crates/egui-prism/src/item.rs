@@ -414,6 +414,9 @@ impl<'theme, 'image> Item<'theme, 'image> {
             if let Some(group) = output.drawing.take() {
                 items.push(DrawItem::Group(group));
             }
+            // Layout overflow remains reachable to the host scroll area even
+            // when the control was fully clipped and produced no drawing.
+            ui.expand_to_include_rect(action_rect);
             input_ids.push(output.response.id);
             actions.push(output);
             x += size.x + 8.0;

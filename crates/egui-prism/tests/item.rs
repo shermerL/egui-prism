@@ -67,6 +67,7 @@ fn finite_slots_keep_passive_root_and_independent_final_hit_rectangles() {
                 panic!("actions");
             };
             assert!(!a.response.rect.intersects(b.response.rect));
+            assert!(ui.min_rect().contains_rect(b.response.rect));
             assert_eq!(b.response.rect.left() - a.response.rect.right(), 8.0);
             assert_eq!(
                 a.response.rect,
