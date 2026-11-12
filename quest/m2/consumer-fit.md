@@ -6,6 +6,8 @@ A representative native consumer has a concrete compatibility assessment and a b
 
 ## Plan
 
+The [standalone settings recipe](/examples/settings/README.md) supplies fixed public-consumer source and basic-test evidence; its real-platform follow-up remains in native-gallery.
+
 Use the canonical consumer example and docs/input-compatibility.md. A first
 source-backed assessment can precede release preparation; a production pilot
 must still identify its exact candidate and applicable platform evidence. Inventory the target application's egui version, host backend, ordered input migration, compositor ownership, fonts, accessibility and application-specific styling. Keep proprietary application details outside public library plans and external model materials.
@@ -77,10 +79,6 @@ and external model materials. This quest neither edits the consumer nor claims
 product/device acceptance, replaces its design system or defines its business
 policy. Independent architecture or confirmed defect work is re-scoped on its
 merits, not hidden inside a fixed task-count budget.
-
-## Required
-
-- [Consumer examples](/quest/m1/consumer-examples.md) - fixed external-consumption evidence available before final source-preview preparation
 
 ## Related
 

@@ -6,6 +6,8 @@ A reproducible native workload identifies the compositor's actual preparation an
 
 ## Plan
 
+The [standalone settings recipe](/examples/settings/README.md) supplies fixed public-consumer source and basic-test evidence; its real-platform follow-up remains in native-gallery.
+
 Start from crates/egui-prism-wgpu, the host integration guide, real Button drawing and existing framebuffer conformance checks. Preserve caller ownership, texture-update ordering, transforms, clipping, nested opacity and error handling. Reuse existing correctness evidence instead of repeating the entire component acceptance matrix.
 
 Use bounded representative workloads covering ordinary opaque controls, faded and nested groups, fixed and changing target sizes, fractional scale/translation and continuous repaint. Record exact source, platform/backend, device and workload. Separate cold preparation, stable frames and resource changes; distinguish texture-pool reuse from texture registrations, buffer creation, uploads and offscreen passes. Measure CPU preparation and GPU duration where supported, with sample method and variability. Report unavailable measurements explicitly rather than inferring GPU speed from CPU submission time.
@@ -21,4 +23,3 @@ This task does not introduce a new renderer, select a new public host API, imple
 ## Related
 
 - [Integration boundaries](/quest/m0/integration-boundaries.md) - consumer and extension necessity assessment
-- [Consumer examples](/quest/m1/consumer-examples.md) - representative public integration that can supply workloads without blocking the baseline

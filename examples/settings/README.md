@@ -97,8 +97,10 @@ are separate evidence. Exact-head results belong to the PR and CI; record the
 recipe revision as well as its pinned dependency candidate. The source revision
 alone does not establish an executed check. Native GUI, IME, clipboard and
 screen-reader observations remain unperformed until explicitly recorded for a
-named OS/backend/display protocol. The existing native-gallery Quest owns those
-platform observations. The recipe is not a release, application migration or
+named OS/backend/display protocol. The existing [native-gallery Quest](../../quest/m1/native-gallery.md) owns those
+platform observations, with an explicit recipe workflow and evidence handoff.
+They are follow-up platform acceptance, not a claim made by this implementation
+or a hidden prerequisite for landing its basic-test scope. The recipe is not a release, application migration or
 permission to publish.
 
 ## Notices

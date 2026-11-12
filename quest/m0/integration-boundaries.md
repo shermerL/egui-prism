@@ -6,6 +6,8 @@ Each controlled egui extension has a source-backed necessity assessment, and con
 
 ## Plan
 
+The [standalone settings recipe](/examples/settings/README.md) supplies fixed public-consumer source and basic-test evidence; its real-platform follow-up remains in native-gallery.
+
 Start from vendor/README.md, the controlled patch, docs/input-compatibility.md, the compositor integration guide and existing behavior regressions. Map each extension family to its observable requirement and a minimal failure case in unmodified egui. Reuse current tests rather than auditing every component again. A passing patched test alone does not prove that no public upstream API can satisfy the requirement.
 
 Evaluate official egui extension points against the same causal, focus, capture, modal and lifecycle requirements. Classify each family as retain, narrow, replaceable or unresolved, with evidence and maintenance implications. Separate a different behavior contract from an equivalent implementation. Do not assume that restoring ordinary Widget syntax preserves same-batch event ordering or permits replaying arbitrary application closures.
@@ -22,6 +24,5 @@ Acceptance is a reviewable necessity/compatibility matrix, targeted evidence for
 
 ## Related
 
-- [Consumer examples](/quest/m1/consumer-examples.md) - independent external usage evidence; neither task waits for the other's final report
 - [Compositing baseline](/quest/m0/compositing-baseline.md) - rendering costs and correctness evidence, not input-policy authority
 - [Consumer fit](/quest/m2/consumer-fit.md) - application-specific adoption assessment
