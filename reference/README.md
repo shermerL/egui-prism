@@ -64,3 +64,9 @@ The `/?cards` fixture renders the pinned Card header, description, content and
 footer with caller-owned text/actions, long and empty content, 320px width,
 light/dark, 100%/150% scale and tinted group opacity. Its ordinary HTML editor
 is an interaction fixture, not an appearance match for the Gallery egui editor.
+
+The `/?tooltips` fixture compares explicitly identified pointer and keyboard
+triggers, immediate and delayed opening, hoverable plain-text content, disabled
+triggers, viewport collisions and long bounded text. It uses the unmodified
+pinned Tooltip source and Radix Tooltip 1.2.8; the shadcn provider defaults to
+zero delay and the content defaults to zero side offset.

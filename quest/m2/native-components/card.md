@@ -19,3 +19,7 @@ Complete implementation, the compiling public API example, component documentati
 - Implementation: reconcile header wrapping with pinned CSS, including long unbreakable words and non-Latin line-break opportunities. Keep the current egui wrapping limitation explicit until controlled reference comparison and regressions establish the intended behavior.
 - Native validation: compare the Cards Gallery and actual pinned reference at matching width, font, scale and theme, including the two-layer shadow and nested controls. The current headless environment cannot establish real native or assistive-technology observations.
 - Maintainer: authorize any GitHub automated code/security review separately. Keep the PR draft and do not merge without a later explicit decision.
+
+## Related
+
+- [Targeted acceptance](/quest/m2/native-components/card-acceptance.md) - trace missing tests and native evidence without waiving this component quest.
