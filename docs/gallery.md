@@ -29,6 +29,7 @@ Theme and case changes preserve caller text, checkboxes, selected values, and ac
 
 | Case | What to inspect |
 |---|---|
+| Spinners | Caller visibility/reduced motion, inline and disabled-button-adjacent status, theme/scale and parent opacity |
 | Theme | Light/dark foreground/background pairs and selected foreground |
 | Badges | Six static variants, long text scrolling, light/dark, 100%/150% scale, and parent opacity |
 | Buttons | Prism roles, sizes, icon names, disabled actions, wrapping, and independent counts |

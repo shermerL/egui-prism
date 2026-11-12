@@ -410,8 +410,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-## Lucide Check and X icons
+## Lucide Check, X and LoaderCircle icons
 
-The Checkbox check path and Dialog close paths follow the Lucide Check and X
-icons bundled by the pinned reference fixture. The complete Lucide and underlying Feather notices are
+The Checkbox check path, Dialog close paths and Spinner arc follow the Lucide
+Check, X and LoaderCircle icons bundled by the pinned reference fixture. The complete Lucide and underlying Feather notices are
 retained in [reference/LICENSE.lucide](reference/LICENSE.lucide).

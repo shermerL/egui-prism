@@ -65,3 +65,7 @@ triggers, immediate and delayed opening, hoverable plain-text content, disabled
 triggers, viewport collisions and long bounded text. It uses the unmodified
 pinned Tooltip source and Radix Tooltip 1.2.8; the shadcn provider defaults to
 zero delay and the content defaults to zero side offset.
+
+Open `/?spinners` for the unmodified pinned Spinner with caller-owned visibility,
+reduced motion, inline/button-adjacent status and translucent-parent samples. Use
+real 100%/150% browser zoom. A successful fixture build is not visual acceptance.

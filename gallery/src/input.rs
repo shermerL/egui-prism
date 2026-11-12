@@ -1,7 +1,7 @@
 //! Pass-local routing for the Gallery's explicit controls and scroll shells.
 use crate::{
     Case, Gallery, buttons, checkboxes, compositing, dialogs, egui, interaction, selects, sliders,
-    switches, text_inputs, tooltips,
+    spinners, switches, text_inputs, tooltips,
 };
 use egui_prism::checkbox::{Checkbox, CheckboxRegistration};
 use egui_prism::switch::{Switch, SwitchRegistration};
@@ -19,6 +19,7 @@ pub(super) enum Control {
     Checkbox(checkboxes::Control),
     Slider(sliders::Control),
     Switch(switches::Control),
+    Spinner(spinners::Control),
     Select(selects::Control),
     Tooltip(tooltips::Control),
     Dialog(dialogs::Control),
@@ -95,6 +96,7 @@ impl Control {
                 | tooltips::Control::Reverse
                 | tooltips::Control::Delayed,
             )
+            | Self::Spinner(spinners::Control::Hidden | spinners::Control::Reduced)
             | Self::Dialog(
                 dialogs::Control::Long
                 | dialogs::Control::Reverse
@@ -560,6 +562,7 @@ impl Gallery {
             Control::Checkbox(control) => self.checkboxes.control(ui, *control),
             Control::Slider(control) => self.sliders.stock(ui, *control).into(),
             Control::Switch(control) => self.switches.control(ui, *control),
+            Control::Spinner(control) => self.spinners.control(ui, &theme, *control),
             Control::Select(control) => self.selects.control(ui, *control),
             Control::Tooltip(control) => self.tooltips.control(ui, *control),
             Control::Dialog(control) => self.dialogs.control(ui, *control),
