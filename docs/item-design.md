@@ -37,24 +37,29 @@ second registration is always invalid; it shows why a generic caller closure
 cannot be blindly replayed as measurement and why moving only drawing after
 registration would leave input geometry inconsistent.
 
-## Recommended boundary decision
+## Internal preparation is viable
 
-Prefer an explicitly prepared Button/IconButton layout value: prepare text/icon
-geometry and intrinsic size without registering input, then consume it once when
-registering in its final child UI. Reuse existing ButtonOutput event handling and
-painting; do not introduce a new host/input association system. Existing normal
-Button calls should reuse the same implementation internally, not duplicate
-measurement constants or glyph calculations in Item.
+A second, unpublished prototype extracted the existing Button measurement block
+into a private `layout(&Ui)` helper, reused by ordinary registration. It did not
+add a public API or change the host contract. A controlled test covered all four
+Button sizes, primary/outline/link roles and IconButton: preparation preserves
+the next automatic ID, registers no hit response, and returns the same size as
+subsequent registration. That test and all 21 existing Button tests passed.
 
-Alternative: first restrict Item actions to a declared finite descriptor set.
-That is a scope restriction, not support for arbitrary widgets, and still needs
-one authoritative measurement implementation. Arbitrary effectful UI callbacks,
-guessed fixed action widths and retained application models are not acceptable
-shortcuts. This shared public-boundary choice requires the maintainer's decision
-under the existing Item Quest before production implementation.
+Therefore absence of a public sizing method is **not** a demonstrated blocker
+and does not by itself require a maintainer decision. Prefer crate-private
+preparation for Item's concrete Button/IconButton slots; do not expose a new
+public preparation protocol merely for this internal consumer. Preserve one
+measurement implementation and the existing ButtonOutput event/paint lifecycle.
+Arbitrary caller widgets would require a wider declared composition scope; the
+basic Item need not promise arbitrary effectful UI closures.
 
-After that decision, establish deterministic width/wrap and two-line-description
-behavior with full accessible names and explicit unsupported cases. Keep actual
-layout limitations distinct from specialist browser/native/AT testing, which the
-maintainer has deferred. That deferral is not permission to call an incomplete
-text or input implementation complete.
+## Remaining implementation work
+
+Establish deterministic width/wrap and balanced two-line description behavior
+with full accessible names and explicit supported slots. The constrained-width
+probe demonstrates why a fixed right-hand action width is insufficient; it is
+not a browser oracle or proof of CSS flex/min-content parity. Keep these actual
+layout requirements distinct from specialist browser/native/AT testing, which
+the maintainer has deferred. That deferral is not permission to call an
+incomplete text or input implementation complete.

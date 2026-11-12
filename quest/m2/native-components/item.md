@@ -14,13 +14,14 @@ Complete the implementation, compiling caller example, component documentation, 
 
 ### Design checkpoint
 
-The [public-path probe and proposed boundary](/docs/item-design.md) records actual
+The [public-path and internal-preparation probes](/docs/item-design.md) record actual
 nested-action sizes and registration effects. The source's flex-wrap/min-content
 and balanced two-line description remain implementation work, not just missing
 visual tests. Under the maintainer's scope decision, real desktop/browser/AT
 specialist validation can follow separately; basic geometry and action correctness
 remain this implementation's responsibility.
 
-## Waiting
-
-- Maintainer: approve a pure prepared Button/IconButton layout value consumed at final registration (recommended), or explicitly restrict Item to finite action descriptors. Existing registration is not pure measurement; this shared public boundary needs a decision before production implementation.
+A private measurement prototype and the existing Button regressions pass: reuse
+that internal path rather than adding a public Button preparation API. No
+maintainer decision is required merely because the original public interface
+lacked measurement. Production Item layout and action integration remain to do.
