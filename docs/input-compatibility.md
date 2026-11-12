@@ -6,6 +6,9 @@ window creation, frame execution, application state and official renderer/platfo
 integration belong to the host. Existing components require their own migrations
 and parity acceptance before opting into this mode.
 
+See the [integration boundary assessment](integration-boundaries.md) for the
+source requirements, public-API alternatives and unresolved equivalence work.
+
 ## One source per application
 
 Cargo patches apply at the consuming application root, not in a dependency's

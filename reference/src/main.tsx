@@ -1,3 +1,4 @@
+import { SeparatorCases } from "./separator-cases";
 import { BadgeCases } from "./badge-cases";
 import * as React from "react";
 import { Compositing } from "./compositing";
@@ -38,4 +39,4 @@ function App() {
  </div></main>;
 }
 const query = new URLSearchParams(location.search);
-createRoot(document.getElementById("root")!).render(query.has("badges") ? <BadgeCases/> : query.has("tooltips") ? <TooltipCases/> : query.has("dialogs") ? <DialogCases/> : query.has("inputs") ? <InputCases/> : query.has("checkboxes") ? <CheckboxFixture/> : query.has("selects") ? <SelectCases/> : query.has("sliders") ? <SliderCases/> : query.has("compositing") ? <Compositing/> : <App/>);
+createRoot(document.getElementById("root")!).render(query.has("separators") ? <SeparatorCases/> : query.has("badges") ? <BadgeCases/> : query.has("tooltips") ? <TooltipCases/> : query.has("dialogs") ? <DialogCases/> : query.has("inputs") ? <InputCases/> : query.has("checkboxes") ? <CheckboxFixture/> : query.has("selects") ? <SelectCases/> : query.has("sliders") ? <SliderCases/> : query.has("compositing") ? <Compositing/> : <App/>);

@@ -26,6 +26,8 @@ There are no duplicated runnable listings to keep synchronized.
 - The app initializes ordered input and its fixed third-party font/theme setup
   once per Context. Stock egui Modal is an explicit alternative in this recipe.
   It neither uses nor accepts Prism Dialog's outstanding Issue 29 semantics.
+  The selected third-party font setup uses Inter, not Prism's default Geist;
+  this recipe is not a Geist visual-parity fixture.
 
 The [library-owned support schema](../../docs/releases.md#version-support-contract),
 [input protocol](../../docs/input-compatibility.md) and
@@ -97,8 +99,17 @@ are separate evidence. Exact-head results belong to the PR and CI; record the
 recipe revision as well as its pinned dependency candidate. The source revision
 alone does not establish an executed check. Native GUI, IME, clipboard and
 screen-reader observations remain unperformed until explicitly recorded for a
-named OS/backend/display protocol. The existing [native-gallery Quest](../../quest/m1/native-gallery.md) owns those
-platform observations, with an explicit recipe workflow and evidence handoff.
+named OS/backend/display protocol.
+
+Native AT integration is not provided by this host: its egui-winit dependency
+does not enable `accesskit`, and the application has no native adapter
+initialization or accessibility-event wiring. The Gallery's separate bridge
+does not supply one to this binary. Screen-reader acceptance therefore needs
+implementation of the official bridge and applicable regression checks before
+actual platform observation; it is not merely an unobserved completed feature.
+The existing [native-gallery Quest](../../quest/m1/native-gallery.md) owns this
+recipe's missing bridge integration and subsequent platform observations, with
+an explicit recipe workflow and evidence handoff.
 They are follow-up platform acceptance, not a claim made by this implementation
 or a hidden prerequisite for landing its basic-test scope. The recipe is not a release, application migration or
 permission to publish.

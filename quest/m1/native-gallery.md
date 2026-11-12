@@ -19,7 +19,13 @@ OS/backend and X11/Wayland where applicable. Observe edit, unrelated redraw,
 continued edit, modal cancel/confirm with focus restoration, native close shortcut,
 clipboard/IME composition, resize/DPI, focus loss and suspend/restart. Verify the
 current-frame group and overlay image on a real device and record accessibility
-actions/readouts separately. Attach results and failures, not only screenshots.
+actions/readouts separately. This recipe currently has no native AT bridge:
+before claiming screen-reader support, the Gallery integration owner must wire
+the official egui-winit AccessKit adapter into that host, cover its event/cleanup
+path, then obtain real platform observations. Gallery's existing bridge does not
+connect another binary automatically. Keep this missing implementation separate
+from unperformed observation, without introducing a second semantic tree or
+custom action dispatcher. Attach results and failures, not only screenshots.
 These observations belong to this platform-acceptance task; they are not hidden
 prerequisites for landing the recipe's implementation and basic tests. Keep Gallery platform acceptance separate from external setup evidence;
 neither a successful Gallery run nor a source archive proves production adoption.

@@ -6,6 +6,8 @@ A reproducible native workload identifies the compositor's actual preparation an
 
 ## Plan
 
+Use the [source-backed integration boundary assessment](/docs/integration-boundaries.md) for current compatibility responsibilities and explicitly unresolved alternatives.
+
 The [standalone settings recipe](/examples/settings/README.md) supplies fixed public-consumer source and basic-test evidence; its real-platform follow-up remains in native-gallery.
 
 Start from crates/egui-prism-wgpu, the host integration guide, real Button drawing and existing framebuffer conformance checks. Preserve caller ownership, texture-update ordering, transforms, clipping, nested opacity and error handling. Reuse existing correctness evidence instead of repeating the entire component acceptance matrix.
@@ -19,7 +21,3 @@ Assess opaque-group direct drawing, batching and resource/shadow caching as cand
 Acceptance includes runnable baseline checks, scoped regression coverage for any confirmed bounds fix, measured results and a justified recommendation of worthwhile changes or no change. Keep variable performance data out of brittle fast-CI thresholds. Record what the measured backend does and does not establish; software Vulkan is not physical-GPU or video-playback acceptance.
 
 This task does not introduce a new renderer, select a new public host API, implement speculative optimization suites or establish an application performance claim. Choose later implementation from measured benefit and correctness evidence rather than adding every possible optimization.
-
-## Related
-
-- [Integration boundaries](/quest/m0/integration-boundaries.md) - consumer and extension necessity assessment
