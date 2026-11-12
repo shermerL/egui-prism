@@ -850,3 +850,111 @@ fn visible_buttons_require_a_live_compositor() {
         assert!(output.paint(ui.painter()).is_err());
     });
 }
+
+#[test]
+fn ordered_window_blur_cancels_space_without_consuming_neighboring_intents() {
+    let context = egui::Context::default();
+    context.options_mut(|options| options.ordered_input = true);
+    let theme = Theme::light();
+    let mut id = None;
+    context
+        .run_ui(Default::default(), |ui| {
+            context.begin_input();
+            id = Some(Button::new(&theme, "Action").register(ui).response.id);
+            while context.next_input_event().is_some() {}
+        })
+        .drop_without_applying_deltas();
+    context.memory_mut(|memory| memory.request_focus(id.unwrap()));
+    let key = |pressed| egui::Event::Key {
+        key: egui::Key::Space,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    };
+    let events = vec![
+        key(true),
+        key(false),
+        key(true),
+        egui::Event::WindowFocused(false),
+        egui::Event::WindowFocused(true),
+        key(false),
+        key(true),
+        key(false),
+    ];
+    let mut activations = Vec::new();
+    context
+        .run_ui(
+            egui::RawInput {
+                focused: true,
+                events: events.clone(),
+                ..Default::default()
+            },
+            |ui| {
+                context.begin_input();
+                let button = Button::new(&theme, "Action").register(ui);
+                while let Some(event) = context.next_input_event() {
+                    if let egui::InputTrigger::Event { index, .. } = event.trigger {
+                        context.input(|input| {
+                            assert_eq!(input.events.as_slice(), &events[index..=index])
+                        });
+                    }
+                    button.cancel_unfocused();
+                    if event.target == Some(button.response.id) && button.handle(&event).clicked() {
+                        let egui::InputTrigger::Event { index, .. } = event.trigger else {
+                            panic!("key event");
+                        };
+                        activations.push(index);
+                    }
+                }
+            },
+        )
+        .drop_without_applying_deltas();
+    assert_eq!(activations, [1, 7]);
+}
+
+#[test]
+fn ordinary_batch_focus_history_does_not_cancel_a_new_space_intent() {
+    let context = egui::Context::default();
+    let theme = Theme::light();
+    let mut id = None;
+    context
+        .run_ui(Default::default(), |ui| {
+            id = Some(Button::new(&theme, "Action").show(ui).response.id);
+        })
+        .drop_without_applying_deltas();
+    context.memory_mut(|memory| memory.request_focus(id.unwrap()));
+    let key = |pressed| egui::Event::Key {
+        key: egui::Key::Space,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    };
+    let mut activations = 0;
+    for events in [
+        vec![
+            egui::Event::WindowFocused(false),
+            egui::Event::WindowFocused(true),
+            key(true),
+        ],
+        vec![key(false)],
+        vec![],
+    ] {
+        context
+            .run_ui(
+                egui::RawInput {
+                    focused: true,
+                    events,
+                    ..Default::default()
+                },
+                |ui| {
+                    let button = Button::new(&theme, "Action").show(ui);
+                    activations += usize::from(button.response.clicked());
+                    button.cancel_unfocused();
+                },
+            )
+            .drop_without_applying_deltas();
+    }
+    assert_eq!(activations, 1);
+}

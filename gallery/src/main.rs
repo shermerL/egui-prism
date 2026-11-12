@@ -9,6 +9,7 @@ mod compositing;
 mod dialogs;
 mod input;
 mod interaction;
+mod items;
 mod selects;
 mod sliders;
 mod switches;
@@ -24,6 +25,7 @@ enum Case {
     Theme,
     Buttons,
     Badges,
+    Items,
     Inputs,
     Checkboxes,
     Sliders,
@@ -41,6 +43,7 @@ impl Case {
             Self::Theme => "Theme",
             Self::Buttons => "Buttons",
             Self::Badges => "Badges",
+            Self::Items => "Items",
             Self::Inputs => "Inputs",
             Self::Checkboxes => "Checkboxes",
             Self::Sliders => "Sliders",
@@ -63,6 +66,7 @@ struct Gallery {
     narrow: bool,
     interaction: InteractionCase,
     buttons: buttons::ButtonCase,
+    items: items::ItemCase,
     inputs: text_inputs::InputCase,
     checkboxes: checkboxes::CheckboxCase,
     sliders: sliders::SliderCase,
@@ -93,6 +97,7 @@ impl Gallery {
             narrow: false,
             interaction: InteractionCase::default(),
             buttons: buttons::ButtonCase::new(context),
+            items: items::ItemCase::new(context),
             inputs: text_inputs::InputCase::default(),
             checkboxes: checkboxes::CheckboxCase::default(),
             sliders: sliders::SliderCase::default(),
@@ -180,10 +185,12 @@ impl Gallery {
                 }
                 let response = if let Some(button) = &entry.button {
                     let response = button.handle(&event);
-                    if response.clicked()
-                        && let Control::Button(control) = control
-                    {
-                        self.buttons.activated(control);
+                    if response.clicked() {
+                        match control {
+                            Control::Button(control) => self.buttons.activated(control),
+                            Control::Item(control) => self.items.activated(control),
+                            _ => {}
+                        }
                     }
                     response
                 } else if let Some(registration) = &entry.checkbox {
@@ -374,6 +381,7 @@ impl Gallery {
                             Case::Compositing,
                             Case::Buttons,
                             Case::Badges,
+                            Case::Items,
                             Case::Inputs,
                             Case::Checkboxes,
                             Case::Sliders,
@@ -443,6 +451,7 @@ impl Gallery {
                 }
                 Case::Buttons => self.buttons.show(ui, &theme, frame),
                 Case::Badges => badges::show(ui, &theme, frame),
+                Case::Items => self.items.show(ui, &theme, frame),
                 Case::Inputs => self.inputs.show(ui, &theme, frame),
                 Case::Checkboxes => self.checkboxes.show(ui, &theme, frame),
                 Case::Sliders => self.sliders.layout(ui, &theme, |case, ui, control| {
