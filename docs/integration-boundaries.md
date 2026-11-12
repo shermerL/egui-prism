@@ -18,9 +18,9 @@ remains authoritative; this document explains its costs and open alternatives.
 - **Unresolved** marks a potentially equivalent alternative needing an experiment.
 
 The [source archive and patch inventory](../vendor/README.md) identify the exact
-baseline. The tests linked below are existing regression specifications, inspected
-as source in this assessment, not newly executed experiments against unmodified
-egui. A patched test passing is not an upstream failure demonstration. In
+baseline. The matrix links existing patched regression specifications inspected as source.
+The separate unmodified-egui experiment below was actually executed; its limited
+result does not establish equivalence or non-equivalence of every possible adapter. A patched test passing is not an upstream failure demonstration. In
 particular, renaming a missing patched method to make an upstream build fail
 would establish source incompatibility, not semantic necessity.
 
@@ -175,11 +175,35 @@ application. Ordered mode, fonts, accessibility bridges and renderer settings
 must be recorded as requirements or observations, not an undifferentiated
 "supported" checkbox.
 
+## Executed public-API experiment
+
+The standalone [upstream comparison](../tests/upstream-boundaries/src/lib.rs)
+uses official unpatched egui 0.37.0 in its own workspace. Its checker verifies
+registry identity and the same archive checksum as the vendor baseline, so the
+consumer root patch cannot silently turn this into another patched-only test.
+It runs in all native cargo CI jobs.
+
+After one warm-up pass registers two ordinary Buttons, the same ordered pointer
+stream clicks the first then the second. With one `Context::run_ui` call,
+observed actions are `[0, 1]` and the UI callback runs once. Splitting at the click
+boundary into two public calls at the same timestamp produces `[1, 1]`, but the
+UI callback runs twice. This is an observed mismatch, not a compile-error proxy.
+
+The experiment shows that splitting frames is not a transparent substitution
+for an arbitrary existing callback: it changes callback count, while the ordinary
+single batch does not expose both activations. It **does not** prove a carefully
+phase-separated public adapter impossible. Modal, capture, scroll, plugin/output
+and IME equivalence remain unresolved. No native window or GPU is involved.
+
+Reproduce with `python3 scripts/check_upstream_boundaries.py` through the normal
+resource gate. The inputs use fixed timestamps, not sleeps. Existing patched
+`two_clicks_in_one_batch_reach_both_targets` remains the corresponding required
+behavior, not a second claim about all public API designs.
+
 ## Remaining equivalence work and decisions
 
-No existing extension is approved for removal by this report. The highest-value
-unresolved experiment is an unmodified-egui prototype using public event/pass
-hooks for the minimal Arrow/Tab/Arrow and modal open/close sequences, while
+No existing extension is approved for removal by this report. The next unresolved experiment is an unmodified-egui phase-aware prototype using
+public event/pass hooks for the minimal Arrow/Tab/Arrow and modal open/close sequences, while
 measuring action replay, plugin consumption, frame-time and output behavior.
 If that fails, record the precise observed failure and source, not a blanket
 claim that public APIs cannot work. If it passes, extend the comparison to
@@ -189,5 +213,7 @@ Any new or expanded extension requires a real consumer, a minimal failure case,
 equivalent public-API alternatives, regression coverage, migration burden and a
 specific upstream-equivalence exit condition. A different interaction contract
 must be proposed as a scope change, not called an equivalent implementation.
-The assessment Quest remains open for disputed-boundary experiments and review;
-no production architecture change follows automatically from a recommendation.
+This assessment delivers the matrix, a bounded public-API experiment and the
+consumer responsibility record. Further phase-aware alternative prototypes remain
+research options, not hidden requirements for merging this report. No removal or
+production architecture change follows automatically from its recommendations.
