@@ -8,6 +8,9 @@ and documentation that stays consistent with that source.
 
 ## Plan
 
+The standalone settings recipe is in /examples/settings/README.md, with its own fixed source graph and controlled workflow. Keep completion tied to observed checks rather than the presence of runnable source.
+
+
 This extracts example ownership from source-preview preparation so useful
 consumer evidence can land before final Gallery and release acceptance. Use the
 merged public APIs and the existing tests/input-consumer dependency contract.
@@ -84,3 +87,8 @@ egui; the pinned shadcn contract remains the visual and interaction authority.
 
 - [Integration boundaries](/quest/m0/integration-boundaries.md) - evidence can inform the assessment without waiting for its completion
 - [Native gallery](/quest/m1/native-gallery.md) - integrated platform acceptance; share applicable workflows and evidence without making it a prerequisite for this example
+
+## Waiting
+
+- Implementation owner: record the external build, controlled stateful workflow and current-frame GPU result for the exact recipe head, preserving explicit native GUI/IME/AT gaps.
+- Reviewer: review the exact implementation and source/configuration choices under the normal repository review gates before a landing recommendation.
