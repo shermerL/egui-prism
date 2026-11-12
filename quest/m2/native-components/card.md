@@ -13,3 +13,7 @@ Follow [the fixed parity contract](/docs/shadcn-parity.md) and `registry/new-yor
 - Cover empty/short/long content and nested controls without double padding or clipped actions. Document dimensions as logical points and provide a compiling Gallery example.
 
 Complete implementation, the compiling public API example, component documentation, native Gallery case and meaningful regressions in one PR. Compare a mature candidate with the actual pinned reference at matching scale and theme. Report controlled tests, native observations and untested platforms separately. Review only the changed component and affected shared paths; reuse unchanged evidence. No host/vendor architecture change, new dependency identity or publication is included.
+
+## Related
+
+- [Targeted acceptance](/quest/m2/native-components/card-acceptance.md) - trace missing tests and native evidence without waiving this component quest.
