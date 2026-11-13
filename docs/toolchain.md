@@ -54,6 +54,12 @@ configuration and credentials are not cached. Cache contents are not confidentia
 and must contain only public dependencies. Existing GitHub branch/PR cache scopes
 apply; this does not grant PR jobs write repository permissions.
 
+The [initial cold-cache run](https://github.com/shermerL/egui-prism/actions/runs/43468577898)
+at `f0b62266f53b7a59c4f1335f614ae9f83530149c` passed policy and all three native
+jobs, including image `macos-26-arm64` version `20261102.0473.1`. Each native job
+saved its download cache. This establishes one successful hosted execution, not
+permanent runner availability or a measured cache speedup.
+
 ## Quest provenance
 
 The CLI is built from the [pinned upstream source](https://github.com/moq-dev/quest/tree/0c1da19a74f77e4f662cf9536fb789aca686b3bc).
