@@ -1,0 +1,7 @@
+plain	A long description wraps onto several lines inside the available width and remains accessible.
+hyphen	alpha-beta/gamma alpha-beta/gamma alpha-beta/gamma
+url	https://example.invalid/alpha-beta/gamma?query=value
+long	Supercalifragilisticexpialidocious
+nbsp	alpha beta alpha beta alpha beta
+cjk	中文标点，测试换行。中文 mixed text，继续。
+accent	Café naïve façade déjà vu élève résumé.

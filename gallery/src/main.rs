@@ -2,6 +2,7 @@
 
 mod native;
 
+mod alerts;
 mod badges;
 mod buttons;
 mod checkboxes;
@@ -26,6 +27,7 @@ enum Case {
     Theme,
     Buttons,
     Badges,
+    Alerts,
     Separators,
     Spinners,
     Inputs,
@@ -45,6 +47,7 @@ impl Case {
             Self::Theme => "Theme",
             Self::Buttons => "Buttons",
             Self::Badges => "Badges",
+            Self::Alerts => "Alerts",
             Self::Separators => "Separators",
             Self::Spinners => "Spinners",
             Self::Inputs => "Inputs",
@@ -68,6 +71,7 @@ struct Gallery {
     case: Case,
     narrow: bool,
     interaction: InteractionCase,
+    alerts: alerts::AlertCase,
     buttons: buttons::ButtonCase,
     spinners: spinners::SpinnerCase,
     inputs: text_inputs::InputCase,
@@ -99,6 +103,7 @@ impl Gallery {
             },
             narrow: false,
             interaction: InteractionCase::default(),
+            alerts: alerts::AlertCase::new(context),
             buttons: buttons::ButtonCase::new(context),
             spinners: spinners::SpinnerCase::default(),
             inputs: text_inputs::InputCase::default(),
@@ -382,6 +387,7 @@ impl Gallery {
                             Case::Compositing,
                             Case::Buttons,
                             Case::Badges,
+                            Case::Alerts,
                             Case::Separators,
                             Case::Spinners,
                             Case::Inputs,
@@ -453,6 +459,7 @@ impl Gallery {
                 }
                 Case::Buttons => self.buttons.show(ui, &theme, frame),
                 Case::Badges => badges::show(ui, &theme, frame),
+                Case::Alerts => self.alerts.show(ui, &theme, frame),
                 Case::Separators => separators::show(ui, &theme, frame),
                 Case::Spinners => self.spinners.show(ui, &theme, frame),
                 Case::Inputs => self.inputs.show(ui, &theme, frame),

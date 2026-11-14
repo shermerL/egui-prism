@@ -52,4 +52,4 @@ nix develop --command cargo run --locked -p egui-prism-gallery
 
 可选的[有序输入集成](docs/input-compatibility.md)要求在应用根目录的 Cargo 配置中声明补丁。[源码清单](vendor/README.md)和独立消费者检查用于保证官方平台集成与渲染器使用统一的类型。
 
-可选的 [`egui-prism-wgpu`](docs/compositing.md) 宿主适配包配合官方 wgpu 渲染器，为组件提供独立的整体透明度合成。核心库仍只依赖 egui；宿主负责渲染器初始化、纹理生命周期和显式关闭。Gallery 包含专门的最终帧缓冲一致性验收场景。
+可选的 [`egui-prism-wgpu`](docs/compositing.md) 宿主适配包配合官方 wgpu 渲染器，为组件提供独立的整体透明度合成。核心库依赖 egui 和内部 Unicode 断行辅助库；宿主负责渲染器初始化、纹理生命周期和显式关闭。Gallery 包含专门的最终帧缓冲一致性验收场景。
