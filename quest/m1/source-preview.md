@@ -7,6 +7,8 @@ source snapshot, and the maintainer can inspect a complete first-release candida
 
 ## Plan
 
+The [standalone settings recipe](/examples/settings/README.md) supplies fixed public-consumer source and basic-test evidence; its real-platform follow-up remains in native-gallery.
+
 Keep all eight M1 controls and native macOS, Windows and Linux as the preparation
 target. Reuse native-gallery acceptance; do not duplicate component implementation
 or claim a build proves GUI, IME or assistive technology behavior. Follow
@@ -42,5 +44,4 @@ deploy Pages, or create a public dependency fork as part of preparation.
 
 ## Required
 
-- [Consumer examples](/quest/m1/consumer-examples.md) - canonical external integration to validate against the source candidate
 - [Build and validate the native gallery](/quest/m1/native-gallery.md)

@@ -318,6 +318,7 @@ fn current_frame_producers_cleanup_and_revocation() {
         }
     }
     actual_button_pixels(&context, &mut host, &mut renderer, &device, &queue);
+    actual_separator_pixels(&context, &mut host, &mut renderer, &queue);
     context.set_pixels_per_point(1.0);
     // A malformed binding fails and automatically releases temporary registrations.
     let (missing, delta) = jobs(&context, egui::TextureId::User(u64::MAX));
@@ -531,5 +532,129 @@ fn actual_button_pixels(
     }
     println!(
         "Actual Button pixels passed: light/dark backgrounds, three roles, image/text overlap, clipping, parent opacity, 1x/1.5x scale"
+    );
+}
+
+// A framebuffer oracle independent of Separator's emitted Group: draw the
+// contract's one-point polygon directly, then blend the whole image once.
+// This checks compositor pixels, not CSS/browser or desktop/AT acceptance.
+fn actual_separator_pixels(
+    context: &egui::Context,
+    host: &mut Host,
+    renderer: &mut egui_wgpu::Renderer,
+    queue: &wgpu::Queue,
+) {
+    use egui_prism::{
+        separator::{Orientation, Separator},
+        theme::Theme,
+    };
+    let device = host.device.clone();
+    let origin = egui::pos2(8.25, 23.5);
+    let viewport = Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(64.0, 64.0));
+    for (theme, background) in [
+        (Theme::light(), egui::Color32::from_rgb(214, 228, 242)),
+        (Theme::dark(), egui::Color32::from_rgb(35, 17, 49)),
+    ] {
+        for orientation in [Orientation::Horizontal, Orientation::Vertical] {
+            for ppp in [1.0, 1.5] {
+                context.set_pixels_per_point(ppp);
+                for extent in [32.0, 0.25, 0.0] {
+                    let size = match orientation {
+                        Orientation::Horizontal => egui::vec2(extent, 1.0),
+                        Orientation::Vertical => egui::vec2(1.0, extent),
+                    };
+                    let expected_rect = Rect::from_min_size(origin, size);
+                    for clipped in [false, true] {
+                        let mut clip = viewport;
+                        if clipped {
+                            match orientation {
+                                Orientation::Horizontal => clip.max.x = origin.x + extent * 0.5,
+                                Orientation::Vertical => clip.max.y = origin.y + extent * 0.5,
+                            }
+                        }
+                        for parent_opacity in [1.0, 0.6] {
+                            let mut images = Vec::new();
+                            for component in [false, true] {
+                                let output = context.run_ui(
+                                    egui::RawInput {
+                                        screen_rect: Some(viewport),
+                                        ..Default::default()
+                                    },
+                                    |ui| {
+                                        // The harness owns this fixed framebuffer, including after
+                                        // switching scale from the preceding captured frame.
+                                        ui.set_clip_rect(viewport);
+                                        ui.painter().rect_filled(viewport, 0, background);
+                                        let mut child = ui.new_child(
+                                            egui::UiBuilder::new().max_rect(expected_rect),
+                                        );
+                                        child.set_clip_rect(clip);
+                                        if component {
+                                            let separator = Separator::new(&theme)
+                                                .orientation(orientation)
+                                                .show(&mut child);
+                                            assert_eq!(separator.response.rect, expected_rect);
+                                            let mut painter = child.painter().clone();
+                                            painter.set_opacity(parent_opacity);
+                                            separator.paint(&painter).unwrap();
+                                        } else if extent > 0.0 {
+                                            child.painter().add(egui::Shape::convex_polygon(
+                                                vec![
+                                                    expected_rect.left_top(),
+                                                    expected_rect.right_top(),
+                                                    expected_rect.right_bottom(),
+                                                    expected_rect.left_bottom(),
+                                                ],
+                                                theme.colors.border,
+                                                egui::Stroke::NONE,
+                                            ));
+                                        }
+                                    },
+                                );
+                                assert_eq!(output.pixels_per_point, ppp);
+                                upload(renderer, &device, queue, output.textures_delta);
+                                let frame = host
+                                    .prepare_frame(
+                                        renderer,
+                                        output.shapes,
+                                        ScreenDescriptor {
+                                            size_in_pixels: [(64.0 * ppp) as u32; 2],
+                                            pixels_per_point: ppp,
+                                        },
+                                    )
+                                    .unwrap();
+                                images.push(read_frame(frame, queue));
+                            }
+                            assert_eq!(images[0].size, images[1].size);
+                            assert_eq!(images[0].pixels.len(), images[1].pixels.len());
+                            if extent == 32.0 {
+                                assert!(images[0].pixels.iter().any(|pixel| *pixel != background));
+                            }
+                            for (index, (plain, actual)) in
+                                images[0].pixels.iter().zip(&images[1].pixels).enumerate()
+                            {
+                                for channel in 0..3 {
+                                    let expected = (f32::from(plain[channel]) * parent_opacity
+                                        + f32::from(background[channel]) * (1.0 - parent_opacity))
+                                        .round()
+                                        as u8;
+                                    assert!(
+                                        actual[channel].abs_diff(expected) <= 3,
+                                        "Separator {orientation:?} ppp={ppp} extent={extent} clipped={clipped} parent={parent_opacity} pixel={index} channel={channel}: actual={actual:?} expected={expected} plain={plain:?}"
+                                    );
+                                }
+                                assert_eq!(actual.a(), 255);
+                                if extent == 0.0 {
+                                    assert_eq!(*actual, background, "zero extent paints nothing");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    println!(
+        "Separator framebuffer contracts passed: 96 cases, both orientations, light/dark tinted backgrounds, 1x/1.5x, zero/subpixel/normal extent, clipping and 60% parent opacity"
     );
 }

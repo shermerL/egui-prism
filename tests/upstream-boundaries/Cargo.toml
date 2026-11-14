@@ -1,0 +1,18 @@
+[package]
+name = "upstream-boundary-probe"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.96"
+publish = false
+
+[workspace]
+
+[dependencies]
+egui = "=0.37.0"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[profile.dev]
+debug = 0
+incremental = false

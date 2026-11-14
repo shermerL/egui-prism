@@ -76,3 +76,12 @@ the controlled Rust `alert_wrapping` test. It measures original text-node Ranges
 after Geist loads without changing pinned Alert source. Use actual browser zoom
 and retain source SHA/environment with the JSON. It is measurement tooling, not
 a passing parity oracle; see [scope and recorded limitations](../docs/alert-wrapping-evidence.md).
+
+The `/?separators` fixture uses the unmodified pinned Separator and locked Radix
+1.1.7 primitive. It matches the native Separators page: both directions and
+semantic modes, 320px width, 48px height, 160px clipping and tinted parent opacity,
+with light/dark themes and 100%/150% scale.
+
+Open `/?spinners` for the unmodified pinned Spinner with caller-owned visibility,
+reduced motion, inline/button-adjacent status and translucent-parent samples. Use
+real 100%/150% browser zoom. A successful fixture build is not visual acceptance.

@@ -11,7 +11,9 @@ mod dialogs;
 mod input;
 mod interaction;
 mod selects;
+mod separators;
 mod sliders;
+mod spinners;
 mod switches;
 mod text_inputs;
 mod tooltips;
@@ -26,6 +28,8 @@ enum Case {
     Buttons,
     Badges,
     Alerts,
+    Separators,
+    Spinners,
     Inputs,
     Checkboxes,
     Sliders,
@@ -44,6 +48,8 @@ impl Case {
             Self::Buttons => "Buttons",
             Self::Badges => "Badges",
             Self::Alerts => "Alerts",
+            Self::Separators => "Separators",
+            Self::Spinners => "Spinners",
             Self::Inputs => "Inputs",
             Self::Checkboxes => "Checkboxes",
             Self::Sliders => "Sliders",
@@ -67,6 +73,7 @@ struct Gallery {
     interaction: InteractionCase,
     alerts: alerts::AlertCase,
     buttons: buttons::ButtonCase,
+    spinners: spinners::SpinnerCase,
     inputs: text_inputs::InputCase,
     checkboxes: checkboxes::CheckboxCase,
     sliders: sliders::SliderCase,
@@ -98,6 +105,7 @@ impl Gallery {
             interaction: InteractionCase::default(),
             alerts: alerts::AlertCase::new(context),
             buttons: buttons::ButtonCase::new(context),
+            spinners: spinners::SpinnerCase::default(),
             inputs: text_inputs::InputCase::default(),
             checkboxes: checkboxes::CheckboxCase::default(),
             sliders: sliders::SliderCase::default(),
@@ -380,6 +388,8 @@ impl Gallery {
                             Case::Buttons,
                             Case::Badges,
                             Case::Alerts,
+                            Case::Separators,
+                            Case::Spinners,
                             Case::Inputs,
                             Case::Checkboxes,
                             Case::Sliders,
@@ -450,6 +460,8 @@ impl Gallery {
                 Case::Buttons => self.buttons.show(ui, &theme, frame),
                 Case::Badges => badges::show(ui, &theme, frame),
                 Case::Alerts => self.alerts.show(ui, &theme, frame),
+                Case::Separators => separators::show(ui, &theme, frame),
+                Case::Spinners => self.spinners.show(ui, &theme, frame),
                 Case::Inputs => self.inputs.show(ui, &theme, frame),
                 Case::Checkboxes => self.checkboxes.show(ui, &theme, frame),
                 Case::Sliders => self.sliders.layout(ui, &theme, |case, ui, control| {

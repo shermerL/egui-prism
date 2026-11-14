@@ -6,6 +6,10 @@ A representative native consumer has a concrete compatibility assessment and a b
 
 ## Plan
 
+Use the [source-backed integration boundary assessment](/docs/integration-boundaries.md) for current compatibility responsibilities and explicitly unresolved alternatives.
+
+The [standalone settings recipe](/examples/settings/README.md) supplies fixed public-consumer source and basic-test evidence; its real-platform follow-up remains in native-gallery.
+
 Use the canonical consumer example and docs/input-compatibility.md. A first
 source-backed assessment can precede release preparation; a production pilot
 must still identify its exact candidate and applicable platform evidence. Inventory the target application's egui version, host backend, ordered input migration, compositor ownership, fonts, accessibility and application-specific styling. Keep proprietary application details outside public library plans and external model materials.
@@ -78,11 +82,6 @@ product/device acceptance, replaces its design system or defines its business
 policy. Independent architecture or confirmed defect work is re-scoped on its
 merits, not hidden inside a fixed task-count budget.
 
-## Required
-
-- [Consumer examples](/quest/m1/consumer-examples.md) - fixed external-consumption evidence available before final source-preview preparation
-
 ## Related
 
-- [Integration boundaries](/quest/m0/integration-boundaries.md) - necessity and supported public integration options
 - [Source preview](/quest/m1/source-preview.md) - candidate preparation remains separate from this assessment
