@@ -77,4 +77,53 @@ The original Alert Quest and acceptance Quest remain incomplete. A validation
 executor with a browser able to reach this fixture must collect the missing
 measurements; native GUI/AT and matched-font comparison remain separate gates.
 Changes to the implementation, fixture, fonts, reference or base invalidate
-affected evidence. Exact-head CI and independent review are linked from PR #33.
+affected evidence. Exact-head CI and review status are linked from PR #33.
+
+## Measured browser comparison, 2026-11-14
+
+Measured source: `47546ae22eead7452dc5ab264ac5fa03fc8aa301`, on macOS
+26.6.2 ARM64, Chrome 157.0.8103.51 headless. A fresh isolated browser profile
+used default 100% zoom, DPR1, visual viewport scale1 and a 1280x813 CSS-pixel
+viewport. The reduced browser user-agent reports Intel/macOS10_15_7; that is
+not the host architecture or OS. No sandbox setting was disabled.
+
+Served the existing production bundle on loopback and activated the existing
+**Measure loaded reference** button after font loading. The fixture measured
+28 actual pinned React Alerts through its original text-node Ranges. No spans,
+CSS substitutes, page-scale emulation or component changes were inserted.
+All18 reference asset hashes passed. Loaded pinned Geist assets were the
+browser WOFF2 (`3626eba547294501c8a4d662c7d9ea3b49734409a4c5a1ccf12fa86429b1687e`)
+and native Regular TTF (`2c460a7a71063e53491f343d44b382267bc0cf496e31db64865f962af3152e68`).
+Native samples were freshly exported by the command above using an isolated
+Cargo target and the pinned development shell. Only the native1x samples are
+paired here; native1.5x was exported but browser150% zoom was NOT RUN.
+
+| Corpus case | Outer width requested | Browser rows | Native rows | Observation |
+| --- | --- | --- | --- | --- |
+| URL | 320 | 2 | 1 | Browser breaks after `gamma?`; native retains one 360.84375pt row inside a286pt clip. |
+| URL | 160 | 2 | 1 | Browser grid text track expands to193.203125px and breaks after `alpha-`; native keeps the complete URL row inside a126pt clip. |
+| Hyphen | 160 | 3 | 4 | Browser keeps one `alpha-beta/gamma` per row. Native splits the middle copy after `alpha-`. |
+| All seven cases | 24 | varies | no text paint | Browser outer width is34px, constrained by its padding/border footprint. Native outer width stays24pt and omits Text shapes. |
+
+At width160, the browser hyphen row measures123.703125px excluding the
+collapsed trailing space. Native reports126.5pt for its first row including
+that space, while its final unspaced copy measures123.71875pt. Preserve raw
+row strings and widths: this points to an additional whitespace/wrapping issue,
+not proof that changing min-content or adding a line-break dependency alone
+repairs the behavior.
+
+The other15 non-CJK samples at widths448/320/160 have matching row strings
+when only ASCII spaces at line boundaries are stripped. This is a limited
+row comparison, not acceptance: raw spaces/NBSP remain in the exports, geometry
+is assessed separately, and ink coverage/native windows/AT were not inspected.
+All four CJK rows remain FONT BLOCKED because matching fallback coverage has
+not been demonstrated, even where row counts happen to agree. Browser and
+native raw exports and the derived comparison were retained locally; do not
+reinterpret the successful native test or CI as a successful oracle comparison.
+
+Result: browser execution is now MEASURED for this revision and environment,
+but the paired comparison FAILS the documented strict text behavior. The
+historical Linux browser failure above remains historical, not the current
+reason this candidate cannot pass. The acceptance Quest still owns runnable
+comparison automation/CI integration, font coverage and remaining platform
+observations; known implementation differences need actual repairs.
