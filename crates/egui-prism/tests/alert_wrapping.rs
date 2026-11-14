@@ -69,9 +69,9 @@ fn wrapping_corpus_retains_complete_text_and_reports_rows() {
                             .iter()
                             .flat_map(|row| row.glyphs.iter().map(|glyph| glyph.chr))
                             .collect();
-                        // Layout can discard line-break spaces, but not visible text
-                        // or NBSP. This invariant does not certify CSS word boundaries.
-                        assert_eq!(rebuilt.replace(' ', ""), text.replace(' ', ""));
+                        // Hanging spaces have zero advance but remain source characters.
+                        // Exact coverage does not itself certify CSS word boundaries.
+                        assert_eq!(rebuilt, *text);
                         println!(
                             "ALERT_CASE\t{id}\t{width}\t{ppp}\t{}\t{}\t{}\t{}",
                             output.response.rect.height(),

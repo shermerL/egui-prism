@@ -16,8 +16,8 @@ cargo test --locked -p egui-prism --test alert_wrapping -- --nocapture
 ```
 
 The normal workspace test command runs this test in CI. It checks outer width
-and preservation of the complete layout input plus non-space row characters
-and NBSP, not CSS line counts or every inter-word space. The 56 samples
+and exact preservation of every normalized input character across rows,
+including hanging spaces and NBSP, not CSS line counts. The 56 samples
 cover 448/320/160/24 logical points at 1x/1.5x. Capture the `ALERT_CASE` and
 `ALERT_ROW` TSV records. Text fields are UTF-8 hexadecimal, so spaces and NBSP
 remain distinguishable; decode with Python `bytes.fromhex(value).decode()`.
@@ -61,8 +61,14 @@ announcements, input or native windows.
 The description now uses `unicode-linebreak`0.1.5 and printable ASCII browser
 compatibility rules, greedily selecting the latest fitting legal opportunity.
 Each candidate line is shaped through public egui APIs, with collapsed trailing
-spaces excluded from fitting. Public `Galley::concat` assembles soft rows without
-inserting source newlines. Minimum width is measured over those same legal
+spaces excluded from fitting but restored as zero-advance glyphs for exact source
+coverage. The natural Galley retains its source and intrinsic metrics; only public
+row/mesh fields are rebuilt. Absolute logical row positions are pixel-snapped
+independently, preserving20-point line height without cumulative fractional-scale
+rounding. Candidate shaping copies only the candidate, not the entire source;
+exponential bracketing/bisection avoids shaping every growing prefix. Invisible
+UIs produce no drawing, without incorrectly culling visible overflow by the border
+box. Minimum width is measured over those same legal
 segments, not ASCII-space-only words. No egui/epaint vendor patch is added.
 
 The newly added measured-case regression failed before the repair (hyphen160:

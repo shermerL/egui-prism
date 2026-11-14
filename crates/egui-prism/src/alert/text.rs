@@ -29,13 +29,14 @@ pub(super) fn description(ui: &Ui, natural: Arc<Galley>, available: f32) -> (Arc
         previous = Some(current);
     }
     ends.push(text.len());
+    let format = &natural.job.sections[0].format;
     let shape = |start: usize, end: usize| {
-        // CSS hangs collapsed line-end spaces; they must not consume width or
-        // make the following word lose an otherwise valid break opportunity.
-        let mut job = (*natural.job).clone();
-        job.text = text[start..end].trim_end_matches(' ').to_owned();
-        job.sections[0].byte_range =
-            egui::text::ByteIndex(0)..egui::text::ByteIndex(job.text.len());
+        // Copy just this candidate, not the complete source job on every probe.
+        // Hanging spaces are restored as zero-advance glyphs after fitting.
+        let candidate = text[start..end].trim_end_matches(' ');
+        let mut job = egui::text::LayoutJob::single_section(candidate.to_owned(), format.clone());
+        job.break_on_newline = false;
+        job.round_output_to_gui = natural.job.round_output_to_gui;
         ui.painter().layout_job(job)
     };
     let mut start = 0;
@@ -48,29 +49,85 @@ pub(super) fn description(ui: &Ui, natural: Arc<Galley>, available: f32) -> (Arc
     if natural.size().x <= width {
         return (natural, width);
     }
-    let mut lines = Vec::new();
-    let mut fitting = None;
-    let mut start = 0;
-    let mut index = 0;
-    while index < ends.len() {
-        let line = shape(start, ends[index]);
-        if line.size().x > width
-            && let Some(last) = fitting.take()
-        {
-            lines.push(last);
-            start = ends[index - 1];
-            continue;
+    // Keep the natural job and its private intrinsic metrics. Soft wrapping
+    // changes rows/meshes, not the unwrapped dimensions or source character map.
+    let mut galley = (*natural).clone();
+    galley.rows.clear();
+    galley.mesh_bounds = egui::Rect::NOTHING;
+    galley.num_vertices = 0;
+    galley.num_indices = 0;
+    let space = natural
+        .rows
+        .iter()
+        .flat_map(|row| &row.glyphs)
+        .find(|glyph| glyph.chr == ' ')
+        .copied();
+    let line_height = format
+        .line_height
+        .expect("Alert sets an explicit line height");
+    let mut widest = 0.0_f32;
+    let mut first = 0;
+    while first < ends.len() {
+        let start = if first == 0 { 0 } else { ends[first - 1] };
+        let mut last = first;
+        let mut line = shape(start, ends[last]);
+        // Bracket the first non-fitting boundary by doubling, then bisect.
+        // This avoids shaping every growing prefix when min-content is large,
+        // without starting each short line by copying the whole remaining text.
+        let mut step = 1;
+        let mut upper = ends.len();
+        loop {
+            let next = first.saturating_add(step).min(ends.len() - 1);
+            if next <= last {
+                break;
+            }
+            let candidate = shape(start, ends[next]);
+            if candidate.size().x > width {
+                upper = next;
+                break;
+            }
+            last = next;
+            line = candidate;
+            if last + 1 == ends.len() {
+                break;
+            }
+            step *= 2;
         }
-        fitting = Some(line);
-        index += 1;
+        while last + 1 < upper {
+            let middle = last + (upper - last) / 2;
+            let candidate = shape(start, ends[middle]);
+            if candidate.size().x <= width {
+                last = middle;
+                line = candidate;
+            } else {
+                upper = middle;
+            }
+        }
+        let end = ends[last];
+        let hanging = text[start..end].len() - text[start..end].trim_end_matches(' ').len();
+        let mut placed = line.rows[0].clone();
+        let row = Arc::make_mut(&mut placed.row);
+        for _ in 0..hanging {
+            let mut glyph = space.expect("a hanging ASCII space exists in the natural galley");
+            glyph.pos.x = line.size().x;
+            glyph.advance_width = 0.0;
+            row.glyphs.push(glyph);
+        }
+        row.size.y = line_height;
+        let y = galley.rows.len() as f32 * line_height;
+        placed.pos.y = (y * ui.pixels_per_point()).round() / ui.pixels_per_point();
+        placed.ends_with_newline = false;
+        galley.mesh_bounds |= placed.visuals.mesh_bounds.translate(placed.pos.to_vec2());
+        galley.num_vertices += placed.visuals.mesh.vertices.len();
+        galley.num_indices += placed.visuals.mesh.indices.len();
+        widest = widest.max(line.size().x);
+        galley.rows.push(placed);
+        first = last + 1;
     }
-    lines.push(fitting.expect("nonempty description has an end boundary"));
-    let mut galley = Galley::concat(Arc::clone(&natural.job), &lines, ui.pixels_per_point());
-    // concat normally rejoins hard paragraphs. These are soft CSS wraps, not
-    // inserted source newlines; accessible text remains the complete input.
-    for row in &mut galley.rows {
-        row.ends_with_newline = false;
-    }
+    galley.rect = egui::Rect::from_min_size(
+        egui::Pos2::ZERO,
+        egui::vec2(widest, galley.rows.len() as f32 * line_height),
+    );
     (Arc::new(galley), width)
 }
 

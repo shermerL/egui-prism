@@ -109,6 +109,90 @@ fn unicode_clusters_and_zero_ink_content_keep_finite_drawing_bounds() {
     }
 }
 #[test]
+fn invisible_ui_does_not_produce_explicit_drawing() {
+    context()
+        .run_ui(Default::default(), |ui| {
+            ui.scope(|ui| {
+                ui.set_invisible();
+                assert!(
+                    Alert::new(&Theme::light(), "hidden")
+                        .description("Hidden notice")
+                        .show(ui)
+                        .drawing
+                        .is_none()
+                );
+            });
+        })
+        .drop_without_applying_deltas();
+}
+#[test]
+fn soft_rows_preserve_source_intrinsics_and_absolute_line_height() {
+    for scale in [1.0, 1.125, 1.5] {
+        let ctx = context();
+        ctx.set_pixels_per_point(scale);
+        ctx.run_ui(Default::default(), |ui| {
+            let text = "one one one one one one one one one one";
+            let natural = ui
+                .scope(|ui| {
+                    ui.set_max_width(1000.0);
+                    let wide = Alert::new(&Theme::light(), "wide")
+                        .description(text)
+                        .show(ui);
+                    texts(&wide)[0].galley.intrinsic_size()
+                })
+                .inner;
+            let narrow = ui
+                .scope(|ui| {
+                    ui.set_max_width(34.0);
+                    Alert::new(&Theme::light(), "narrow")
+                        .description(text)
+                        .show(ui)
+                })
+                .inner;
+            let shapes = texts(&narrow);
+            let galley = &shapes[0].galley;
+            let rebuilt: String = galley
+                .rows
+                .iter()
+                .flat_map(|row| row.glyphs.iter().map(|glyph| glyph.chr))
+                .collect();
+            assert_eq!(rebuilt, text);
+            assert_eq!(galley.intrinsic_size(), natural);
+            assert_eq!(galley.rows.len(), 10);
+            close(galley.size().y, 200.0);
+            for (index, row) in galley.rows.iter().enumerate() {
+                close(row.pos.y, (index as f32 * 20.0 * scale).round() / scale);
+                assert!(!row.ends_with_newline);
+            }
+        })
+        .drop_without_applying_deltas();
+    }
+}
+#[test]
+fn long_descriptions_keep_complete_text_through_many_legal_breaks() {
+    for text in [
+        "a ".repeat(2000).trim_end().to_owned(),
+        format!("{} {}", "x".repeat(1000), "a ".repeat(2000).trim_end()),
+    ] {
+        context()
+            .run_ui(Default::default(), |ui| {
+                ui.set_max_width(160.0);
+                let out = Alert::new(&Theme::light(), "long")
+                    .description(&text)
+                    .show(ui);
+                let shapes = texts(&out);
+                let rebuilt: String = shapes[0]
+                    .galley
+                    .rows
+                    .iter()
+                    .flat_map(|row| row.glyphs.iter().map(|glyph| glyph.chr))
+                    .collect();
+                assert_eq!(rebuilt, text);
+            })
+            .drop_without_applying_deltas();
+    }
+}
+#[test]
 fn reference_geometry_and_light_dark_variants() {
     for theme in [Theme::light(), Theme::dark()] {
         context()

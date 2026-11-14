@@ -189,7 +189,7 @@ impl<'theme, 'a> Alert<'theme, 'a> {
         });
 
         let parent_clip = ui.clip_rect();
-        let drawing = if parent_clip.is_positive() {
+        let drawing = if ui.is_visible() && parent_clip.is_positive() {
             let background = Shape::Rect(egui::epaint::RectShape::new(
                 rect,
                 egui::CornerRadius::same(10),
