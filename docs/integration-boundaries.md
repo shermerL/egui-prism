@@ -202,6 +202,10 @@ behavior, not a second claim about all public API designs.
 
 ## Remaining equivalence work and decisions
 
+The [minimal public-API input equivalence Quest](../quest/m0/public-input-equivalence.md)
+tracks the next Arrow/Tab/Arrow and modal experiments. It is planned work, not
+additional executed evidence for this assessment.
+
 No existing extension is approved for removal by this report. The next unresolved experiment is an unmodified-egui phase-aware prototype using
 public event/pass hooks for the minimal Arrow/Tab/Arrow and modal open/close sequences, while
 measuring action replay, plugin consumption, frame-time and output behavior.
