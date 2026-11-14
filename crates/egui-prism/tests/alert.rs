@@ -40,6 +40,75 @@ fn texts(output: &AlertOutput) -> Vec<&egui::epaint::TextShape> {
         .collect()
 }
 #[test]
+fn measured_browser_line_breaks_and_minimum_outer_width() {
+    for (text, width, rows, outer) in [
+        (
+            "alpha-beta/gamma alpha-beta/gamma alpha-beta/gamma",
+            160.0,
+            3,
+            160.0,
+        ),
+        (
+            "https://example.invalid/alpha-beta/gamma?query=value",
+            320.0,
+            2,
+            320.0,
+        ),
+        (
+            "https://example.invalid/alpha-beta/gamma?query=value",
+            160.0,
+            2,
+            160.0,
+        ),
+        ("Supercalifragilisticexpialidocious", 24.0, 1, 34.0),
+        ("ABCD-1234-5678-9012-3456-7890", 160.0, 2, 160.0),
+        ("-12345678901234567890", 160.0, 1, 160.0),
+        ("code-12345678901234567890", 160.0, 2, 160.0),
+        ("alpha/beta/gamma/delta", 160.0, 1, 160.0),
+        ("word?next?word?next?word", 160.0, 2, 160.0),
+        ("word(opening)word(opening)", 160.0, 1, 160.0),
+    ] {
+        context()
+            .run_ui(Default::default(), |ui| {
+                ui.set_max_width(width);
+                let out = Alert::new(&Theme::light(), "browser")
+                    .description(text)
+                    .show(ui);
+                close(out.response.rect.width(), outer);
+                let shapes = texts(&out);
+                assert_eq!(shapes.len(), 1);
+                assert_eq!(shapes[0].galley.rows.len(), rows, "{text} at {width}");
+            })
+            .drop_without_applying_deltas();
+    }
+}
+#[test]
+fn unicode_clusters_and_zero_ink_content_keep_finite_drawing_bounds() {
+    for text in [
+        "e\u{301}",
+        "alpha\u{a0}beta",
+        "alpha\u{2060}beta",
+        "👩\u{200d}💻",
+        "\u{200d}",
+    ] {
+        context()
+            .run_ui(Default::default(), |ui| {
+                ui.set_max_width(34.0);
+                ui.set_clip_rect(egui::Rect::EVERYTHING);
+                let out = Alert::new(&Theme::light(), "cluster")
+                    .description(text)
+                    .show(ui);
+                let group = out.drawing.as_ref().unwrap();
+                assert!(group.bounds().is_finite());
+                for shape in texts(&out) {
+                    assert_eq!(shape.galley.rows.len(), 1);
+                    assert_eq!(shape.galley.job.text, text);
+                }
+            })
+            .drop_without_applying_deltas();
+    }
+}
+#[test]
 fn reference_geometry_and_light_dark_variants() {
     for theme in [Theme::light(), Theme::dark()] {
         context()
@@ -236,7 +305,7 @@ fn narrow_zero_and_clipped_layouts_bound_the_group_and_preserve_exact_response()
                     .title("Long title")
                     .description("Words that can wrap with a long description")
                     .show(ui);
-                close(out.response.rect.width(), width);
+                close(out.response.rect.width(), width.max(34.0));
                 if let Some(group) = out.drawing {
                     assert!(group.bounds().is_finite());
                     assert!(clip.contains_rect(group.bounds()));
@@ -379,12 +448,13 @@ fn unbreakable_words_and_nbsp_keep_min_content_width_without_expanding_the_notic
                 assert_eq!(text[0].galley.rows.len(), 1);
                 assert!(text[0].galley.size().x > 126.0);
                 let group = output.drawing.as_ref().unwrap();
-                assert!(group.bounds().width() <= 162.0);
+                assert!(group.bounds().right() > output.response.rect.right());
                 for item in group.items().iter().skip(1) {
                     let Item::Shape(shape) = item else {
                         panic!("text")
                     };
-                    assert!(shape.clip_rect.right() <= output.response.rect.right() - 17.0);
+                    assert!(shape.clip_rect.right() > output.response.rect.right());
+                    assert!(ui.clip_rect().contains_rect(shape.clip_rect));
                 }
             })
             .drop_without_applying_deltas();

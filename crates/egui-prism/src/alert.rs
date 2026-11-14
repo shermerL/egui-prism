@@ -1,4 +1,4 @@
-//! Bounded inline notices with caller-owned content and explicit drawing.
+//! Inline notices with CSS minimum sizing, caller-owned content and explicit drawing.
 //!
 //! ```
 //! use egui_prism::{alert::{Alert, AlertVariant}, egui, theme::Theme};
@@ -12,6 +12,8 @@
 //!     // Submit notice.drawing through the host compositor in this frame.
 //! });
 //! ```
+
+mod text;
 
 use egui::{
     Color32, FontId, IdSalt, Image, Rect, Response, Sense, Shape, Stroke, TextFormat, TextStyle,
@@ -37,7 +39,7 @@ pub enum AlertVariant {
 ///
 /// The caller owns content, stable identity, image resources and any actions.
 /// This component retains no state, starts no timers and never dismisses itself.
-/// Width follows the available finite UI width; the title elides to one line,
+/// Width fills the finite UI width with a 34-point minimum; the title elides to one line,
 /// and a plain-text description wraps. Install fonts with [`crate::theme::install_fonts`].
 #[must_use = "call show and submit the returned drawing"]
 pub struct Alert<'theme, 'a> {
@@ -89,12 +91,13 @@ impl<'theme, 'a> Alert<'theme, 'a> {
     /// Allocate a noninteractive assertive alert and prepare its unfaded drawing.
     ///
     /// The caller must provide finite available width, even in scrolling layouts.
-    /// Widths smaller than the fixed padding/icon footprint clip content instead
-    /// of widening the notice. Clipping never removes accessible content.
+    /// The border box is at least 34 points wide. Description min-content may
+    /// overflow the box; the parent UI clip controls visibility, not the Alert.
+    /// Clipping never removes accessible content.
     pub fn show(self, ui: &mut egui::Ui) -> AlertOutput {
         let width = ui.available_width();
         assert!(width.is_finite(), "alert requires a finite available width");
-        let width = width.max(0.0);
+        let width = width.max(34.0);
         let colors = self.theme.colors;
         let foreground = match self.variant {
             AlertVariant::Default => colors.surface.foreground,
@@ -110,9 +113,9 @@ impl<'theme, 'a> Alert<'theme, 'a> {
         let inset = vec2(17.0, 13.0); // Border plus px-4 / py-3.
         let icon_column = if self.icon.is_some() { 28.0 } else { 0.0 };
         let text_width = (width - 2.0 * inset.x - icon_column).max(0.0);
-        // CSS grid's 1fr column keeps a description's min-content width. egui's
-        // ordinary wrapping instead splits overlong words, including NBSP runs.
-        // Measure those runs in one unwrapped galley before wrapping the column.
+        // Shape the full normalized input before selecting legal CSS line breaks.
+        // egui's ordinary wrapper can emergency-split words and prioritizes dash
+        // candidates differently from the reference browser.
         let natural_description = self.description.map(|text| {
             layout_text(
                 ui,
@@ -123,29 +126,16 @@ impl<'theme, 'a> Alert<'theme, 'a> {
                 false,
             )
         });
-        let min_content = natural_description.as_ref().map_or(0.0, |text| {
-            text.rows
-                .iter()
-                .flat_map(|row| {
-                    row.glyphs
-                        .split(|glyph| glyph.chr == ' ')
-                        .filter_map(|run| Some(run.last()?.max_x() - run.first()?.pos.x))
-                })
-                .fold(0.0, f32::max)
-        });
-        let column_width = text_width.max(min_content);
+        let (description, column_width) = match natural_description {
+            Some(natural) => {
+                let (galley, width) = text::description(ui, natural, text_width);
+                (Some(galley), width)
+            }
+            None => (None, text_width),
+        };
         let title = self
             .title
             .map(|text| layout_text(ui, text, column_width, TextStyle::Button, foreground, true));
-        let description = natural_description.map(|text| {
-            if text.size().x <= column_width {
-                text
-            } else {
-                let mut job = (*text.job).clone();
-                job.wrap.max_width = column_width;
-                ui.painter().layout_job(job)
-            }
-        });
         let title_height = title.as_ref().map_or(0.0, |text| {
             if text.job.text.is_empty() {
                 16.0
@@ -198,8 +188,8 @@ impl<'theme, 'a> Alert<'theme, 'a> {
             node.set_live_atomic();
         });
 
-        let bounds = rect.expand(1.0).intersect(ui.clip_rect());
-        let drawing = if ui.is_rect_visible(rect) && bounds.is_positive() {
+        let parent_clip = ui.clip_rect();
+        let drawing = if parent_clip.is_positive() {
             let background = Shape::Rect(egui::epaint::RectShape::new(
                 rect,
                 egui::CornerRadius::same(10),
@@ -208,18 +198,12 @@ impl<'theme, 'a> Alert<'theme, 'a> {
                 egui::StrokeKind::Inside,
             ));
             let mut items = vec![Item::Shape(egui::epaint::ClippedShape::new(
-                bounds, background,
+                parent_clip,
+                background,
             ))];
             let content_origin = rect.min + inset;
             // Keep fixed padding and the icon slot even below their intrinsic footprint.
-            let content_clip = Rect::from_min_max(
-                content_origin,
-                egui::pos2(
-                    (rect.right() - inset.x).max(content_origin.x),
-                    rect.bottom() - 1.0,
-                ),
-            )
-            .intersect(bounds);
+            let content_clip = parent_clip;
             if let Some(mut icon) = self.icon {
                 if icon.image_options().tint == Color32::WHITE {
                     icon = icon.tint(foreground);
@@ -240,22 +224,49 @@ impl<'theme, 'a> Alert<'theme, 'a> {
                 }
             }
             let text_origin = content_origin + vec2(icon_column, 0.0);
-            let text_clip = Rect::from_min_size(text_origin, vec2(text_width, content_height))
-                .intersect(bounds);
+            let text_clip = parent_clip;
             if text_clip.is_positive() {
-                for (galley, offset, color) in [
-                    (title, 0.0, foreground),
-                    (description, description_offset, description_color),
+                let title_clip = Rect::from_min_size(text_origin, vec2(column_width, title_height))
+                    .intersect(parent_clip);
+                for (galley, offset, color, clip) in [
+                    (title, 0.0, foreground, title_clip),
+                    (
+                        description,
+                        description_offset,
+                        description_color,
+                        text_clip,
+                    ),
                 ] {
-                    if let Some(galley) = galley {
+                    if let Some(galley) = galley.filter(|galley| galley.num_vertices > 0) {
                         items.push(Item::Shape(egui::epaint::ClippedShape::new(
-                            text_clip,
+                            clip,
                             Shape::galley(text_origin + vec2(0.0, offset), galley, color),
                         )));
                     }
                 }
             }
-            Some(Group::new(bounds, 1.0, items).expect("finite alert geometry and clips"))
+            let bounds = items.iter().fold(Rect::NOTHING, |bounds, item| {
+                let Item::Shape(shape) = item else {
+                    unreachable!("Alert emits shapes")
+                };
+                bounds.union(
+                    shape
+                        .shape
+                        .visual_bounding_rect()
+                        .intersect(shape.clip_rect),
+                )
+            });
+            if bounds.is_positive() {
+                for item in &mut items {
+                    let Item::Shape(shape) = item else {
+                        unreachable!("Alert emits shapes")
+                    };
+                    shape.clip_rect = shape.clip_rect.intersect(bounds);
+                }
+                Some(Group::new(bounds, 1.0, items).expect("finite alert geometry and clips"))
+            } else {
+                None
+            }
         } else {
             None
         };

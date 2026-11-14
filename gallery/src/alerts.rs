@@ -74,6 +74,26 @@ impl AlertCase {
             ui.set_max_width(160.0);
             draw(Alert::new(theme,"narrow").title("A deliberately long title for a bounded notice").description("A long description wraps onto several lines inside the available width and remains accessible."),ui,frame);
         });
+        frame.label(
+            ui,
+            "160pt legal breaks; long content overflows to the parent clip",
+        );
+        ui.scope(|ui| {
+            ui.set_max_width(160.0);
+            for (id, text) in [
+                (
+                    "hyphen-wrap",
+                    "alpha-beta/gamma alpha-beta/gamma alpha-beta/gamma",
+                ),
+                (
+                    "url-wrap",
+                    "https://example.invalid/alpha-beta/gamma?query=value",
+                ),
+                ("word-overflow", "Supercalifragilisticexpialidocious"),
+            ] {
+                draw(Alert::new(theme, id).description(text), ui, frame);
+            }
+        });
         frame.label(ui, "320pt notice clipped to 54pt height");
         ui.scope(|ui| {
             ui.set_max_width(320.0);

@@ -1,6 +1,6 @@
 # Inline Alert
 
-`alert::Alert` is a bounded inline notice. The caller owns its theme, stable
+`alert::Alert` is an inline notice with CSS minimum sizing and visible overflow. The caller owns its theme, stable
 identity, title, description, optional image and application policy. It retains
 no state, timer, focus or dismissal lifecycle. `AlertVariant::Destructive` is a
 visual choice, not a network or application error detector.
@@ -44,7 +44,8 @@ and action submission without a window or GPU claim.
 Reference: `registry/new-york-v4/ui/alert.tsx` at shadcn
 `8a3536678a528cc012b9e62484290e79d0be410f`, unchanged in the reference fixture.
 
-- Available width fills the finite parent allocation. Padding is 16 horizontal
+- Available width fills the finite parent allocation with a 34-point minimum.
+  Padding is 16 horizontal
   and 12 vertical points, plus a one-point semantic border. Radius is 10 points,
   independent of control metrics.
 - A decorative icon takes a 16-point slot, 12-point column gap and two-point
@@ -52,8 +53,9 @@ Reference: `registry/new-york-v4/ui/alert.tsx` at shadcn
 - Title: Geist Medium, 14 points, 20-point line height, -0.35-point tracking,
   single-line ellipsis and a 16-point minimum for empty text.
 - Description: plain-text Geist Regular, 14 points and 20-point line height.
-  Its grid column preserves the widest space-delimited unbreakable run,
-  including nonbreaking spaces, before wrapping. Overflow remains clipped. Title/description rows have a two-point gap.
+  Its grid column preserves the widest legal unbreakable segment, including
+  nonbreaking spaces, before greedy line wrapping. Collapsed line-end spaces
+  do not consume width. Title/description rows have a two-point gap.
   Either can be omitted, with or without an icon. Empty descriptions have no line.
 - Default: card surface and foreground, muted description. Destructive: the
   same surface, destructive title/icon and 90%-alpha destructive description.
@@ -62,15 +64,18 @@ ASCII whitespace collapses like CSS normal whitespace. Nonbreaking spaces are
 preserved. This API accepts plain text, corresponding to direct text children
 of `AlertDescription`, not rich HTML, paragraph children, links or nested lists.
 The reference's paragraph-specific relaxed typography is outside this text API.
-Min-content measurement currently treats space-delimited runs as unbreakable.
-CSS hyphen, punctuation and non-Latin line-break opportunities are not yet
-matched; this remains a parity gap, rather than a claim of general Unicode
-line-breaking equivalence.
+An internal `unicode-linebreak` dependency supplies Unicode15 opportunities.
+Printable ASCII follows Chromium's compatibility rules, which differ from
+untailored UAX14 for URLs and opening punctuation. This is not a complete CSS
+text engine: dictionary-based scripts, newer Unicode rules, matched CJK fallback
+fonts and browser-specific differences still need explicit evidence.
 
 Provide finite available width, including within horizontal scroll areas.
-Clipping bounds both compositor allocation and drawing. Extremely narrow widths
-below the padding/icon footprint clip content rather than enlarge the notice;
-this explicit bounded-container behavior is not a claim of CSS overflow parity.
+The border box cannot be narrower than its 34-point padding/border footprint.
+Description min-content may extend beyond it; drawing/group bounds include the
+visible overflow and remain bounded by the parent UI clip. Set that parent clip
+explicitly when a container must hide overflowing text. This replaces the earlier
+Draft's self-clipping behavior without changing the builder or output types.
 A title's ellipsis and a parent's clip never shorten accessible content.
 
 ## Accessibility

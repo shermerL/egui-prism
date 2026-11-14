@@ -37,7 +37,7 @@ parity therefore requires host-owned group compositing over the actual surface;
 a fixed background-color approximation is insufficient.
 
 The [host compositing capability](/docs/compositing.md)
-keeps the core egui-only and adds a separately installed wgpu adapter. The native
+keeps renderer/platform integration outside the core and adds a separately installed wgpu adapter. The native
 Gallery directly integrates official winit, egui-winit and egui-wgpu; the host
 owns windows, GPU resources, current-frame texture preparation and ordered command
 submission. Backend setup failures are explicit. Component contracts and evidence remain in the

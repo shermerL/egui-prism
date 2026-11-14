@@ -47,7 +47,7 @@ fn wrapping_corpus_retains_complete_text_and_reports_rows() {
                         let output = Alert::new(&theme, (id, width as u32))
                             .description(text)
                             .show(&mut child);
-                        assert_eq!(output.response.rect.width(), width);
+                        assert_eq!(output.response.rect.width(), width.max(34.0));
                         let group = output.drawing.as_ref().expect("visible alert");
                         let text_shapes: Vec<_> = group
                             .items()
@@ -60,19 +60,6 @@ fn wrapping_corpus_retains_complete_text_and_reports_rows() {
                                 _ => None,
                             })
                             .collect();
-                        // Below padding width the current implementation omits paint;
-                        // explicitly report it, never turn absence into a parity pass.
-                        if text_shapes.is_empty() {
-                            assert!(
-                                width < 34.0,
-                                "text disappeared at a supported content width"
-                            );
-                            println!(
-                                "ALERT_CASE\t{id}\t{width}\t{ppp}\tNO_TEXT_PAINT\t{}",
-                                hex(text)
-                            );
-                            return;
-                        }
                         assert_eq!(text_shapes.len(), 1);
                         let (clip, shape) = text_shapes[0];
                         assert_eq!(shape.galley.job.text, *text);

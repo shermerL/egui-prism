@@ -22,10 +22,11 @@ cover 448/320/160/24 logical points at 1x/1.5x. Capture the `ALERT_CASE` and
 `ALERT_ROW` TSV records. Text fields are UTF-8 hexadecimal, so spaces and NBSP
 remain distinguishable; decode with Python `bytes.fromhex(value).decode()`.
 CASE fields: ID, outer width, ppp, height, paint clip width, row count, input hex.
-ROW fields: ID, width, ppp, row index, layout width, text hex. A CASE with
-`NO_TEXT_PAINT` instead records absence of a Text shape, not an empty line.
-Widths below the 34-point padding/border footprint currently omit text paint;
-the probe reports this without requiring that behavior to remain after a fix.
+ROW fields: ID, requested width, ppp, row index, layout width, text hex.
+The border box now has a34-point minimum even when24 is requested, with
+parent-controlled visible overflow. The probe requires a Text shape for every
+nonempty corpus sample. Historical `NO_TEXT_PAINT` records below describe the
+old implementation, not an accepted empty line or a current expected result.
 Neither galley widths nor preserved strings establish visible glyph coverage.
 
 Browser probe:
@@ -54,6 +55,31 @@ Inspect the rendered glyphs separately. CJK remains font-blocked until matching
 fallback coverage is demonstrated, even if text strings survive both probes.
 This harness does not cover title/icon combinations, destructive style, live
 announcements, input or native windows.
+
+## Candidate internal text-layout repair
+
+The description now uses `unicode-linebreak`0.1.5 and printable ASCII browser
+compatibility rules, greedily selecting the latest fitting legal opportunity.
+Each candidate line is shaped through public egui APIs, with collapsed trailing
+spaces excluded from fitting. Public `Galley::concat` assembles soft rows without
+inserting source newlines. Minimum width is measured over those same legal
+segments, not ASCII-space-only words. No egui/epaint vendor patch is added.
+
+The newly added measured-case regression failed before the repair (hyphen160:
+four rows rather than three). After the repair, all24 non-CJK browser/native1x
+row samples agree when ASCII boundary spaces are stripped, including requested
+width24. The browser reference bundle/corpus are unchanged from measured source
+`47546ae22eead7452dc5ab264ac5fa03fc8aa301`; native output is newly exported from
+the repair candidate. Six additional numeric-hyphen, slash/question-mark and
+opening-punctuation cases at160px were measured through the same pinned Alert
+structure in Chrome157 and added as controlled regressions. They vary text
+content only, not CSS or element structure.
+
+This is row evidence, not a geometry/ink or full CSS acceptance PASS. CJK fallback,
+dictionary-based scripts, newer Unicode rules, other engines, actual browser150%
+zoom, native windows and speech remain separate gaps. Structural combining/ZWJ,
+NBSP/word-joiner and zero-ink tests do not establish missing-glyph coverage.
+The earlier failures below remain source-bound before-fix observations.
 
 ## Evidence recorded 2026-11-12
 
