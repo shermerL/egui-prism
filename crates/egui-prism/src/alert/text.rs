@@ -111,6 +111,9 @@ pub(super) fn description(ui: &Ui, natural: Arc<Galley>, available: f32) -> (Arc
             let mut glyph = space.expect("a hanging ASCII space exists in the natural galley");
             glyph.pos.x = line.size().x;
             glyph.advance_width = 0.0;
+            // This space has no mesh; its offset belongs to this row, not
+            // the original unwrapped paragraph from which its metrics came.
+            glyph.first_vertex = row.visuals.mesh.vertices.len() as u32;
             row.glyphs.push(glyph);
         }
         row.size.y = line_height;

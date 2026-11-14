@@ -193,6 +193,38 @@ fn long_descriptions_keep_complete_text_through_many_legal_breaks() {
     }
 }
 #[test]
+fn hanging_space_vertices_are_local_to_each_destination_row() {
+    let text = format!("{} {}", "i".repeat(100), "WW ".repeat(100).trim_end());
+    context()
+        .run_ui(Default::default(), |ui| {
+            ui.set_max_width(34.0);
+            let out = Alert::new(&Theme::light(), "vertices")
+                .description(&text)
+                .show(ui);
+            let shapes = texts(&out);
+            let galley = &shapes[0].galley;
+            assert!(galley.rows.len() > 2);
+            let mut hanging = 0;
+            for row in &galley.rows {
+                for glyph in &row.glyphs {
+                    assert!(glyph.first_vertex as usize <= row.visuals.mesh.vertices.len());
+                    if glyph.chr == ' ' && glyph.advance_width == 0.0 {
+                        hanging += 1;
+                        assert_eq!(glyph.first_vertex as usize, row.visuals.mesh.vertices.len());
+                    }
+                }
+            }
+            assert!(hanging > 0);
+            let rebuilt: String = galley
+                .rows
+                .iter()
+                .flat_map(|row| row.glyphs.iter().map(|glyph| glyph.chr))
+                .collect();
+            assert_eq!(rebuilt, text);
+        })
+        .drop_without_applying_deltas();
+}
+#[test]
 fn reference_geometry_and_light_dark_variants() {
     for theme in [Theme::light(), Theme::dark()] {
         context()
