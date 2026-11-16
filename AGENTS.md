@@ -51,6 +51,13 @@ refactored code. Explain removal of obsolete or unhelpful comments. Retain
 third-party copyright and license notices. Use the project formatter, with one
 normal final newline and no extra blank lines at the end of files.
 
+## AI attribution
+
+Mark AI-generated contributions in PR descriptions and AI-generated issues,
+reviews, and comments with `(AI: <name>)`. Use the actual model name when known;
+otherwise use the tool name, such as `Dot` or `Grok`. Do not guess model identities
+or include effort, provider, or session details.
+
 ## Workflow and evidence
 
 Use quest/ as the task source. Preserve unrelated changes and keep local notes,
