@@ -54,9 +54,9 @@ normal final newline and no extra blank lines at the end of files.
 ## AI attribution
 
 Mark AI-generated contributions in PR descriptions and AI-generated issues,
-reviews, and comments with `(AI: <name>)`. Use the actual model name when known;
-otherwise use the actual tool name; `Dot` and `Grok` are only examples. Do not
-guess model identities or include effort, provider, or session details.
+reviews, and comments with `(Written by <name>)`. Use the actual model name when
+known; otherwise use the actual tool name. `Dot` and `Grok` are only examples.
+Do not guess model identities or include effort, provider, or session details.
 
 ## Workflow and evidence
 
