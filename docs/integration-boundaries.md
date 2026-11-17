@@ -132,7 +132,7 @@ compile-only harness is not the runnable external recipe or a registry package.
 ## Rendering boundary and real integration costs
 
 The [compositor guide](../crates/egui-prism-wgpu/README.md) is the canonical
-contract. Core stays egui-only; the adapter uses unmodified egui-wgpu, not a
+contract. Core uses egui and an internal Unicode text helper; the adapter uses unmodified egui-wgpu, not a
 renderer fork. Group opacity differs observably from multiplying every shape's
 alpha: an opaque glyph over an opaque fill must be assembled before fading.
 

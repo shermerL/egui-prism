@@ -37,7 +37,7 @@ parity therefore requires host-owned group compositing over the actual surface;
 a fixed background-color approximation is insufficient.
 
 The [host compositing capability](/docs/compositing.md)
-keeps the core egui-only and adds a separately installed wgpu adapter. The native
+keeps renderer/platform integration outside the core and adds a separately installed wgpu adapter. The native
 Gallery directly integrates official winit, egui-winit and egui-wgpu; the host
 owns windows, GPU resources, current-frame texture preparation and ordered command
 submission. Backend setup failures are explicit. Component contracts and evidence remain in the
@@ -103,6 +103,7 @@ resource lifetimes. Their migration sections replace the earlier egui-style APIs
 | Slider | [Slider](sliders.md), [comparison and evidence](sliders.md#comparison-and-evidence), [delivery PR](https://github.com/shermerL/egui-prism/pull/9) | Caller-owned value, ordered input and explicit drawing. Single-thumb horizontal LTR scope includes a documented 16-point Rust layout minimum. Browser, macOS/Metal and framebuffer evidence are separate. |
 | Select | [Selects](selects.md), [evidence and limits](selects.md#evidence-and-limits) | Caller-owned optional value, frame-local registration and ordered popup input. Adapter submission tests do not render framebuffer pixels. The browser geometry reference is at 100%; native 150% and narrow layouts are additional checks. |
 | Dialog | [Dialogs](dialogs.md), [evidence and limits](dialogs.md#evidence-and-limits) | Caller-owned open state and dismissal policy, scoped content and explicit drawing groups. The bounded scrolling body is an explicit extension; ordinary direct-painting egui controls are outside group opacity isolation. |
+| Alert | [Inline alerts](alerts.md) | Bounded caller-owned notices with optional title, description and icon, assertive accessibility metadata and explicit drawing. Native/reference visual and assistive-technology observations remain pending. |
 | Separator | [Separators](separators.md) | Noninteractive, caller-bounded geometry with decorative or oriented semantic output. Native visual and assistive-technology acceptance remain pending. |
 | Badge | [Badges](badges.md) | Static caller-owned text with six variants, natural width, accessible text and explicit drawing. Platform observations are recorded separately from contract tests. |
 

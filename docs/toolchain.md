@@ -11,8 +11,10 @@
 | Node.js | 24.x; reference packages locked separately | `flake.nix`, `reference/package-lock.json` |
 
 Rustup selects the project toolchain without changing the global default.
-Cargo.lock fixes native dependency resolution. The core depends only on egui
-without default features. The separate adapter uses the official egui-wgpu
+Cargo.lock fixes native dependency resolution. The core uses egui without
+default features and `unicode-linebreak`0.1.5 for internal Alert text layout.
+The latter is Apache-2.0, has no transitive dependencies and supplies Unicode15
+break opportunities, not a complete CSS text engine. The separate adapter uses the official egui-wgpu
 renderer; the Gallery adds default fonts and the official winit/egui-winit
 window, clipboard, IME, link, Wayland and X11 integration.
 

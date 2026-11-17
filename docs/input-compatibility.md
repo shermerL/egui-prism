@@ -1,7 +1,7 @@
 # Ordered input integration
 
 The controlled egui 0.37.0 patch provides current-pass focus policy, ordered event
-routing and composite capture for M1 consumers. The core remains egui-only;
+routing and composite capture for M1 consumers. The core uses egui and a platform-independent text helper;
 window creation, frame execution, application state and official renderer/platform
 integration belong to the host. Existing components require their own migrations
 and parity acceptance before opting into this mode.

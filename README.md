@@ -84,7 +84,7 @@ application-root Cargo patch. Its [source inventory](vendor/README.md) and
 standalone consumer checks keep the official platform/renderer types unified.
 
 The optional [`egui-prism-wgpu`](docs/compositing.md) host adapter provides isolated
-group opacity with the official wgpu renderer. The core remains egui-only; hosts own
+group opacity with the official wgpu renderer. The core uses egui and an internal Unicode line-break helper; hosts own
 renderer initialization, texture lifetimes and explicit shutdown. The Gallery
 includes a dedicated final-framebuffer conformance fixture.
 
