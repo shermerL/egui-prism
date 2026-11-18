@@ -262,7 +262,8 @@ fn layout_text(ui: &Ui, text: &str, width: f32, title: bool, color: Color32) -> 
     job.wrap.max_width = width.max(min_content);
     let mut galley = ui.painter().layout_job(job.clone());
     let lines = galley.rows.len();
-    if lines > 1 {
+    // Chromium balances blocks of up to six lines in the pinned reference.
+    if (2..=6).contains(&lines) {
         // Find the narrowest wrap width retaining the initial line count. This
         // balances short copy without quadratic partitioning or truncating long copy.
         let mut low = min_content;

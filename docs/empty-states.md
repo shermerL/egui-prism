@@ -63,16 +63,24 @@ Reference: unmodified `new-york-v4/ui/empty.tsx` at shadcn
   An uncustomized white tint inherits page foreground.
 - Copy collapses CSS ASCII whitespace, retains the full accessible text, never
   elides, and preserves space-delimited unbreakable runs including NBSP. A
-  bounded width search balances wrapping while preserving the initial line
-  count. Header text can overflow a very narrow column; allocation remains
-  bounded and the parent's clip is authoritative. Glyph bounds preserve accents.
+  bounded width search balances two through six lines while preserving the initial
+  line count. Longer paragraphs keep their ordinary wrap width. Header text can
+  overflow a narrow column. The parent clips the drawing. Glyph bounds preserve accents.
 
-The balance algorithm is deterministic but is **not verified CSS `text-balance`
-parity**. Browser line breaking around hyphens, punctuation, CJK and other scripts,
-UA balancing limits and font shaping may differ. Longer localized copy remains
-available without truncation, but actual wrapping, font coverage and script
-behavior need matched browser/native observation. These remain in the existing
-Quest, not an accepted substitute for its parity requirement.
+The long French description on the pinned `/?empty` page serves as a regression
+sample. At a 1280px viewport, 100% zoom and 216px outer width, headless Chrome
+157 renders ten lines using Geist. The native test checks the words on each
+line using the bundled Geist font. Previously the fifth native line ended at
+“projet”. It now ends at “ou”, as in the reference.
+
+To reproduce, open `/?empty`, enable **Long localized copy**, and set the width
+of the section containing the Empty examples to 216 CSS pixels. Leave the
+viewport at 1280px. Measure the original description text with DOM Ranges.
+
+At 244px outer width the reference takes seven lines and native takes
+eight. At 275px both take six lines but break at different words. These samples
+remain open in the [Empty acceptance Quest](/quest/m2/native-components/empty-acceptance.md),
+along with punctuation, CJK font coverage and line breaking.
 
 ## Drawing, input and semantics
 

@@ -6,12 +6,14 @@ A horizontal or vertical separator follows pinned geometry and distinguishes dec
 
 ## Plan
 
-Follow [the fixed parity contract](/docs/shadcn-parity.md) and `registry/new-york-v4/ui/separator.tsx` at shadcn commit `8a3536678a528cc012b9e62484290e79d0be410f`. Start from theme border tokens and existing layout primitives; preserve the accepted egui-only core and host-owned input, frame and GPU responsibilities.
+The component, public example, focused contract tests, documentation, native Gallery page and pinned reference fixture are implemented. The public contract is in [Separators](/docs/separators.md). Preserve the egui-only core and the existing host-owned input, frame and GPU responsibilities.
 
-- Expose orientation and semantics only as supported by the reference. Derive available extent from the caller layout; do not add global spacing policy.
-- Preserve clipping, scale and accessibility semantics. Include a small compiling example with both orientations and focused geometry/metadata checks.
+Finish the targeted rendered comparison with shadcn commit `8a3536678a528cc012b9e62484290e79d0be410f` at matching theme and scale. Check both directions, decorative and semantic uses, clipping and parent opacity. Keep automated checks, actual native/browser observations and untested platforms separate; reuse unaffected component evidence.
 
-Complete implementation, the compiling public API example, component documentation, native Gallery case and meaningful regressions in one PR. Compare a mature candidate with the actual pinned reference at matching scale and theme. Report controlled tests, native observations and untested platforms separately. Review only the changed component and affected shared paths; reuse unchanged evidence. No host/vendor architecture change, new dependency identity or publication is included.
+## Waiting
+
+- Project coordinator: review the exact implementation head and reconcile independent and GitHub code/security review results. Native/reference visual comparison still needs an environment where both fixtures are reachable; this implementation environment has no native display and its remote browser cannot reach the local reference server.
+- Maintainer: PR #32 is an evaluation draft with an explicit merge prohibition. Keep it draft and do not merge or enable auto-merge without a later explicit decision; review success does not lift the prohibition.
 
 ## Related
 

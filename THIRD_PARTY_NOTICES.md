@@ -94,6 +94,19 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
+## AccessKit native adapters
+
+The Gallery uses the official AccessKit winit and platform adapters through
+`egui-winit`. AccessKit is licensed under Apache-2.0.
+
+Copyright 2022 The AccessKit Authors. All rights reserved.
+
+Source: https://github.com/AccessKit/accesskit
+
+The Apache-2.0 license text is retained in
+[LICENSE-APACHE](vendor/egui/LICENSE-APACHE). Dependency versions and platform
+packages are recorded in `Cargo.lock`; no AccessKit source is modified or vendored.
+
 ## Bundled default fonts
 
 The Gallery enables egui default fonts through epaint_default_fonts 0.37.0.
@@ -249,6 +262,10 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## shadcn/ui reference and adapted component specifications
+
+The unmodified reference components include Separator at
+`apps/v4/registry/new-york-v4/ui/separator.tsx`; source hashes are in
+`reference/manifest.json`.
 
 Source: https://github.com/shadcn-ui/ui/tree/8a3536678a528cc012b9e62484290e79d0be410f
 
@@ -410,8 +427,20 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-## Lucide Check and X icons
+## Alert line-break helpers
 
-The Checkbox check path and Dialog close paths follow the Lucide Check and X
-icons bundled by the pinned reference fixture. The complete Lucide and underlying Feather notices are
+The core uses `unicode-linebreak`0.1.5 (Apache-2.0). Its complete license is
+retained in [licenses/LICENSE.unicode-linebreak](licenses/LICENSE.unicode-linebreak).
+
+Printable ASCII compatibility rules in `crates/egui-prism/src/alert/text.rs`
+are adapted from Chromium's BSD-licensed `LineBreakData::FillAscii`, at source commit
+`765d6c2dd59fd38635636aa8f4b19cf299268460`.
+Copyright 2016 The Chromium Authors. The complete BSD-style license and
+copyright notice are retained in [licenses/LICENSE.chromium](licenses/LICENSE.chromium).
+The adapted rules are private Rust code, not an egui/epaint or renderer patch.
+
+## Lucide Check, X and LoaderCircle icons
+
+The Checkbox check path, Dialog close paths and Spinner arc follow the Lucide
+Check, X and LoaderCircle icons bundled by the pinned reference fixture. The complete Lucide and underlying Feather notices are
 retained in [reference/LICENSE.lucide](reference/LICENSE.lucide).

@@ -514,7 +514,7 @@ pub(crate) fn image_shapes(ui: &Ui, image: &Image<'_>, rect: egui::Rect) -> Vec<
                 assert_eq!(
                     options.corner_radius,
                     egui::CornerRadius::ZERO,
-                    "rotated button images cannot also have rounded corners"
+                    "rotated images cannot also have rounded corners"
                 );
                 let mut mesh = egui::Mesh::with_texture(texture.id);
                 mesh.add_rect_with_uv(rect, options.uv, options.tint);

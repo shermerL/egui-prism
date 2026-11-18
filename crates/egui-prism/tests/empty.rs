@@ -513,3 +513,40 @@ fn repeated_words_in_min_content_columns_never_create_whitespace_only_rows() {
         .drop_without_applying_deltas();
     }
 }
+
+#[test]
+fn long_gallery_description_keeps_the_reference_rows_at_216_points() {
+    let copy = "Vos projets enregistrés apparaîtront ici. Créez votre premier projet ou importez un projet existant pour commencer à travailler ensemble.";
+    let expected = [
+        "Vos projets",
+        "enregistrés",
+        "apparaîtront ici.",
+        "Créez votre",
+        "premier projet ou",
+        "importez un projet",
+        "existant pour",
+        "commencer à",
+        "travailler",
+        "ensemble.",
+    ];
+    context()
+        .run_ui(input(1280.), |ui| {
+            let theme = Theme::light();
+            theme.apply(ui.style_mut());
+            ui.set_max_width(216.);
+            let out = Empty::new(&theme, "projects")
+                .description(copy)
+                .show(ui, |_| {});
+            let group = out.drawing.unwrap();
+            let text = texts(&group)[0];
+            assert_eq!(text.galley.text(), copy);
+            let rows: Vec<_> = text
+                .galley
+                .rows
+                .iter()
+                .map(|row| row.text().trim_end_matches(' ').to_owned())
+                .collect();
+            assert_eq!(rows, expected);
+        })
+        .drop_without_applying_deltas();
+}
