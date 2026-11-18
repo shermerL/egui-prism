@@ -11,8 +11,10 @@
 | Node.js | 24.x; reference packages locked separately | `flake.nix`, `reference/package-lock.json` |
 
 Rustup selects the project toolchain without changing the global default.
-Cargo.lock fixes native dependency resolution. The core depends only on egui
-without default features. The separate adapter uses the official egui-wgpu
+Cargo.lock fixes native dependency resolution. The core uses egui without
+default features and `unicode-linebreak`0.1.5 for internal Alert text layout.
+The latter is Apache-2.0, has no transitive dependencies and supplies Unicode15
+break opportunities, not a complete CSS text engine. The separate adapter uses the official egui-wgpu
 renderer; the Gallery adds default fonts and the official winit/egui-winit
 window, clipboard, IME, link, Wayland and X11 integration.
 
@@ -26,6 +28,39 @@ The Nix shell exposes Apple Silicon macOS, x86_64 Linux and ARM64 Linux.
 Portable Cargo checks run separately in the three-OS CI matrix, including Windows
 without Nix. A CI binary is not a signed installer or proof of GUI/IME acceptance.
 Linux runtime libraries and an appropriate Vulkan driver are required.
+
+## CI scheduling and dependency cache
+
+PR creation, reopening and head updates run the full Check workflow, including
+Draft PRs. Changing a PR to Ready does not repeat checks for an unchanged head.
+Runs for the same PR share a concurrency group, so a newer run cancels the older
+one. Different PRs and every main push have separate groups; main checks are not
+superseded by later pushes. A rerun shares its original group and can supersede
+another run of that PR, so rerun only the current candidate.
+
+The native jobs use pinned `macos-26` ARM64, Windows 2022 and Ubuntu 24.04 labels,
+with the same locked checks and Linux software-GPU tests. Older macOS versions
+are outside this CI validation scope; no macOS 15/14 or Intel fallback is kept.
+This is a CI baseline, not a release minimum-version or GUI/AT acceptance claim.
+No documentation-only exemption is applied. Reducing duplicate requests or moving
+to the newer macOS image does not reserve hosted capacity: a job that never
+acquires a runner is not a test pass.
+
+A SHA-pinned official actions/cache step stores only Cargo registry indexes,
+crate archives, unpacked sources and Git object databases. Keys separate OS and
+architecture and include all checked-out Cargo lockfiles and the Rust toolchain
+file. A source-only prefix restore can reuse downloads across lockfile changes;
+Cargo still resolves and validates the locked dependencies. Every build, lint
+and test runs on cache hits and misses. Compiler output, executables, Cargo
+configuration and credentials are not cached. Cache contents are not confidential
+and must contain only public dependencies. Existing GitHub branch/PR cache scopes
+apply; this does not grant PR jobs write repository permissions.
+
+The [initial cold-cache run](https://github.com/shermerL/egui-prism/actions/runs/43468577898)
+at `f0b62266f53b7a59c4f1335f614ae9f83530149c` passed policy and all three native
+jobs, including image `macos-26-arm64` version `20261102.0473.1`. Each native job
+saved its download cache. This establishes one successful hosted execution, not
+permanent runner availability or a measured cache speedup.
 
 ## Quest provenance
 

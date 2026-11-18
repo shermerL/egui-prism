@@ -122,13 +122,12 @@ impl CardUi<'_> {
     /// Add the pinned two-row header, with 16-point title and optional 14-point description.
     ///
     /// The explicit second grid row leaves an eight-point gap even without a
-    /// description. Empty strings have no text height. Plain text uses egui's
-    /// Unicode wrapping, not browser CSS line breaking.
+    /// description. Empty strings have no text height. Both rows share a grid
+    /// track wide enough for either row's unbreakable text runs.
     pub fn header(&mut self, title: &str, description: Option<&str>) {
         let start = self.ui.available_rect_before_wrap().min;
-        let width = self.width;
         let mut y = start.y;
-        for (text, style, size, line_height, color) in [
+        let rows = [
             (
                 title,
                 TextStyle::Heading,
@@ -143,7 +142,8 @@ impl CardUi<'_> {
                 20.0,
                 self.theme.colors.muted.foreground,
             ),
-        ] {
+        ]
+        .map(|(text, style, size, line_height, color)| {
             let text = text
                 .split([' ', '\t', '\n', '\r', '\u{000c}'])
                 .filter(|part| !part.is_empty())
@@ -162,12 +162,20 @@ impl CardUi<'_> {
                     },
                 }],
                 wrap: egui::text::TextWrapping {
-                    max_width: width,
+                    max_width: f32::INFINITY,
                     ..Default::default()
                 },
                 break_on_newline: false,
+                round_output_to_gui: false,
                 ..Default::default()
             });
+            (text, galley, style, color)
+        });
+        let width = rows.iter().fold(self.width, |width, (_, galley, _, _)| {
+            width.max(crate::normal_text::min_content(self.ui, galley))
+        });
+        for (text, natural, style, color) in rows {
+            let (galley, _) = crate::normal_text::wrap(self.ui, natural, width);
             let height = if text.is_empty() {
                 0.0
             } else {

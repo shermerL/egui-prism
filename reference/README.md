@@ -65,8 +65,28 @@ footer with caller-owned text/actions, long and empty content, 320px width,
 light/dark, 100%/150% scale and tinted group opacity. Its ordinary HTML editor
 is an interaction fixture, not an appearance match for the Gallery egui editor.
 
+The `/?alerts` fixture uses the unchanged pinned Alert source for default and
+destructive notices, optional icons/titles/descriptions, 448/160/320-pixel widths,
+clipping and 60% parent opacity. Its descriptions are direct plain text children.
+Light/dark and 100%/150% controls match the native Alerts page.
+
 The `/?tooltips` fixture compares explicitly identified pointer and keyboard
 triggers, immediate and delayed opening, hoverable plain-text content, disabled
 triggers, viewport collisions and long bounded text. It uses the unmodified
 pinned Tooltip source and Radix Tooltip 1.2.8; the shadcn provider defaults to
 zero delay and the content defaults to zero side offset.
+
+The `/?alert-wrapping` measurement fixture shares its seven-case corpus with
+the controlled Rust `alert_wrapping` test. It measures original text-node Ranges
+after Geist loads without changing pinned Alert source. Use actual browser zoom
+and retain source SHA/environment with the JSON. It is measurement tooling, not
+a passing parity oracle; see [scope and recorded limitations](../docs/alert-wrapping-evidence.md).
+
+The `/?separators` fixture uses the unmodified pinned Separator and locked Radix
+1.1.7 primitive. It matches the native Separators page: both directions and
+semantic modes, 320px width, 48px height, 160px clipping and tinted parent opacity,
+with light/dark themes and 100%/150% scale.
+
+Open `/?spinners` for the unmodified pinned Spinner with caller-owned visibility,
+reduced motion, inline/button-adjacent status and translucent-parent samples. Use
+real 100%/150% browser zoom. A successful fixture build is not visual acceptance.

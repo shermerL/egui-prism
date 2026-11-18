@@ -6,6 +6,12 @@ Caller-owned content can be composed in a Card with the pinned header, descripti
 
 ## Plan
 
+The 120-point long-word defect and shared title/description minimum track have
+controlled regressions. Header fitting reuses the internal normal-whitespace
+line breaker, with no new dependency or public API. Preserve the Card regressions
+and affected Alert tests when reviewing this shared helper; broader native and
+matched-font reference acceptance remains separate.
+
 Follow [the fixed parity contract](/docs/shadcn-parity.md) and `registry/new-york-v4/ui/card.tsx` at shadcn commit `8a3536678a528cc012b9e62484290e79d0be410f`. Start from existing theme tokens and ordinary egui child-layout ownership; preserve the accepted egui-only core and host-owned input, frame and GPU responsibilities.
 
 - Match pinned padding, border, radius, spacing and typography. Keep content layout and lifetime explicit at the caller; do not introduce a retained layout tree.
@@ -16,7 +22,7 @@ Complete implementation, the compiling public API example, component documentati
 
 ## Waiting
 
-- Implementation: reconcile header wrapping with pinned CSS, including long unbreakable words and non-Latin line-break opportunities. Keep the current egui wrapping limitation explicit until controlled reference comparison and regressions establish the intended behavior.
+- Implementation/validation: retain the passing 120pt pinned-reference long-word, shared-track and NBSP regressions; compare remaining language-specific and matched-font break opportunities under the targeted acceptance Quest. Do not claim full Unicode/browser parity from these samples.
 - Native validation: compare the Cards Gallery and actual pinned reference at matching width, font, scale and theme, including the two-layer shadow and nested controls. The current headless environment cannot establish real native or assistive-technology observations.
 - Maintainer: authorize any GitHub automated code/security review separately. Keep the PR draft and do not merge without a later explicit decision.
 

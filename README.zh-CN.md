@@ -26,7 +26,7 @@ nix develop --command cargo run --locked -p egui-prism-gallery
 
 原生构建与完整检查步骤见 [CONTRIBUTING.md](CONTRIBUTING.md)。[Gallery 验收说明](docs/gallery.md) 列出了交互、布局、缩放和截图场景。
 
-核心库依赖 egui；Gallery 管理自己的 winit 窗口和显式 wgpu 渲染循环，由 egui-winit 对接操作系统输入、输入法和剪贴板。应用也可以在自己的宿主程序中使用组件库。
+核心库依赖 egui；Gallery 管理自己的 winit 窗口和显式 wgpu 渲染循环，由 egui-winit 对接操作系统输入、输入法、剪贴板和原生 AccessKit 辅助功能桥。应用也可以在自己的宿主程序中使用组件库。事件契约与各平台独立验收要求见 [辅助功能检查](docs/gallery.md#native-accessibility)。
 
 `install_fonts` 安装的内置 Geist 字体只覆盖有限字符。回退字体的数据、许可和字体族链由宿主负责；未启用 egui 的 `default_fonts` 特性时，`FontDefinitions::default()` 不包含字体。详见[主题设置](docs/themes.md)。
 
@@ -53,4 +53,4 @@ nix develop --command cargo run --locked -p egui-prism-gallery
 
 可选的[有序输入集成](docs/input-compatibility.md)要求在应用根目录的 Cargo 配置中声明补丁。[源码清单](vendor/README.md)和独立消费者检查用于保证官方平台集成与渲染器使用统一的类型。
 
-可选的 [`egui-prism-wgpu`](docs/compositing.md) 宿主适配包配合官方 wgpu 渲染器，为组件提供独立的整体透明度合成。核心库仍只依赖 egui；宿主负责渲染器初始化、纹理生命周期和显式关闭。Gallery 包含专门的最终帧缓冲一致性验收场景。
+可选的 [`egui-prism-wgpu`](docs/compositing.md) 宿主适配包配合官方 wgpu 渲染器，为组件提供独立的整体透明度合成。核心库依赖 egui 和内部 Unicode 断行辅助库；宿主负责渲染器初始化、纹理生命周期和显式关闭。Gallery 包含专门的最终帧缓冲一致性验收场景。

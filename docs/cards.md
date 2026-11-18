@@ -45,9 +45,13 @@ clickable or draggable, and does not replace any child response.
 The API covers the Quest's default header, description, content and footer.
 It does not expose the upstream optional CardAction grid slot, header/footer
 border utility classes or arbitrary CSS class overrides. Compose application
-actions in the content or footer. Header wrapping uses egui's text layout, so
-browser Unicode line-breaking and very long unbreakable-word behavior are not
-claimed to be identical.
+actions in the content or footer. The title and description share a grid track
+at least as wide as either row's unbreakable runs. Normal-whitespace wrapping
+reuses the private Unicode/ASCII break rules used by Alert, preserving long words
+and NBSP runs without emergency character splitting. Hanging spaces do not take
+up visible line width; text can overflow the Card under the parent's clip.
+No dependency or public text-layout API is added. This does not establish every
+browser's shaping or language-specific break behavior.
 
 ## Drawing and input ownership
 
@@ -91,8 +95,18 @@ source hashes are checks, not visual observations.
 No matched native/browser screenshot comparison, real native event delivery,
 OS DPI observation or screen-reader acceptance has been performed for this
 component. The shadow uses egui's tessellation/blur, not a browser blur kernel;
-matching visual appearance still needs observation. Header CSS line breaking,
-including long words and non-Latin text, remains an explicit parity gap. Keep
+matching visual appearance still needs observation. The 120-point long-word
+regression now keeps `Antidisestablishmentarianism` on one line; both header rows
+also retain a shared minimum track when either contains the widest word or NBSP
+run. The actual unmodified pinned `/?cards` fixture was measured in headless Chrome
+157, Geist and 1× at a 1280px viewport. At 120px outer width, the long-title,
+long-description and NBSP samples each keep both rows on one line and share a
+track (respectively 228.0625, 188.3125 and 141.40625 CSS pixels). The native
+regressions check the same words, shared row layout and unchanged outer width.
+To reproduce, set the first `[data-slot=card]` width to 120px and replace its
+original title/description text with the three pairs in `tests/card_unbreakable.rs`.
+No reference component classes or source are modified. Broader matched-font
+Unicode and native-window observations remain unverified. Keep
 [the Card Quest](../quest/m2/native-components/card.md) open until these applicable
 acceptance conditions have been reconciled. Existing platform evidence for
 other controls does not establish Card acceptance.
