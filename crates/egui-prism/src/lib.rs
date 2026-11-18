@@ -17,6 +17,7 @@
 /// The egui version used by this library.
 pub use egui;
 
+mod normal_text;
 mod shadow;
 mod transition;
 
@@ -25,6 +26,7 @@ pub mod theme;
 pub mod alert;
 pub mod badge;
 pub mod button;
+pub mod card;
 pub mod text_input;
 
 pub mod checkbox;

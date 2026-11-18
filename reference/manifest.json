@@ -27,6 +27,7 @@
     "reference/src/ui/alert.tsx": "d03dcae5cdb63c381c1144ca9a0c49ba0e46466967d7deb94662034042acb034",
     "reference/src/ui/tooltip.tsx": "611e4305879b2773eafe76bf3c5caa69d8e47367fd97887a71634a27828f4433",
     "reference/src/ui/separator.tsx": "ad7d5403fe337160e41dbf04147896e448ae3a747b8d06660d627d74d60021bc",
-    "reference/src/ui/spinner.tsx": "5d040fc49cb54c0296070644053b5a8840ddbfca89a430546bf308df3fffad65"
+    "reference/src/ui/spinner.tsx": "5d040fc49cb54c0296070644053b5a8840ddbfca89a430546bf308df3fffad65",
+    "reference/src/ui/card.tsx": "ef8305b12c3112dab42a4708b41b1ebcc042fa5ab4c20f039da8d45b09ed5059"
   }
 }

@@ -7,10 +7,7 @@ pub(crate) fn outer(
     rect: egui::Rect,
     radius: impl Into<egui::CornerRadius>,
 ) -> egui::Shape {
-    use egui::epaint::{Mesh, Primitive, RoundedRect, Vertex, tessellator::path};
-
     let radius = radius.into();
-    let mut shadow = Mesh::default();
     let shape: egui::Shape = egui::epaint::Shadow {
         offset: [0, 1],
         blur: 2,
@@ -19,8 +16,54 @@ pub(crate) fn outer(
     }
     .as_shape(rect, radius)
     .into();
+    cut_out(ctx, rect, radius, vec![shape])
+}
+
+/// Tailwind shadow-sm: 0 1px 3px / 10%, then 0 1px 2px -1px / 10%.
+pub(crate) fn small(
+    ctx: &egui::Context,
+    rect: egui::Rect,
+    radius: egui::CornerRadius,
+) -> egui::Shape {
+    let (inset, inner_radius) = egui::epaint::RoundedRect::new(rect, radius)
+        .shrink(1.0)
+        .into_parts();
+    let shadow = |rect, radius, blur| {
+        egui::Shape::from(
+            egui::epaint::Shadow {
+                offset: [0, 1],
+                blur,
+                spread: 0,
+                color: egui::Color32::from_black_alpha(26),
+            }
+            .as_shape(rect, radius),
+        )
+    };
+    // CSS lists its frontmost shadow first; egui paints back to front.
+    cut_out(
+        ctx,
+        rect,
+        radius,
+        vec![
+            shadow(inset, inner_radius, 2),
+            shadow(rect, radius.into(), 3),
+        ],
+    )
+}
+
+fn cut_out(
+    ctx: &egui::Context,
+    rect: egui::Rect,
+    radius: egui::CornerRadius,
+    shapes: Vec<egui::Shape>,
+) -> egui::Shape {
+    use egui::epaint::{Mesh, Primitive, RoundedRect, Vertex, tessellator::path};
+    let mut shadow = Mesh::default();
     for primitive in ctx.tessellate(
-        vec![egui::epaint::ClippedShape::new(rect.expand(5.0), shape)],
+        shapes
+            .into_iter()
+            .map(|shape| egui::epaint::ClippedShape::new(rect.expand(5.0), shape))
+            .collect(),
         ctx.pixels_per_point(),
     ) {
         let Primitive::Mesh(part) = primitive.primitive else {

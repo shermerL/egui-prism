@@ -3,48 +3,15 @@ use std::sync::Arc;
 use egui::{Galley, Ui};
 
 /// Lay out normal-whitespace description text without emergency word splitting.
-pub(super) fn description(ui: &Ui, natural: Arc<Galley>, available: f32) -> (Arc<Galley>, f32) {
+pub(crate) fn wrap(ui: &Ui, natural: Arc<Galley>, available: f32) -> (Arc<Galley>, f32) {
     let text = &natural.job.text;
     if text.is_empty() || natural.size().x <= available {
         return (natural, available);
     }
-    let unicode: Vec<_> = unicode_linebreak::linebreaks(text)
-        .map(|(end, _)| end)
-        .collect();
-    let mut ends = Vec::new();
-    let mut previous: Option<char> = None;
-    let mut before_previous = None;
-    for (offset, current) in text.char_indices() {
-        if let Some(before) = previous {
-            let allowed = if before.is_ascii_graphic() && current.is_ascii_graphic() {
-                ascii_break(before_previous, before, current)
-            } else {
-                unicode.binary_search(&offset).is_ok()
-            };
-            if allowed {
-                ends.push(offset);
-            }
-        }
-        before_previous = previous;
-        previous = Some(current);
-    }
-    ends.push(text.len());
+    let ends = break_ends(text);
     let format = &natural.job.sections[0].format;
-    let shape = |start: usize, end: usize| {
-        // Copy just this candidate, not the complete source job on every probe.
-        // Hanging spaces are restored as zero-advance glyphs after fitting.
-        let candidate = text[start..end].trim_end_matches(' ');
-        let mut job = egui::text::LayoutJob::single_section(candidate.to_owned(), format.clone());
-        job.break_on_newline = false;
-        job.round_output_to_gui = natural.job.round_output_to_gui;
-        ui.painter().layout_job(job)
-    };
-    let mut start = 0;
-    let mut minimum = 0.0_f32;
-    for &end in &ends {
-        minimum = minimum.max(shape(start, end).size().x);
-        start = end;
-    }
+    let shape = |start, end| shape_line(ui, &natural, start, end);
+    let minimum = min_content_at(ui, &natural, &ends);
     let width = available.max(minimum);
     if natural.size().x <= width {
         return (natural, width);
@@ -64,7 +31,7 @@ pub(super) fn description(ui: &Ui, natural: Arc<Galley>, available: f32) -> (Arc
         .copied();
     let line_height = format
         .line_height
-        .expect("Alert sets an explicit line height");
+        .expect("normal text uses an explicit line height");
     let mut widest = 0.0_f32;
     let mut first = 0;
     while first < ends.len() {
@@ -132,6 +99,58 @@ pub(super) fn description(ui: &Ui, natural: Arc<Galley>, available: f32) -> (Arc
         egui::vec2(widest, galley.rows.len() as f32 * line_height),
     );
     (Arc::new(galley), width)
+}
+
+/// CSS min-content width under the same legal-break rules used for wrapping.
+pub(crate) fn min_content(ui: &Ui, natural: &Galley) -> f32 {
+    min_content_at(ui, natural, &break_ends(&natural.job.text))
+}
+
+fn min_content_at(ui: &Ui, natural: &Galley, ends: &[usize]) -> f32 {
+    let mut start = 0;
+    let mut minimum = 0.0_f32;
+    for &end in ends {
+        minimum = minimum.max(shape_line(ui, natural, start, end).size().x);
+        start = end;
+    }
+    minimum
+}
+
+fn shape_line(ui: &Ui, natural: &Galley, start: usize, end: usize) -> Arc<Galley> {
+    let text = &natural.job.text;
+    let format = &natural.job.sections[0].format;
+    // Copy just this candidate, not the complete source job on every probe.
+    // Hanging spaces are restored as zero-advance glyphs after fitting.
+    let candidate = text[start..end].trim_end_matches(' ');
+    let mut job = egui::text::LayoutJob::single_section(candidate.to_owned(), format.clone());
+    job.break_on_newline = false;
+    job.round_output_to_gui = natural.job.round_output_to_gui;
+    ui.painter().layout_job(job)
+}
+
+fn break_ends(text: &str) -> Vec<usize> {
+    let unicode: Vec<_> = unicode_linebreak::linebreaks(text)
+        .map(|(end, _)| end)
+        .collect();
+    let mut ends = Vec::new();
+    let mut previous: Option<char> = None;
+    let mut before_previous = None;
+    for (offset, current) in text.char_indices() {
+        if let Some(before) = previous {
+            let allowed = if before.is_ascii_graphic() && current.is_ascii_graphic() {
+                ascii_break(before_previous, before, current)
+            } else {
+                unicode.binary_search(&offset).is_ok()
+            };
+            if allowed {
+                ends.push(offset);
+            }
+        }
+        before_previous = previous;
+        previous = Some(current);
+    }
+    ends.push(text.len());
+    ends
 }
 
 // Printable ASCII compatibility follows Chromium's BSD-licensed

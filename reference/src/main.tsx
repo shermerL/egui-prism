@@ -1,3 +1,4 @@
+import { CardCases } from "./card-cases";
 import { AlertWrapping } from "./alert-wrapping";
 import { AlertCases } from "./alert-cases";
 import { SeparatorCases } from "./separator-cases";
@@ -42,4 +43,4 @@ function App() {
  </div></main>;
 }
 const query = new URLSearchParams(location.search);
-createRoot(document.getElementById("root")!).render(query.has("alert-wrapping") ? <AlertWrapping/> : query.has("alerts") ? <AlertCases/> : query.has("separators") ? <SeparatorCases/> : query.has("spinners") ? <SpinnerCases/> : query.has("badges") ? <BadgeCases/> : query.has("tooltips") ? <TooltipCases/> : query.has("dialogs") ? <DialogCases/> : query.has("inputs") ? <InputCases/> : query.has("checkboxes") ? <CheckboxFixture/> : query.has("selects") ? <SelectCases/> : query.has("sliders") ? <SliderCases/> : query.has("compositing") ? <Compositing/> : <App/>);
+createRoot(document.getElementById("root")!).render(query.has("cards") ? <CardCases/> : query.has("alert-wrapping") ? <AlertWrapping/> : query.has("alerts") ? <AlertCases/> : query.has("separators") ? <SeparatorCases/> : query.has("spinners") ? <SpinnerCases/> : query.has("badges") ? <BadgeCases/> : query.has("tooltips") ? <TooltipCases/> : query.has("dialogs") ? <DialogCases/> : query.has("inputs") ? <InputCases/> : query.has("checkboxes") ? <CheckboxFixture/> : query.has("selects") ? <SelectCases/> : query.has("sliders") ? <SliderCases/> : query.has("compositing") ? <Compositing/> : <App/>);

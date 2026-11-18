@@ -106,6 +106,7 @@ resource lifetimes. Their migration sections replace the earlier egui-style APIs
 | Alert | [Inline alerts](alerts.md) | Bounded caller-owned notices with optional title, description and icon, assertive accessibility metadata and explicit drawing. Native/reference visual and assistive-technology observations remain pending. |
 | Separator | [Separators](separators.md) | Noninteractive, caller-bounded geometry with decorative or oriented semantic output. Native visual and assistive-technology acceptance remain pending. |
 | Badge | [Badges](badges.md) | Static caller-owned text with six variants, natural width, accessible text and explicit drawing. Platform observations are recorded separately from contract tests. |
+| Card | [Cards](cards.md) | Caller-owned sections, pinned geometry and two-layer shadow, ordinary child input and explicit group drawing. Header line-breaking and native/reference observations remain open. |
 
 | Tooltip | [Tooltips](tooltips.md) | Explicit trigger responses, host-supplied hint scope and drawing-only hints. Natural text width matches the reference while drawing and Group allocation are clipped to the viewport; browser/native observations and controlled tests are recorded separately. |
 
