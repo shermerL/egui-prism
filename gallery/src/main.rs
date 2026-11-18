@@ -9,6 +9,7 @@ mod cards;
 mod checkboxes;
 mod compositing;
 mod dialogs;
+mod empty_states;
 mod input;
 mod interaction;
 mod selects;
@@ -28,6 +29,7 @@ enum Case {
     Theme,
     Buttons,
     Badges,
+    Empty,
     Cards,
 
     Alerts,
@@ -50,6 +52,7 @@ impl Case {
             Self::Theme => "Theme",
             Self::Buttons => "Buttons",
             Self::Badges => "Badges",
+            Self::Empty => "Empty states",
             Self::Cards => "Cards",
 
             Self::Alerts => "Alerts",
@@ -88,6 +91,7 @@ struct Gallery {
     selects: selects::SelectCase,
     tooltips: tooltips::TooltipCase,
     dialogs: dialogs::DialogCase,
+    empty: empty_states::EmptyCase,
 }
 
 impl Gallery {
@@ -122,6 +126,7 @@ impl Gallery {
             selects: selects::SelectCase::default(),
             tooltips: tooltips::TooltipCase::default(),
             dialogs: dialogs::DialogCase::default(),
+            empty: empty_states::EmptyCase::new(context),
         };
         gallery.apply_theme(context);
         Ok(gallery)
@@ -202,10 +207,12 @@ impl Gallery {
                 }
                 let response = if let Some(button) = &entry.button {
                     let response = button.handle(&event);
-                    if response.clicked()
-                        && let Control::Button(control) = control
-                    {
-                        self.buttons.activated(control);
+                    if response.clicked() {
+                        match control {
+                            Control::Button(control) => self.buttons.activated(control),
+                            Control::Empty(control) => self.empty.activated(control),
+                            _ => {}
+                        }
                     }
                     if response.clicked()
                         && let Control::Card(control) = control
@@ -401,6 +408,7 @@ impl Gallery {
                             Case::Compositing,
                             Case::Buttons,
                             Case::Badges,
+                            Case::Empty,
                             Case::Cards,
 
                             Case::Alerts,
@@ -475,6 +483,7 @@ impl Gallery {
                 }
                 Case::Buttons => self.buttons.show(ui, &theme, frame),
                 Case::Badges => badges::show(ui, &theme, frame),
+                Case::Empty => self.empty.show(ui, &theme, frame),
                 Case::Cards => self.cards.show(ui, &theme, frame),
 
                 Case::Alerts => self.alerts.show(ui, &theme, frame),

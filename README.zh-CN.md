@@ -37,6 +37,7 @@ nix develop --command cargo run --locked -p egui-prism-gallery
 组件与集成文档目前使用英文：
 
 - [语义化主题](docs/themes.md)：主题 API、颜色配对、间距职责和验证范围。
+- [空状态](docs/empty-states.md)：标题、说明、图标和由调用方管理的操作。
 - [徽章](docs/badges.md)：紧凑静态文本与固定参考的六种外观。
 - [卡片](docs/cards.md)：调用方拥有内容的标题、描述、主体与页脚组合。
 - [按钮](docs/buttons.md)：用途、尺寸、图标和由调用方管理的操作。
