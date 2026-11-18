@@ -1,5 +1,6 @@
 //! Root-window native host. OS input/IME/clipboard stay in egui-winit.
 use egui_prism::egui;
+use egui_winit::accesskit_winit;
 use std::{
     sync::{Arc, Mutex},
     time::Instant,
@@ -15,6 +16,12 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 enum Wake {
     Repaint(Instant),
     GpuError,
+    AccessKit(accesskit_winit::Event),
+}
+impl From<accesskit_winit::Event> for Wake {
+    fn from(event: accesskit_winit::Event) -> Self {
+        Self::AccessKit(event)
+    }
 }
 pub fn run() -> Result<()> {
     let event_loop = EventLoop::<Wake>::with_user_event().build()?;
@@ -63,6 +70,13 @@ impl ApplicationHandler<Wake> for App {
         match event {
             Wake::Repaint(when) => {
                 self.deadline = Some(self.deadline.map_or(when, |old| old.min(when)));
+            }
+            Wake::AccessKit(event) => {
+                if let Some(runtime) = &mut self.runtime
+                    && forward_accesskit_event(runtime.window.id(), &mut runtime.input, event)
+                {
+                    runtime.window.request_redraw();
+                }
             }
             Wake::GpuError => {
                 if let Some(runtime) = &mut self.runtime {
@@ -143,6 +157,7 @@ impl Runtime {
         let window = Arc::new(
             event_loop.create_window(
                 Window::default_attributes()
+                    .with_visible(false)
                     .with_title("egui-prism gallery")
                     .with_inner_size(winit::dpi::LogicalSize::new(960.0, 900.0)),
             )?,
@@ -200,11 +215,11 @@ impl Runtime {
             .ok_or("gamma-color surface format unavailable")?;
         surface.configure(&device, &config);
         let context = egui::Context::default();
-        let wake = proxy;
+        let wake = proxy.clone();
         context.set_request_repaint_callback(move |info| {
             let _ = wake.send_event(Wake::Repaint(Instant::now() + info.delay));
         });
-        let input = egui_winit::State::new(
+        let mut input = egui_winit::State::new(
             context.clone(),
             egui::ViewportId::ROOT,
             event_loop,
@@ -212,6 +227,7 @@ impl Runtime {
             event_loop.system_theme(),
             Some(device.limits().max_texture_dimension_2d as usize),
         );
+        input.init_accesskit(event_loop, &window, proxy);
         let gallery = super::Gallery::new(&context, &device)?;
         let renderer = egui_wgpu::Renderer::new(
             &device,
@@ -221,6 +237,7 @@ impl Runtime {
                 ..Default::default()
             },
         );
+        window.set_visible(true);
         Ok(Self {
             gallery,
             input,
@@ -447,6 +464,32 @@ impl Runtime {
     }
 }
 
+// Returns whether the current window needs a redraw.
+fn forward_accesskit_event(
+    window_id: WindowId,
+    input: &mut egui_winit::State,
+    event: accesskit_winit::Event,
+) -> bool {
+    // Adapter callbacks can outlive the window that queued them.
+    if event.window_id != window_id {
+        return false;
+    }
+    match event.window_event {
+        accesskit_winit::WindowEvent::InitialTreeRequested => {
+            input.egui_ctx().enable_accesskit();
+            true
+        }
+        accesskit_winit::WindowEvent::ActionRequested(request) => {
+            input.on_accesskit_action_request(request);
+            true
+        }
+        accesskit_winit::WindowEvent::AccessibilityDeactivated => {
+            input.egui_ctx().disable_accesskit();
+            false
+        }
+    }
+}
+
 fn should_close(info: &egui::ViewportInfo, commands: &[egui::ViewportCommand]) -> bool {
     !commands
         .iter()
@@ -460,6 +503,143 @@ fn should_close(info: &egui::ViewportInfo, commands: &[egui::ViewportCommand]) -
 #[cfg(test)]
 mod tests {
     use super::*;
+    use egui::accesskit::{Action, ActionData, ActionRequest, NodeId, TreeId};
+    use winit::raw_window_handle::{DisplayHandle, HandleError, HasDisplayHandle};
+
+    struct NoDisplay;
+    impl HasDisplayHandle for NoDisplay {
+        fn display_handle(&self) -> std::result::Result<DisplayHandle<'_>, HandleError> {
+            Err(HandleError::Unavailable)
+        }
+    }
+
+    fn headless_input() -> egui_winit::State {
+        egui_winit::State::new(
+            egui::Context::default(),
+            egui::ViewportId::ROOT,
+            &NoDisplay,
+            Some(1.0),
+            None,
+            None,
+        )
+    }
+
+    fn accesskit_event(
+        window_id: WindowId,
+        window_event: accesskit_winit::WindowEvent,
+    ) -> accesskit_winit::Event {
+        accesskit_winit::Event {
+            window_id,
+            window_event,
+        }
+    }
+
+    fn emits_accesskit_tree(input: &mut egui_winit::State) -> bool {
+        // No Window is needed to drain the same queue that take_egui_input uses.
+        let raw = input.egui_input_mut().take();
+        let mut output = input.egui_ctx().run_ui(raw, |ui| {
+            ui.label("bridge probe");
+        });
+        let emitted = output.platform_output.accesskit_update.is_some();
+        output.textures_delta.clear();
+        emitted
+    }
+
+    #[test]
+    fn accesskit_activation_and_deactivation() {
+        let mut input = headless_input();
+        let id = WindowId::from(1_u64);
+        assert!(!emits_accesskit_tree(&mut input));
+
+        let wake: Wake =
+            accesskit_event(id, accesskit_winit::WindowEvent::InitialTreeRequested).into();
+        let Wake::AccessKit(event) = wake else {
+            panic!("AccessKit must use the host Wake channel");
+        };
+        assert!(forward_accesskit_event(id, &mut input, event));
+        assert!(emits_accesskit_tree(&mut input));
+
+        let event = accesskit_event(id, accesskit_winit::WindowEvent::AccessibilityDeactivated);
+        assert!(!forward_accesskit_event(id, &mut input, event));
+        assert!(!emits_accesskit_tree(&mut input));
+
+        let event = accesskit_event(id, accesskit_winit::WindowEvent::InitialTreeRequested);
+        assert!(forward_accesskit_event(id, &mut input, event));
+        assert!(emits_accesskit_tree(&mut input));
+    }
+
+    #[test]
+    fn accesskit_actions_preserve_order_and_payloads() {
+        let mut input = headless_input();
+        let id = WindowId::from(1_u64);
+        let event = accesskit_event(id, accesskit_winit::WindowEvent::InitialTreeRequested);
+        assert!(forward_accesskit_event(id, &mut input, event));
+        let requests = [
+            ActionRequest {
+                action: Action::SetValue,
+                target_tree: TreeId::ROOT,
+                target_node: NodeId(7),
+                data: Some(ActionData::NumericValue(0.25)),
+            },
+            ActionRequest {
+                action: Action::Increment,
+                target_tree: TreeId::ROOT,
+                target_node: NodeId(7),
+                data: None,
+            },
+            ActionRequest {
+                action: Action::Focus,
+                target_tree: TreeId::ROOT,
+                target_node: NodeId(8),
+                data: None,
+            },
+        ];
+        let mut expected = Vec::new();
+        for (index, request) in requests.into_iter().enumerate() {
+            let ordinary = egui::Event::Text(index.to_string());
+            input.egui_input_mut().events.push(ordinary.clone());
+            expected.push(ordinary);
+            let event = accesskit_event(
+                id,
+                accesskit_winit::WindowEvent::ActionRequested(request.clone()),
+            );
+            assert!(forward_accesskit_event(id, &mut input, event));
+            expected.push(egui::Event::AccessKitActionRequest(request));
+        }
+        assert_eq!(input.egui_input_mut().take().events, expected);
+        assert!(input.egui_input_mut().take().events.is_empty());
+    }
+
+    #[test]
+    fn accesskit_ignores_events_for_replaced_window() {
+        let mut input = headless_input();
+        let old = WindowId::from(1_u64);
+        let current = WindowId::from(2_u64);
+        let event = accesskit_event(old, accesskit_winit::WindowEvent::InitialTreeRequested);
+        assert!(!forward_accesskit_event(current, &mut input, event));
+        assert!(!emits_accesskit_tree(&mut input));
+
+        let event = accesskit_event(current, accesskit_winit::WindowEvent::InitialTreeRequested);
+        assert!(forward_accesskit_event(current, &mut input, event));
+        assert!(emits_accesskit_tree(&mut input));
+
+        for window_event in [
+            accesskit_winit::WindowEvent::ActionRequested(ActionRequest {
+                action: Action::Focus,
+                target_tree: TreeId::ROOT,
+                target_node: NodeId(7),
+                data: None,
+            }),
+            accesskit_winit::WindowEvent::AccessibilityDeactivated,
+            accesskit_winit::WindowEvent::InitialTreeRequested,
+        ] {
+            let event = accesskit_event(old, window_event);
+            assert!(!forward_accesskit_event(current, &mut input, event));
+            assert!(input.egui_input().events.is_empty());
+            assert!(emits_accesskit_tree(&mut input));
+        }
+    }
+
     #[test]
     fn close_decisions_run_without_a_surface_or_redraw() {
         let context = egui::Context::default();

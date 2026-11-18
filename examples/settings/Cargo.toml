@@ -1,0 +1,29 @@
+[package]
+name = "prism-settings-example"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.96"
+publish = false
+
+[workspace]
+
+[dependencies]
+egui-prism = { git = "https://github.com/shermerL/egui-prism", rev = "5f2c2280d5a4e221b6dd9c9a49d6fafe573c8bfb" }
+egui-prism-wgpu = { git = "https://github.com/shermerL/egui-prism", rev = "5f2c2280d5a4e221b6dd9c9a49d6fafe573c8bfb" }
+egui = { version = "=0.37.0", features = ["default_fonts"] }
+egui-wgpu = { version = "=0.37.0", default-features = false }
+egui-winit = { version = "=0.37.0", default-features = false, features = ["clipboard", "links", "wayland", "x11"] }
+wgpu = { version = "=30.0.0", default-features = false, features = ["std", "wgsl", "metal", "dx12", "vulkan"] }
+winit = { version = "=0.30.13", default-features = false, features = ["rwh_06", "wayland", "x11"] }
+pollster = "=0.4.0"
+shadcn-egui = { git = "https://github.com/oetiker/shadcn-egui", rev = "2e9b53058657fa26f70e27a8d0fa8f63ab1761fc" }
+
+[patch.crates-io]
+egui = { git = "https://github.com/shermerL/egui-prism", rev = "5f2c2280d5a4e221b6dd9c9a49d6fafe573c8bfb" }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[profile.dev]
+debug = 0
+incremental = false

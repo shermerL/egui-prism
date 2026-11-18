@@ -553,3 +553,65 @@ fn returned_ids_allow_complete_same_batch_retirement() {
     })
     .drop_without_applying_deltas();
 }
+
+#[test]
+fn narrow_item_wraps_media_copy_and_action_group_on_separate_lines() {
+    context()
+        .run_ui(input(1280., vec![]), |ui| {
+            let theme = Theme::light();
+            ui.set_width(80.);
+            let out = Item::new(&theme, "narrow-reference")
+                .title("Default item")
+                .description("Caller-owned content and independent actions.")
+                .icon((egui::TextureId::User(1), egui::vec2(16., 16.)))
+                .action(ItemAction::new(
+                    "open",
+                    Button::new(&theme, "Open").role(ButtonRole::Outline),
+                ))
+                .action(ItemAction::icon(
+                    "add",
+                    IconButton::new(
+                        &theme,
+                        (egui::TextureId::User(1), egui::vec2(16., 16.)),
+                        "Add item",
+                    ),
+                ))
+                .register(ui);
+            let group = out.drawing.as_ref().unwrap();
+            let title = texts(group)[0];
+            assert_eq!(title.pos.x, out.response.rect.left() + 17.);
+            assert_eq!(title.pos.y, out.response.rect.top() + 65.);
+            assert_eq!(title.galley.rows.len(), 2);
+            assert_eq!(out.response.rect.height(), 218.5);
+            assert_eq!(
+                out.actions[0].response.rect.top(),
+                out.response.rect.top() + 165.5
+            );
+            assert!(out.actions[0].response.rect.top() > title.visual_bounding_rect().bottom());
+            assert_eq!(
+                out.actions[0].response.rect.left(),
+                out.response.rect.left() + 17.
+            );
+        })
+        .drop_without_applying_deltas();
+}
+
+#[test]
+fn long_gallery_description_retains_the_reference_first_row_at_640_points() {
+    context().run_ui(input(1280., vec![]), |ui| {
+        let theme = Theme::light();
+        ui.set_width(640.);
+        let out = Item::new(&theme, "long-reference")
+            .title("Default item")
+            .description("A deliberately long description demonstrates the supported text layout, keeps the complete accessible name, and must not steal the independent actions' hit regions.")
+            .icon((egui::TextureId::User(1), egui::vec2(16., 16.)))
+            .action(ItemAction::new("open", Button::new(&theme, "Download original archive").role(ButtonRole::Outline)))
+            .action(ItemAction::icon("add", IconButton::new(&theme, (egui::TextureId::User(1), egui::vec2(16., 16.)), "Add item")))
+            .register(ui);
+        let group = out.drawing.as_ref().unwrap();
+        let description = texts(group)[1];
+        assert_eq!(description.galley.rows[0].text().trim(), "A deliberately long description demonstrates");
+        assert_eq!(description.galley.rows.len(), 2);
+        assert!(description.galley.elided);
+    }).drop_without_applying_deltas();
+}

@@ -2,8 +2,8 @@
 //!
 //! Title, description, decorative icon and Button/IconButton slots are supported.
 //! This is not an interactive row, selection model or arbitrary widget container.
-//! Description balancing uses egui line breaks; exact CSS text-balancing and
-//! browser min-content parity are not established. See `docs/items.md`.
+//! Text fitting reuses the internal normal-whitespace break rules. Exact browser
+//! balancing and broader font coverage remain separate evidence; see `docs/items.md`.
 
 use crate::{
     button::{Button, ButtonOutput, IconButton},
@@ -183,11 +183,9 @@ impl<'theme, 'image> Item<'theme, 'image> {
         ]
         .into_iter()
         .filter_map(|(value, title)| value.map(|value| (value, title)))
-        .flat_map(|(value, title)| value.split_inclusive(' ').map(move |word| (word, title)))
-        .map(|(word, title)| {
-            text(ui, word, f32::INFINITY, title, false, self.theme)
-                .size()
-                .x
+        .map(|(value, title)| {
+            let natural = text(ui, value, f32::INFINITY, title, false, self.theme);
+            crate::normal_text::min_content(ui, &natural)
         })
         .fold(0.0_f32, f32::max);
         let media_width = if self.icon.is_some() { 32.0 } else { 0.0 };
@@ -199,20 +197,26 @@ impl<'theme, 'image> Item<'theme, 'image> {
             .iter()
             .map(|size| size.y)
             .fold(0.0_f32, f32::max);
-        let prefix = media_width
-            + if self.icon.is_some() && has_copy {
-                gap
-            } else {
-                0.0
-            };
+        let wrap_copy = self.icon.is_some() && has_copy && media_width + gap + minimum > available;
+        let prefix = if wrap_copy {
+            0.0
+        } else {
+            media_width
+                + if self.icon.is_some() && has_copy {
+                    gap
+                } else {
+                    0.0
+                }
+        };
         let copy_minimum = if has_copy { minimum } else { 0.0 };
         let action_gap = if !self.actions.is_empty() && (has_copy || self.icon.is_some()) {
             gap
         } else {
             0.0
         };
-        // Keep an action group intact, wrapping it before squeezing copy below its
-        // space-delimited minimum. This is an explicit bounded composition, not CSS flex.
+        // Collect the finite media/copy/action slots in source order. Each slot
+        // moves to the next flex line before its minimum width would be squeezed;
+        // the copy fills the free space on its own line.
         let wrap_actions = !self.actions.is_empty()
             && (has_copy || self.icon.is_some())
             && prefix + copy_minimum + action_gap + action_width > available;
@@ -237,18 +241,18 @@ impl<'theme, 'image> Item<'theme, 'image> {
             } else {
                 0.0
             };
-        let first_height = copy_height
-            .max(
-                media_width
-                    + if self.icon.is_some() && self.description.is_some() {
-                        2.0
-                    } else {
-                        0.0
-                    },
-            )
+        let copy_row_height = copy_height
+            .max(if wrap_copy { 0.0 } else { media_width })
             .max(if wrap_actions { 0.0 } else { action_height });
+        let copy_top = if wrap_copy { media_width + gap } else { 0.0 };
+        let first_height = if wrap_copy {
+            media_width
+        } else {
+            copy_row_height
+        };
         let height = 2.0 * inset.y
-            + first_height
+            + copy_top
+            + copy_row_height
             + if wrap_actions {
                 gap + action_height
             } else {
@@ -334,7 +338,7 @@ impl<'theme, 'image> Item<'theme, 'image> {
                 push(&mut items, shape, clip);
             }
         }
-        let mut y = inner.y + (first_height - copy_height) * 0.5;
+        let mut y = inner.y + copy_top + (copy_row_height - copy_height) * 0.5;
         for (key, original, galley) in [
             ("title", self.title, title),
             ("description", self.description, description),
@@ -370,10 +374,11 @@ impl<'theme, 'image> Item<'theme, 'image> {
             inner.x + prefix + content_width + action_gap
         };
         let action_y = inner.y
+            + copy_top
             + if wrap_actions {
-                first_height + gap
+                copy_row_height + gap
             } else {
-                (first_height - action_height) * 0.5
+                (copy_row_height - action_height) * 0.5
             };
         let mut actions = Vec::new();
         let mut ids = std::collections::HashSet::new();
@@ -513,40 +518,71 @@ fn text(
             },
         }],
         wrap: egui::text::TextWrapping {
-            max_width: width,
+            max_width: f32::INFINITY,
             ..Default::default()
         },
         break_on_newline: false,
+        round_output_to_gui: false,
         ..Default::default()
     };
     if value.is_empty() {
         job.wrap.max_rows = 0;
         return ui.painter().layout_job(job);
     }
-    let full = ui.painter().layout_job(job.clone());
+    let natural = ui.painter().layout_job(job);
+    let (mut full, mut fitted_width) = crate::normal_text::wrap(ui, natural.clone(), width);
     if !balance {
         return full;
     }
-    // Minimize width while preserving the original line count, then clamp to
-    // two rows. This does not implement browser-specific balance or line breaks.
-    let mut balanced = job;
-    if full.rows.len() > 1 && full.rows.len() <= 6 {
-        let mut low = value
-            .split_inclusive(' ')
-            .map(|word| text(ui, word, f32::INFINITY, false, false, theme).size().x)
-            .fold(0.0_f32, f32::max);
-        let mut high = width;
+    // Retain the bounded balancing policy; use the same legal word boundaries
+    // for measurement and fitting instead of emergency character splitting.
+    if (2..=6).contains(&full.rows.len()) {
+        let lines = full.rows.len();
+        let mut low = crate::normal_text::min_content(ui, &natural);
+        let mut high = fitted_width;
         while high - low > 0.25 {
             let mid = (low + high) * 0.5;
-            balanced.wrap.max_width = mid;
-            if ui.painter().layout_job(balanced.clone()).rows.len() <= full.rows.len() {
+            let (candidate, _) = crate::normal_text::wrap(ui, natural.clone(), mid);
+            if candidate.rows.len() <= lines {
                 high = mid;
+                full = candidate;
             } else {
                 low = mid;
             }
         }
-        balanced.wrap.max_width = high;
+        fitted_width = high;
     }
-    balanced.wrap.max_rows = 2;
-    ui.painter().layout_job(balanced)
+    if full.rows.len() <= 2 {
+        return full;
+    }
+    // Keep the first legal line, then let egui shape its existing one-line
+    // ellipsis for the remainder. Preserve the complete source job for callers.
+    let start = full.rows[0].text().len();
+    let mut last_job = egui::text::LayoutJob::single_section(
+        value[start..].to_owned(),
+        natural.job.sections[0].format.clone(),
+    );
+    last_job.wrap.max_width = fitted_width;
+    last_job.wrap.max_rows = 1;
+    last_job.break_on_newline = false;
+    last_job.round_output_to_gui = false;
+    let last = ui.painter().layout_job(last_job);
+    let mut galley = (*full).clone();
+    galley.rows.truncate(2);
+    let y = galley.rows[1].pos.y;
+    galley.rows[1] = last.rows[0].clone();
+    galley.rows[1].pos.y = y;
+    galley.elided = true;
+    galley.mesh_bounds = egui::Rect::NOTHING;
+    galley.num_vertices = 0;
+    galley.num_indices = 0;
+    let mut widest = 0.0_f32;
+    for row in &galley.rows {
+        galley.mesh_bounds |= row.visuals.mesh_bounds.translate(row.pos.to_vec2());
+        galley.num_vertices += row.visuals.mesh.vertices.len();
+        galley.num_indices += row.visuals.mesh.indices.len();
+        widest = widest.max(row.size.x);
+    }
+    galley.rect = Rect::from_min_size(egui::Pos2::ZERO, vec2(widest, 42.0));
+    Arc::new(galley)
 }

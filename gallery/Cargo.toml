@@ -13,7 +13,7 @@ egui-prism.workspace = true
 egui = { workspace = true, features = ["default_fonts"] }
 egui-prism-wgpu = { path = "../crates/egui-prism-wgpu" }
 egui-wgpu = { version = "=0.37.0", default-features = false, features = ["capture"] }
-egui-winit = { version = "=0.37.0", default-features = false, features = ["clipboard", "links", "wayland", "x11"] }
+egui-winit = { version = "=0.37.0", default-features = false, features = ["accesskit", "clipboard", "links", "wayland", "x11"] }
 wgpu = { version = "=30.0.0", default-features = false, features = ["std", "wgsl", "metal", "dx12", "vulkan"] }
 winit = { version = "=0.30.13", default-features = false, features = ["rwh_06", "wayland", "x11"] }
 pollster = "=0.4.0"

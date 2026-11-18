@@ -52,20 +52,31 @@ interactive `asChild` rows, linked descriptions, image media, multiple content
 slots, header/footer and list/separator wrappers are not exported. Do not infer
 support for them from the reference fixture, which imports the complete original
 source. The Rust text engine is not a CSS engine: exact CSS `text-balance`,
-line-breaking/min-content rules and raster parity are not established. The
-current minimum-width estimate uses space-delimited words, so CJK, punctuation
-and browser-specific break opportunities are not implemented as CSS equivalents.
-Only the trailing action group wraps as a unit; the leading icon and copy remain
-on the first row. The source flex container can wrap those items separately at
-extreme widths, which this finite layout does not implement.
-Description balancing minimizes egui wrap width while retaining its natural line
-count (up to six), then visibly clamps to two lines. This bounded algorithm is
+line-breaking/min-content rules and raster parity are not established. Minimum widths now use the same private Unicode/ASCII break rules as Alert and
+Card, without a new dependency. Leading media, copy and the trailing action
+group each wrap in source order when their minimum size would exceed the current
+line. The copy fills the free space on its line; an action group stays intact.
+Description balancing minimizes the legal wrap width while retaining its natural line
+count (up to six), then visibly clamps to two lines using egui’s existing ellipsis shaping. This bounded algorithm is
 not a claim of browser `text-balance` equivalence. Long unbreakable content and
 action groups retain their natural width and contribute to the host scroll
 extent instead of moving drawings away from their registered hit rectangles. Any known layout limitations
 remain implementation limitations, not “tests passed” or merely missing screenshots.
 
 ## Evidence layers
+
+The actual pinned `/?items` fixture was measured in headless Chrome157 with
+Geist, a 1280px viewport and 1× scale. The 80-point short-copy case originally
+kept text at x=65 beside the media; it now places copy at x=17/y=65 on its own
+line, with actions at y=165.5 and total height 218.5, matching that reference.
+The public regression uses the original Default item copy and Open/Add controls.
+The existing 640-point long-copy first row remains unchanged and matches the
+saved reference; it was a passing control, not a newly discovered defect.
+
+These are targeted layout observations and controlled native drawing/input
+tests. They do not claim full CSS balancing, all language/width combinations or
+real native-window/accessibility acceptance. The three finite slots are retained;
+no general flex-layout framework or public measurement API is introduced.
 
 `cargo run --locked -p egui-prism --example item` is a compiling collector-host
 example, not a rendered window. Component regressions exercise the public API;
