@@ -60,6 +60,17 @@ source, long text in a horizontal scroll area, and group opacity over a tinted
 surface. Light/dark and 100%/150% controls match the native Badges page.
 The Link variant remains a noninteractive span in both fixtures.
 
+The `/?empty` fixture renders the unchanged Empty source with caller-selected
+empty/loading/error presentations, disabled actions, long localized copy, a
+140px overflow sample and tinted opacity. Match native and browser viewport
+widths around 768px for `md:p-12`, even when content is only 320px wide. Use
+actual browser zoom for 100%/150%, not CSS zoom. `text-balance` and script-specific
+line breaks require rendered comparison; a successful build is not that evidence.
+The `/?cards` fixture renders the pinned Card header, description, content and
+footer with caller-owned text/actions, long and empty content, 320px width,
+light/dark, 100%/150% scale and tinted group opacity. Its ordinary HTML editor
+is an interaction fixture, not an appearance match for the Gallery egui editor.
+
 The `/?alerts` fixture uses the unchanged pinned Alert source for default and
 destructive notices, optional icons/titles/descriptions, 448/160/320-pixel widths,
 clipping and 60% parent opacity. Its descriptions are direct plain text children.

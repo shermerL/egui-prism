@@ -1,7 +1,7 @@
 //! Pass-local routing for the Gallery's explicit controls and scroll shells.
 use crate::{
-    Case, Gallery, buttons, checkboxes, compositing, dialogs, egui, interaction, items, selects,
-    sliders, spinners, switches, text_inputs, tooltips,
+    Case, Gallery, buttons, cards, checkboxes, compositing, dialogs, egui, empty_states,
+    interaction, items, selects, sliders, spinners, switches, text_inputs, tooltips,
 };
 use egui_prism::checkbox::{Checkbox, CheckboxRegistration};
 use egui_prism::switch::{Switch, SwitchRegistration};
@@ -16,6 +16,7 @@ pub(super) enum Control {
     Selected,
     Button(buttons::Control),
     Item(items::Control),
+    Card(cards::Control),
     Input(text_inputs::Control),
     Checkbox(checkboxes::Control),
     Slider(sliders::Control),
@@ -24,6 +25,7 @@ pub(super) enum Control {
     Select(selects::Control),
     Tooltip(tooltips::Control),
     Dialog(dialogs::Control),
+    Empty(empty_states::Control),
     Interaction(interaction::Control),
     Compositing(compositing::Control),
     Link(&'static str, &'static str),
@@ -33,7 +35,8 @@ impl Control {
     pub fn is_status(&self) -> bool {
         matches!(
             self,
-            Self::Button(buttons::Control::PreviewCount | buttons::Control::Count(_))
+            Self::Card(cards::Control::Count)
+                | Self::Button(buttons::Control::PreviewCount | buttons::Control::Count(_))
                 | Self::Item(items::Control::Count(_))
                 | Self::Input(text_inputs::Control::Count(_))
                 | Self::Checkbox(checkboxes::Control::Count(_))
@@ -42,6 +45,7 @@ impl Control {
                 | Self::Select(selects::Control::Count(_) | selects::Control::OutsideCount)
                 | Self::Tooltip(tooltips::Control::Count(_) | tooltips::Control::OutsideCount)
                 | Self::Dialog(dialogs::Control::Count(_) | dialogs::Control::OutsideCount)
+                | Self::Empty(empty_states::Control::Count)
                 | Self::Interaction(
                     interaction::Control::Count(_) | interaction::Control::Focus(_)
                 )
@@ -50,7 +54,14 @@ impl Control {
 
     pub fn changes_layout(&self, response: &egui::Response) -> bool {
         match self {
-            Self::Item(
+            Self::Empty(
+                empty_states::Control::State(_)
+                | empty_states::Control::Long
+                | empty_states::Control::Disabled,
+            ) => response.changed(),
+            Self::Empty(empty_states::Control::Action) => response.clicked(),
+            Self::Card(cards::Control::Disabled | cards::Control::Long | cards::Control::Text)
+            | Self::Item(
                 items::Control::Disabled
                 | items::Control::Hidden
                 | items::Control::Reversed
@@ -588,6 +599,7 @@ impl Gallery {
             Control::Selected => ui.selectable_label(true, "Selected foreground").into(),
             Control::Button(control) => self.buttons.control(ui, &theme, *control),
             Control::Item(control) => self.items.control(ui, *control),
+            Control::Card(control) => self.cards.control(ui, &theme, *control),
             Control::Input(control) => self.inputs.control(ui, &theme, *control),
             Control::Checkbox(control) => self.checkboxes.control(ui, *control),
             Control::Slider(control) => self.sliders.stock(ui, *control).into(),
@@ -596,6 +608,7 @@ impl Gallery {
             Control::Select(control) => self.selects.control(ui, *control),
             Control::Tooltip(control) => self.tooltips.control(ui, *control),
             Control::Dialog(control) => self.dialogs.control(ui, *control),
+            Control::Empty(control) => self.empty.control(ui, &theme, *control),
             Control::Interaction(control) => {
                 self.interaction
                     .control(ui, *control, self.case == Case::Layout)

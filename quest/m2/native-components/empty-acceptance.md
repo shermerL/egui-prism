@@ -10,7 +10,7 @@ Use the [fixed parity contract](/docs/shadcn-parity.md). The implementation and 
 
 The [shared acceptance protocol](/docs/component-acceptance.md) defines source identity, environment, oracle, evidence rows, integration invalidation and exit gates. Every result must name the tested head and distinguish tests, rendered browser/native observations, and AT. Use the unmodified pinned reference and matched font/theme/scale. Do not replace a required observation with a successful CI job.
 
-Automatable work uses the actual pinned `?empty` fixture and public Empty output. First confirm the candidate's documented route; do not collect a different page as an oracle. Export original text rows, visible bounds and available width from both engines at matched fonts and scales, and compare with a reproducible headless-browser runner. Include paragraphs on both sides of the selected browser's balancing line-count limit, not only short two-line copy, plus the existing repeated-word/NBSP cases and punctuation/CJK. Record the engine-specific limit and raw results rather than assuming every browser implements the current native binary search. Missing matched fonts or failed browser startup is BLOCKED, not native-only PASS. Commit only supported passing assertions after the corresponding fix, retaining a before-fix failure; do not normalize away line-count or break-position mismatches.
+Automatable work uses the actual pinned `?empty` fixture and public Empty output. First confirm the candidate's documented route; do not collect a different page as an oracle. Export original text rows, visible bounds and available width from both engines at matched fonts and scales, and compare with a reproducible headless-browser runner. Include paragraphs on both sides of the selected browser's balancing line-count limit, not only short two-line copy, plus the existing repeated-word/NBSP cases and punctuation/CJK. Record the engine-specific limit and raw results rather than assuming every browser implements the native balancing objective. Missing matched fonts or failed browser startup is BLOCKED, not native-only PASS. Commit only supported passing assertions after the corresponding fix, retaining a before-fix failure; do not normalize away line-count or break-position mismatches.
 
 Use controlled public-API input sequences for caller-state removal/reinsertion, disabled actions, page return and focus loss, checking one/zero intent counts and retired IDs without network or wall-clock sleeps. Preserve the separate actual-window and AT observations below. Map existing tests before adding cases, put runnable checks in CI and retain source/version-bound safe mismatch artifacts. This does not authorize a new production balancing algorithm or redefine CSS parity.
 
@@ -19,6 +19,39 @@ Use controlled public-API input sequences for caller-state removal/reinsertion, 
 3. In an actual window repeat empty-to-loading-to-failed-to-empty 20 times. Click/keyboard changes state only through the caller; disappearing buttons leave input/AT trees, and old focus/IDs cannot activate hidden actions. Add no network/timer/business state. Disabled actions produce zero commands. Repeat after page return and focus loss/reentry.
 4. Native AT keeps empty copy passive, with no fabricated alert/busy/live semantics or focus stealing. Check caller-provided loading/error presentations separately; Empty does not own announcements. Verify documented explicit-Group opacity and direct-paint boundaries separately, without claiming arbitrary GPU callback capture.
 5. CSS balancing/Unicode defects, stale actions and incorrect breakpoints block landing. Unverified different-model independence remains a review gap unless explicitly excepted for that exact task.
+
+### Executor handoff
+
+Run the targeted `cargo test --locked -p egui-prism --test empty`, then launch
+Gallery in the pinned development shell and select **Empty states**. The `empty` example
+uses a recording compositor; it does not establish window/input acceptance.
+Build and serve `reference/` following its README and open `/?empty`. Record
+actual viewport width after changing browser zoom, DPR, native application scale
+and both source SHAs. Do not resize only the 320px container when testing the
+767/768/769 viewport breakpoint.
+
+Capture ordinary/long-copy, 140px, 320px and wide containers in each theme and
+at actual 100%/150% zoom. Preserve original screenshots, computed padding,
+header/content bounds, and raw line text/width for the same content on both
+sides. The existing demo does not contain the whole balancing/Unicode corpus
+above; add the missing samples around the unchanged pinned source before
+claiming coverage. Matching line counts alone do not prove matching word
+boundaries or glyph coverage, especially with CJK fallback fonts.
+
+For each of 20 caller-controlled state cycles, record the active state, action
+counter and focused control before/after activation: Empty/Create to loading,
+then caller-selected error/Retry to loading, then caller-selected Empty. Include
+keyboard activation, disabled actions, page return and focus loss/reentry. Try
+the old control position after it disappears; no hidden action may increment
+the counter. Keep the same state trace for native/browser observation, and
+record AT tree disappearance and passive copy separately. Neither screenshot
+nor simulated button response proves real focus or AT delivery.
+
+Attach exact tested-head evidence (and CI merge SHA when applicable), raw
+measurements and the state trace. Missing font, window or AT access stays
+NOT RUN/BLOCKED with the responsible validation executor. Known balancing,
+breakpoint or stale-action defects remain blockers until fixed or explicitly
+scoped by the maintainer; a follow-up task does not turn them into PASS.
 
 Before completion, include the automatable supported-case assertions in CI, provide native/reference captures and measured comparisons, record AT/input observations, link the applicable exact-head CI and independent review, and map every original requirement to PASS or a specifically retained blocking owner. FAIL, NOT RUN and BLOCKED rows prevent this Quest being called complete. No silent scope reduction or after-merge deferral of known parity defects. Only an explicit maintainer scope decision can permit staged landing; record the deferred requirements and owners without marking them PASS or deleting incomplete Quests.
 

@@ -41,6 +41,7 @@ def main():
         run(sys.executable, "scripts/check_settings_example.py")
         run("cargo", "run", "--locked", "-p", "egui-prism", "--example", "ordered_input")
         run("cargo", "run", "--locked", "-p", "egui-prism", "--example", "select")
+        run("cargo", "run", "--locked", "-p", "egui-prism", "--example", "empty")
         run("cargo", "run", "--locked", "-p", "egui-prism", "--example", "tooltip")
         run("cargo", "run", "--locked", "-p", "egui-prism", "--example", "item")
         run("cargo", "run", "--locked", "-p", "egui-prism", "--example", "spinner")
