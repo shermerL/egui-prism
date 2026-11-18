@@ -210,6 +210,8 @@ fn push_shape(items: &mut Vec<Item>, shape: Shape, clip: Rect) {
     }
 }
 
+mod text;
+
 fn layout_text(ui: &Ui, text: &str, width: f32, title: bool, color: Color32) -> Arc<egui::Galley> {
     let text = text
         .split([' ', '\t', '\n', '\r', '\u{000c}'])
@@ -221,7 +223,7 @@ fn layout_text(ui: &Ui, text: &str, width: f32, title: bool, color: Color32) -> 
     } else {
         TextStyle::Body
     };
-    let mut job = egui::text::LayoutJob {
+    let job = egui::text::LayoutJob {
         sections: vec![egui::text::LayoutSection {
             leading_space: 0.0,
             byte_range: egui::text::ByteIndex(0)..egui::text::ByteIndex(text.len()),
@@ -245,42 +247,7 @@ fn layout_text(ui: &Ui, text: &str, width: f32, title: bool, color: Color32) -> 
         halign: Align::Center,
         ..Default::default()
     };
-    let natural = ui.painter().layout_job(job.clone());
-    // Keep words and NBSP runs intact, including when the parent is narrower.
-    // egui considers overflow before accepting the current space as a break.
-    // Include each run's closing space so it cannot spill onto an empty row;
-    // centered layout excludes that trailing whitespace from visible bounds.
-    let min_content = natural
-        .rows
-        .iter()
-        .flat_map(|row| {
-            row.glyphs
-                .split_inclusive(|glyph| glyph.chr == ' ')
-                .filter_map(|run| Some(run.last()?.max_x() - run.first()?.pos.x))
-        })
-        .fold(0.0, f32::max);
-    job.wrap.max_width = width.max(min_content);
-    let mut galley = ui.painter().layout_job(job.clone());
-    let lines = galley.rows.len();
-    // Chromium balances blocks of up to six lines in the pinned reference.
-    if (2..=6).contains(&lines) {
-        // Find the narrowest wrap width retaining the initial line count. This
-        // balances short copy without quadratic partitioning or truncating long copy.
-        let mut low = min_content;
-        let mut high = job.wrap.max_width;
-        while high - low > 0.25 {
-            let mid = (low + high) * 0.5;
-            job.wrap.max_width = mid;
-            let candidate = ui.painter().layout_job(job.clone());
-            if candidate.rows.len() <= lines {
-                high = mid;
-                galley = candidate;
-            } else {
-                low = mid;
-            }
-        }
-    }
-    galley
+    text::wrap(ui, ui.painter().layout_job(job), width)
 }
 
 /// Caller content using ordinary egui layout and explicit child drawing groups.

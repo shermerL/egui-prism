@@ -200,10 +200,7 @@ fn long_copy_balances_without_elision_and_preserves_words_nbsp_and_all_content()
             assert!(text.galley.rows.len() > 1);
             assert_eq!(text.galley.text(), copy);
             assert!(!text.galley.elided);
-            assert!(
-                text.galley.job.wrap.max_width < 264.,
-                "short copy is balanced, not ordinary full-width wrapping"
-            );
+            assert!(text.galley.rows.iter().all(|row| row.size.x <= 264.));
             for row in &text.galley.rows {
                 assert!(row.rect().center().x.abs() <= 0.5);
             }
@@ -516,7 +513,6 @@ fn repeated_words_in_min_content_columns_never_create_whitespace_only_rows() {
 
 #[test]
 fn long_gallery_description_keeps_the_reference_rows_at_216_points() {
-    let copy = "Vos projets enregistrés apparaîtront ici. Créez votre premier projet ou importez un projet existant pour commencer à travailler ensemble.";
     let expected = [
         "Vos projets",
         "enregistrés",
@@ -529,24 +525,78 @@ fn long_gallery_description_keeps_the_reference_rows_at_216_points() {
         "travailler",
         "ensemble.",
     ];
+    assert_eq!(description_rows_at(216.), expected);
+}
+
+fn description_rows_at(width: f32) -> Vec<String> {
+    let copy = "Vos projets enregistrés apparaîtront ici. Créez votre premier projet ou importez un projet existant pour commencer à travailler ensemble.";
+    let mut rows = Vec::new();
     context()
         .run_ui(input(1280.), |ui| {
             let theme = Theme::light();
             theme.apply(ui.style_mut());
-            ui.set_max_width(216.);
+            ui.set_max_width(width);
             let out = Empty::new(&theme, "projects")
                 .description(copy)
                 .show(ui, |_| {});
             let group = out.drawing.unwrap();
             let text = texts(&group)[0];
             assert_eq!(text.galley.text(), copy);
-            let rows: Vec<_> = text
+            let glyph_text: String = text
+                .galley
+                .rows
+                .iter()
+                .flat_map(|row| row.glyphs.iter().map(|glyph| glyph.chr))
+                .collect();
+            assert_eq!(glyph_text, copy);
+            let natural = ui.painter().layout_job((*text.galley.job).clone());
+            assert_eq!(text.galley.intrinsic_size(), natural.intrinsic_size());
+            for (index, row) in text.galley.rows.iter().enumerate() {
+                near(row.pos.y, (index as f32 * 22.75).round());
+                // egui snaps each row origin to the physical pixel grid.
+                assert!(row.rect().center().x.abs() <= 0.5);
+                assert!(!row.ends_with_newline);
+                assert!(row.glyphs.iter().all(|glyph|
+                glyph.first_vertex as usize <= row.visuals.mesh.vertices.len()));
+            }
+            rows = text
                 .galley
                 .rows
                 .iter()
                 .map(|row| row.text().trim_end_matches(' ').to_owned())
                 .collect();
-            assert_eq!(rows, expected);
         })
         .drop_without_applying_deltas();
+    rows
+}
+
+#[test]
+fn description_hangs_trailing_spaces_at_244_points() {
+    assert_eq!(
+        description_rows_at(244.),
+        [
+            "Vos projets enregistrés",
+            "apparaîtront ici. Créez",
+            "votre premier projet ou",
+            "importez un projet",
+            "existant pour",
+            "commencer à travailler",
+            "ensemble.",
+        ]
+    );
+}
+
+#[test]
+fn description_balances_the_reference_rows_at_275_points() {
+    assert_eq!(
+        description_rows_at(275.),
+        [
+            "Vos projets enregistrés",
+            "apparaîtront ici. Créez",
+            "votre premier projet",
+            "ou importez un projet",
+            "existant pour commencer",
+            "à travailler ensemble.",
+        ]
+    );
 }

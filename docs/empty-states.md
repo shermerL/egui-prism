@@ -63,24 +63,33 @@ Reference: unmodified `new-york-v4/ui/empty.tsx` at shadcn
   An uncustomized white tint inherits page foreground.
 - Copy collapses CSS ASCII whitespace, retains the full accessible text, never
   elides, and preserves space-delimited unbreakable runs including NBSP. A
-  bounded width search balances two through six lines while preserving the initial
-  line count. Longer paragraphs keep their ordinary wrap width. Header text can
+  paragraph search balances two through six lines by minimizing squared unused
+  width while preserving the initial line count. Fitting excludes hanging trailing
+  spaces and uses fractional glyph widths. Longer paragraphs keep greedy word breaks. Header text can
   overflow a narrow column. The parent clips the drawing. Glyph bounds preserve accents.
 
 The long French description on the pinned `/?empty` page serves as a regression
-sample. At a 1280px viewport, 100% zoom and 216px outer width, headless Chrome
-157 renders ten lines using Geist. The native test checks the words on each
-line using the bundled Geist font. Previously the fifth native line ended at
-“projet”. It now ends at “ou”, as in the reference.
+sample. At a 1280px viewport, 100% zoom and bundled Geist, the native drawing
+tests now reproduce the saved headless Chrome 157 rows at these outer widths:
+
+| Outer width | Reference and native rows | Regression |
+| --- | --- | --- |
+| 216 | 10 | Long paragraphs retain greedy wrapping; line five ends at “ou”. |
+| 244 | 7 | Hanging trailing spaces no longer force an eighth line. |
+| 275 | 6 | Balanced lines three and four read “votre premier projet” and “ou importez un projet”. |
 
 To reproduce, open `/?empty`, enable **Long localized copy**, and set the width
-of the section containing the Empty examples to 216 CSS pixels. Leave the
-viewport at 1280px. Measure the original description text with DOM Ranges.
+of the section containing the Empty examples to 216, 244 or 275 CSS pixels.
+Leave the viewport at 1280px. Measure the original description text with DOM
+Ranges. These assertions compare saved browser rows with native drawing data;
+they are not a new native-window visual or input acceptance result.
 
-At 244px outer width the reference takes seven lines and native takes
-eight. At 275px both take six lines but break at different words. These samples
-remain open in the [Empty acceptance Quest](/quest/m2/native-components/empty-acceptance.md),
-along with punctuation, CJK font coverage and line breaking.
+The balancing objective follows the squared-unused-width approach described in
+[Chromium's paragraph line breaker](https://chromium.googlesource.com/chromium/src/+/8666e8454af6fedd422d24e6f94a48d1474d7b12/third_party/blink/renderer/core/layout/inline/score_line_breaker.h).
+Empty's internal implementation supports the existing space-delimited plain-text
+contract, not Chromium's full shaping, break opportunities or penalties.
+Punctuation, CJK font coverage, other widths/scales and matched native observation
+remain in the [Empty acceptance Quest](/quest/m2/native-components/empty-acceptance.md).
 
 ## Drawing, input and semantics
 

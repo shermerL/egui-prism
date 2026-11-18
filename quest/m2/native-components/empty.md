@@ -14,11 +14,13 @@ application state manager, dependency upgrade or host/vendor change is included.
 Compare mature native and browser candidates at matching theme, font, viewport
 and scale, including viewport widths around 768, narrow containers, long localized
 copy, icon geometry, text line breaks, overflow and caller action hit targets.
-The deterministic native balancing search and space-delimited min-content model
-are not verified CSS text-balance or full Unicode line-breaking parity. Compare the long Gallery description at 244pt (eight native rows, seven
-in Chrome 157) and 275pt (same count, different words). Preserve the 216pt ten-row
-regression. Reconcile hyphen, punctuation and matched-font CJK opportunities.
-Do not treat those differences as an accepted substitute for the pinned source.
+The native squared-unused-width balancing and space-delimited min-content model
+are not verified full CSS text-balance or Unicode line-breaking parity. Preserve
+the saved Chrome 157 regressions at 216pt (ten rows), 244pt (seven rows) and 275pt
+(six rows with matching words). The latter two originally failed because trailing
+spaces affected fitting and minimum-width greedy balancing chose different breaks.
+Reconcile hyphen, punctuation and matched-font CJK opportunities. Do not treat
+remaining differences as an accepted substitute for the pinned source.
 
 Keep controlled test, real native input/GUI, assistive-technology and untested
 platform evidence distinct in /docs/empty-states.md. Review the final changed
