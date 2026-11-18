@@ -13,7 +13,7 @@
 //! });
 //! ```
 
-mod text;
+use crate::normal_text;
 
 use egui::{
     Color32, FontId, IdSalt, Image, Rect, Response, Sense, Shape, Stroke, TextFormat, TextStyle,
@@ -128,7 +128,7 @@ impl<'theme, 'a> Alert<'theme, 'a> {
         });
         let (description, column_width) = match natural_description {
             Some(natural) => {
-                let (galley, width) = text::description(ui, natural, text_width);
+                let (galley, width) = normal_text::wrap(ui, natural, text_width);
                 (Some(galley), width)
             }
             None => (None, text_width),

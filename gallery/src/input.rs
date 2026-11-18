@@ -1,7 +1,7 @@
 //! Pass-local routing for the Gallery's explicit controls and scroll shells.
 use crate::{
-    Case, Gallery, buttons, checkboxes, compositing, dialogs, egui, empty_states, interaction,
-    selects, sliders, spinners, switches, text_inputs, tooltips,
+    Case, Gallery, buttons, cards, checkboxes, compositing, dialogs, egui, empty_states,
+    interaction, selects, sliders, spinners, switches, text_inputs, tooltips,
 };
 use egui_prism::checkbox::{Checkbox, CheckboxRegistration};
 use egui_prism::switch::{Switch, SwitchRegistration};
@@ -15,6 +15,7 @@ pub(super) enum Control {
     Zoom(f32),
     Selected,
     Button(buttons::Control),
+    Card(cards::Control),
     Input(text_inputs::Control),
     Checkbox(checkboxes::Control),
     Slider(sliders::Control),
@@ -33,7 +34,8 @@ impl Control {
     pub fn is_status(&self) -> bool {
         matches!(
             self,
-            Self::Button(buttons::Control::PreviewCount | buttons::Control::Count(_))
+            Self::Card(cards::Control::Count)
+                | Self::Button(buttons::Control::PreviewCount | buttons::Control::Count(_))
                 | Self::Input(text_inputs::Control::Count(_))
                 | Self::Checkbox(checkboxes::Control::Count(_))
                 | Self::Slider(sliders::Control::Value(_) | sliders::Control::Focus(_))
@@ -56,7 +58,8 @@ impl Control {
                 | empty_states::Control::Disabled,
             ) => response.changed(),
             Self::Empty(empty_states::Control::Action) => response.clicked(),
-            Self::Button(
+            Self::Card(cards::Control::Disabled | cards::Control::Long | cards::Control::Text)
+            | Self::Button(
                 buttons::Control::Disabled | buttons::Control::Invalid | buttons::Control::Reversed,
             )
             | Self::Input(
@@ -566,6 +569,7 @@ impl Gallery {
             }
             Control::Selected => ui.selectable_label(true, "Selected foreground").into(),
             Control::Button(control) => self.buttons.control(ui, &theme, *control),
+            Control::Card(control) => self.cards.control(ui, &theme, *control),
             Control::Input(control) => self.inputs.control(ui, &theme, *control),
             Control::Checkbox(control) => self.checkboxes.control(ui, *control),
             Control::Slider(control) => self.sliders.stock(ui, *control).into(),

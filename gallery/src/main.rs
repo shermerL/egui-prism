@@ -5,6 +5,7 @@ mod native;
 mod alerts;
 mod badges;
 mod buttons;
+mod cards;
 mod checkboxes;
 mod compositing;
 mod dialogs;
@@ -29,6 +30,8 @@ enum Case {
     Buttons,
     Badges,
     Empty,
+    Cards,
+
     Alerts,
     Separators,
     Spinners,
@@ -50,6 +53,8 @@ impl Case {
             Self::Buttons => "Buttons",
             Self::Badges => "Badges",
             Self::Empty => "Empty states",
+            Self::Cards => "Cards",
+
             Self::Alerts => "Alerts",
             Self::Separators => "Separators",
             Self::Spinners => "Spinners",
@@ -76,6 +81,8 @@ struct Gallery {
     interaction: InteractionCase,
     alerts: alerts::AlertCase,
     buttons: buttons::ButtonCase,
+    cards: cards::CardCase,
+
     spinners: spinners::SpinnerCase,
     inputs: text_inputs::InputCase,
     checkboxes: checkboxes::CheckboxCase,
@@ -109,6 +116,8 @@ impl Gallery {
             interaction: InteractionCase::default(),
             alerts: alerts::AlertCase::new(context),
             buttons: buttons::ButtonCase::new(context),
+            cards: cards::CardCase::default(),
+
             spinners: spinners::SpinnerCase::default(),
             inputs: text_inputs::InputCase::default(),
             checkboxes: checkboxes::CheckboxCase::default(),
@@ -204,6 +213,11 @@ impl Gallery {
                             Control::Empty(control) => self.empty.activated(control),
                             _ => {}
                         }
+                    }
+                    if response.clicked()
+                        && let Control::Card(control) = control
+                    {
+                        self.cards.activated(control);
                     }
                     response
                 } else if let Some(registration) = &entry.checkbox {
@@ -395,6 +409,8 @@ impl Gallery {
                             Case::Buttons,
                             Case::Badges,
                             Case::Empty,
+                            Case::Cards,
+
                             Case::Alerts,
                             Case::Separators,
                             Case::Spinners,
@@ -468,6 +484,8 @@ impl Gallery {
                 Case::Buttons => self.buttons.show(ui, &theme, frame),
                 Case::Badges => badges::show(ui, &theme, frame),
                 Case::Empty => self.empty.show(ui, &theme, frame),
+                Case::Cards => self.cards.show(ui, &theme, frame),
+
                 Case::Alerts => self.alerts.show(ui, &theme, frame),
                 Case::Separators => separators::show(ui, &theme, frame),
                 Case::Spinners => self.spinners.show(ui, &theme, frame),

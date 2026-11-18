@@ -427,12 +427,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-## Alert line-break helpers
+## Normal-whitespace line-break helpers
 
 The core uses `unicode-linebreak`0.1.5 (Apache-2.0). Its complete license is
 retained in [licenses/LICENSE.unicode-linebreak](licenses/LICENSE.unicode-linebreak).
 
-Printable ASCII compatibility rules in `crates/egui-prism/src/alert/text.rs`
+Printable ASCII compatibility rules in `crates/egui-prism/src/normal_text.rs`
 are adapted from Chromium's BSD-licensed `LineBreakData::FillAscii`, at source commit
 `765d6c2dd59fd38635636aa8f4b19cf299268460`.
 Copyright 2016 The Chromium Authors. The complete BSD-style license and
