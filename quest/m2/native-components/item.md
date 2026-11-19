@@ -10,8 +10,48 @@ Reference item.tsx and accepted Button/IconButton/Tooltip contracts. The caller 
 
 Cover long text and accessible full names, optional leading content, trailing buttons, disabled actions and constrained width. Distinguish a passive Item from an explicitly interactive Item and from selection controls. Reserve action space using real content measurements. Use the fixed reference presentation; any needed interactive extension requires a concrete reference and declared public scope.
 
-PR41 already includes ten Item tests, Button compatibility regressions and a specialist checklist. Map and extend these in this existing Quest, not a duplicate acceptance task. Required automatable additions compare the actual pinned `?items` fixture with public Item output: min-content and legal break positions for Latin/NBSP, hyphen/URL, matched-font CJK/punctuation and combining/ZWJ copy; description balancing before and after the selected browser's line-count limit; visible two-line clamp/ellipsis versus full accessible text; and narrow widths where icon, copy and action slots must follow the source's flex wrapping. Export row text/counts, slot rectangles and clipping with source/font/engine identities. Reuse the bounded browser/native measurement approach from Alert where practical, not a general UI framework. Missing matched fonts or browser execution is BLOCKED, not native-only PASS.
+PR41 includes twelve Item tests, Button compatibility regressions and a specialist checklist. Map and extend these in this existing Quest, not a duplicate acceptance task. Required automatable additions compare the actual pinned `?items` fixture with public Item output: min-content and legal break positions for Latin/NBSP, hyphen/URL, matched-font CJK/punctuation and combining/ZWJ copy; description balancing before and after the selected browser's line-count limit; visible two-line clamp/ellipsis versus full accessible text; and narrow widths where icon, copy and action slots must follow the source's flex wrapping. Export row text/counts, slot rectangles and clipping with source/font/engine identities. Reuse the bounded browser/native measurement approach from Alert where practical, not a general UI framework. Missing matched fonts or browser execution is BLOCKED, not native-only PASS.
 
-Retain public-API controlled tests for final registered versus painted action rectangles, action order/count, stable/reordered/removed/reinserted IDs and disabled/clipped actions. Preserve both ordered blur/refocus cancellation and ordinary-batch compatibility when integrating main; use deterministic events and logical time. Existing controlled transition/idle repaint checks stay separate from actual visual/AT observations. Add only missing assertions and integrate runnable cases into CI with safe mismatch artifacts. For each real defect retain a before-fix failing case and repair the component before claiming parity; the documented space-only minimum-width, balancing and extreme-width slot limitations are implementation work, not unperformed tests. No new production text dependency or broader slot API is approved by this test plan.
+Retain public-API controlled tests for final registered versus painted action rectangles, action order/count, stable/reordered/removed/reinserted IDs and disabled/clipped actions. Preserve both ordered blur/refocus cancellation and ordinary-batch compatibility when integrating main; use deterministic events and logical time. Existing controlled transition/idle repaint checks stay separate from actual visual/AT observations. Add only missing assertions and integrate runnable cases into CI with safe mismatch artifacts. For each real defect retain a before-fix failing case and repair the component before claiming parity; remaining demonstrated text/layout defects are implementation work, not unperformed tests; retain the fixed minimum-width and independently wrapped slot regressions. No new production text dependency or broader slot API is approved by this test plan.
 
-Complete the implementation, compiling caller example, component documentation, native Gallery case and meaningful regressions in the same PR. Use /docs/shadcn-parity.md and the fixed shadcn source at 8a3536678a528cc012b9e62484290e79d0be410f. Include supported states, stable identities, caller ownership, clipping and accessible semantics; do not claim unsupported variants. Compare a mature candidate at matching theme and scale, then revisit only affected behavior after fixes. Keep source, controlled tests, real native input/GUI and untested platforms distinct. Reuse unchanged review evidence; final changed code still needs applicable independent/GitHub review and CI. Core stays egui-only; the host owns event order, fonts, frame/GPU lifetime and application policy. A materially new public boundary requires a concrete prototype and maintainer decision. No generic widget framework, application state manager or publication is included.
+Complete the implementation, compiling caller example, component documentation, native Gallery case and meaningful regressions in the same PR. Use /docs/shadcn-parity.md and the fixed shadcn source at 8a3536678a528cc012b9e62484290e79d0be410f. Include supported states, stable identities, caller ownership, clipping and accessible semantics; do not claim unsupported variants. Real desktop/browser/AT specialist checks are deferred under the maintainer's scope decision; their absence is not a hidden implementation-stage gate. Known implementation limitations remain separately stated. Keep source, controlled tests, real native input/GUI and untested platforms distinct. Reuse unchanged review evidence; final changed code still needs applicable independent/GitHub review and CI. Core stays egui-only; the host owns event order, fonts, frame/GPU lifetime and application policy. A materially new public boundary requires a concrete prototype and maintainer decision. No generic widget framework, application state manager or publication is included.
+
+### Design checkpoint
+
+The [public-path and internal-preparation probes](/docs/item-design.md) record actual
+nested-action sizes and registration effects. The source's flex-wrap/min-content
+and balanced two-line description remain implementation work, not just missing
+visual tests. Under the maintainer's scope decision, real desktop/browser/AT
+specialist validation can follow separately; basic geometry and action correctness
+remain this implementation's responsibility.
+
+A private measurement prototype and the existing Button regressions pass: reuse
+that internal path rather than adding a public Button preparation API. No
+maintainer decision is required merely because the original public interface
+lacked measurement. The finite Item candidate now integrates that path. Basic tests cover final hit
+rectangles, stable IDs, independent pointer/keyboard actions, removal and blur,
+disabled controls, full accessible names, theme/scale and parent composition.
+The related Button cancellation helper now observes the current ordered
+WindowFocused(false) event; a standalone regression preserves valid intents
+before and after blur/refocus in the same event batch.
+
+The 80pt media/copy/action wrapping defect has a before-fix failure and a
+regression matching the actual pinned Item fixture. Minimum widths reuse the
+private normal-whitespace line breaker; action measurement and registration stay
+at their final rectangles. Keep broader CSS balancing/font equivalence explicitly
+unverified rather than calling these finite samples full parity. The 100ms shell fill/border transition
+is implemented with controlled-time retargeting and idle/clipped repaint tests. The [supported finite slots and exact
+limits](/docs/items.md) remain explicit. Do not mark complete fixed-reference
+parity merely because the implementation or CI builds.
+
+### Deferred specialist verification
+
+At an exact candidate head, compare Gallery Items against pinned `/?items` in
+light/dark themes at 100%/150% scale and wide/narrow widths. Record OS/backend,
+browser and AT versions, screenshots of title/description wrapping, media offset,
+action group placement, transparent borders and muted colors; exercise keyboard
+traversal, hide/reinsert, disabled actions and per-action counts. Confirm full
+caller text through real AT without container activation or lost button names.
+Attach observations and failures separately per platform. These unperformed
+specialist checks do not block the explicitly scoped basic implementation stage,
+but do not resolve the documented text implementation limitations.

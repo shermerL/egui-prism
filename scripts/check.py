@@ -43,6 +43,7 @@ def main():
         run("cargo", "run", "--locked", "-p", "egui-prism", "--example", "select")
         run("cargo", "run", "--locked", "-p", "egui-prism", "--example", "empty")
         run("cargo", "run", "--locked", "-p", "egui-prism", "--example", "tooltip")
+        run("cargo", "run", "--locked", "-p", "egui-prism", "--example", "item")
         run("cargo", "run", "--locked", "-p", "egui-prism", "--example", "spinner")
         run("cargo", "check", "-p", "egui-prism", "--locked", "--no-default-features")
         run("cargo", "test", "--locked", "-p", "egui-prism", "--test", "theme")

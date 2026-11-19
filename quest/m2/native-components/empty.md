@@ -32,7 +32,7 @@ requires a concrete prototype and maintainer decision.
 ## Waiting
 
 - Native validation: run the Gallery and pinned reference on an accessible desktop with matching width/theme/font/scale and record real input and visual observations. The current headless execution environment has no native display; headless tests cannot establish these observations.
-- Maintainer: authorize any desired GitHub automated-review task separately. The user has only authorized draft PR publication and prohibited merging; no Codex or automated-review task is started here.
+- Validation coordinator: keep remaining specialist evidence separate from implementation-stage landing. Record the review evidence used for each candidate in its PR; merging the implementation does not complete these acceptance checks.
 
 ## Related
 

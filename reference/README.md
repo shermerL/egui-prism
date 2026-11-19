@@ -82,6 +82,10 @@ triggers, viewport collisions and long bounded text. It uses the unmodified
 pinned Tooltip source and Radix Tooltip 1.2.8; the shadcn provider defaults to
 zero delay and the content defaults to zero side offset.
 
+Open `/?items` for the unmodified pinned passive Item with three variants, both
+sizes, leading icon and independent Button/IconButton actions. Long copy, narrow
+width, hide/reinsert and reorder controls are available. Use actual browser zoom
+for 100%/150%; a successful build does not establish Rust/reference parity.
 The `/?alert-wrapping` measurement fixture shares its seven-case corpus with
 the controlled Rust `alert_wrapping` test. It measures original text-node Ranges
 after Geist loads without changing pinned Alert source. Use actual browser zoom

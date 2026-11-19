@@ -90,4 +90,5 @@ group opacity with the official wgpu renderer. The core uses egui and an interna
 renderer initialization, texture lifetimes and explicit shutdown. The Gallery
 includes a dedicated final-framebuffer conformance fixture.
 
+See [items](docs/items.md) for passive content with caller-owned independent actions.
 See [spinners](docs/spinners.md) for caller-controlled passive busy status and motion.

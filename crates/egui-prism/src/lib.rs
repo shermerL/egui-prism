@@ -40,4 +40,5 @@ pub mod separator;
 pub mod slider;
 pub mod tooltip;
 
+pub mod item;
 pub mod spinner;

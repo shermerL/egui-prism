@@ -12,6 +12,7 @@ mod dialogs;
 mod empty_states;
 mod input;
 mod interaction;
+mod items;
 mod selects;
 mod separators;
 mod sliders;
@@ -29,6 +30,7 @@ enum Case {
     Theme,
     Buttons,
     Badges,
+    Items,
     Empty,
     Cards,
 
@@ -52,6 +54,7 @@ impl Case {
             Self::Theme => "Theme",
             Self::Buttons => "Buttons",
             Self::Badges => "Badges",
+            Self::Items => "Items",
             Self::Empty => "Empty states",
             Self::Cards => "Cards",
 
@@ -81,6 +84,7 @@ struct Gallery {
     interaction: InteractionCase,
     alerts: alerts::AlertCase,
     buttons: buttons::ButtonCase,
+    items: items::ItemCase,
     cards: cards::CardCase,
 
     spinners: spinners::SpinnerCase,
@@ -116,6 +120,7 @@ impl Gallery {
             interaction: InteractionCase::default(),
             alerts: alerts::AlertCase::new(context),
             buttons: buttons::ButtonCase::new(context),
+            items: items::ItemCase::new(context),
             cards: cards::CardCase::default(),
 
             spinners: spinners::SpinnerCase::default(),
@@ -210,6 +215,7 @@ impl Gallery {
                     if response.clicked() {
                         match control {
                             Control::Button(control) => self.buttons.activated(control),
+                            Control::Item(control) => self.items.activated(control),
                             Control::Empty(control) => self.empty.activated(control),
                             _ => {}
                         }
@@ -408,6 +414,7 @@ impl Gallery {
                             Case::Compositing,
                             Case::Buttons,
                             Case::Badges,
+                            Case::Items,
                             Case::Empty,
                             Case::Cards,
 
@@ -483,6 +490,7 @@ impl Gallery {
                 }
                 Case::Buttons => self.buttons.show(ui, &theme, frame),
                 Case::Badges => badges::show(ui, &theme, frame),
+                Case::Items => self.items.show(ui, &theme, frame),
                 Case::Empty => self.empty.show(ui, &theme, frame),
                 Case::Cards => self.cards.show(ui, &theme, frame),
 

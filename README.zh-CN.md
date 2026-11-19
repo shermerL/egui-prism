@@ -40,6 +40,7 @@ nix develop --command cargo run --locked -p egui-prism-gallery
 - [空状态](docs/empty-states.md)：标题、说明、图标和由调用方管理的操作。
 - [徽章](docs/badges.md)：紧凑静态文本与固定参考的六种外观。
 - [卡片](docs/cards.md)：调用方拥有内容的标题、描述、主体与页脚组合。
+- [条目](docs/items.md)：被动文本与图标，以及由调用方管理的独立按钮操作。
 - [按钮](docs/buttons.md)：用途、尺寸、图标和由调用方管理的操作。
 - [文本输入](docs/text-input.md)：编辑、校验、稳定 ID 和输入法验证证据。
 - [复选框](docs/checkboxes.md)：编辑由调用方持有的布尔值。

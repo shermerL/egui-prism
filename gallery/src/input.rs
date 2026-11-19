@@ -1,7 +1,7 @@
 //! Pass-local routing for the Gallery's explicit controls and scroll shells.
 use crate::{
     Case, Gallery, buttons, cards, checkboxes, compositing, dialogs, egui, empty_states,
-    interaction, selects, sliders, spinners, switches, text_inputs, tooltips,
+    interaction, items, selects, sliders, spinners, switches, text_inputs, tooltips,
 };
 use egui_prism::checkbox::{Checkbox, CheckboxRegistration};
 use egui_prism::switch::{Switch, SwitchRegistration};
@@ -15,6 +15,7 @@ pub(super) enum Control {
     Zoom(f32),
     Selected,
     Button(buttons::Control),
+    Item(items::Control),
     Card(cards::Control),
     Input(text_inputs::Control),
     Checkbox(checkboxes::Control),
@@ -36,6 +37,7 @@ impl Control {
             self,
             Self::Card(cards::Control::Count)
                 | Self::Button(buttons::Control::PreviewCount | buttons::Control::Count(_))
+                | Self::Item(items::Control::Count(_))
                 | Self::Input(text_inputs::Control::Count(_))
                 | Self::Checkbox(checkboxes::Control::Count(_))
                 | Self::Slider(sliders::Control::Value(_) | sliders::Control::Focus(_))
@@ -59,6 +61,14 @@ impl Control {
             ) => response.changed(),
             Self::Empty(empty_states::Control::Action) => response.clicked(),
             Self::Card(cards::Control::Disabled | cards::Control::Long | cards::Control::Text)
+            | Self::Item(
+                items::Control::Disabled
+                | items::Control::Hidden
+                | items::Control::Reversed
+                | items::Control::Long
+                | items::Control::Small
+                | items::Control::Icon,
+            )
             | Self::Button(
                 buttons::Control::Disabled | buttons::Control::Invalid | buttons::Control::Reversed,
             )
@@ -346,6 +356,25 @@ impl Layout {
         response
     }
 
+    /// Bind a Button already registered by the finite Item composition.
+    pub fn item_action(
+        &mut self,
+        control: items::Control,
+        button: egui_prism::button::ButtonOutput,
+    ) {
+        let id = button.response.id;
+        self.ids.insert(id);
+        self.entries.push(Entry {
+            control: Control::Item(control),
+            response: button.response.clone(),
+            button: Some(button),
+            switch: None,
+            checkbox: None,
+            local: None,
+            ids: HashSet::from([id]),
+        });
+    }
+
     pub fn switch_widget<'a>(
         &mut self,
         ui: &mut egui::Ui,
@@ -569,6 +598,7 @@ impl Gallery {
             }
             Control::Selected => ui.selectable_label(true, "Selected foreground").into(),
             Control::Button(control) => self.buttons.control(ui, &theme, *control),
+            Control::Item(control) => self.items.control(ui, *control),
             Control::Card(control) => self.cards.control(ui, &theme, *control),
             Control::Input(control) => self.inputs.control(ui, &theme, *control),
             Control::Checkbox(control) => self.checkboxes.control(ui, *control),

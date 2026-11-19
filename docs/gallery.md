@@ -2,7 +2,7 @@
 
 The native macOS, Windows and Linux hosts use the same Rust gallery and library. The gallery
 demonstrates the theme API, Prism buttons, text inputs, checkboxes, switches, sliders,
-selects, dialogs, empty states, static badges, cards, alerts, separators and spinners, alongside standard egui harness controls. Other Prism widgets are planned.
+selects, dialogs, empty states, items, static badges, cards, alerts, separators and spinners, alongside standard egui harness controls. Other Prism widgets are planned.
 A harness check is not a component acceptance result.
 
 ## Run and identify a build
@@ -29,6 +29,7 @@ Theme and case changes preserve caller text, checkboxes, selected values, and ac
 
 | Case | What to inspect |
 |---|---|
+| Items | Passive shell, independent actions/counters, disabled state, reorder/removal, long/narrow copy, theme/scale |
 | Spinners | Caller visibility/reduced motion, inline and disabled-button-adjacent status, theme/scale and parent opacity |
 | Theme | Light/dark foreground/background pairs and selected foreground |
 | Empty states | Caller-selected empty/loading/error, long localized copy, disabled action, viewport padding, narrow overflow and opacity |
