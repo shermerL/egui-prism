@@ -1189,3 +1189,72 @@ fn accesskit_close_click_reports_one_intent_then_stops_when_closed() {
         },
     );
 }
+
+#[test]
+fn open_dialog_exposes_its_header_and_removes_it_when_closed() {
+    let (ctx, _, _installation) = setup();
+    ctx.enable_accesskit();
+    let theme = Theme::light();
+    let mut previous_title = None;
+    for (open, description) in [
+        (true, Some("Applies immediately.")),
+        (true, None),
+        (false, None),
+    ] {
+        let output = ctx.run_ui(RawInput::default(), |_| {
+            ctx.begin_input();
+            let mut dialog = Dialog::new(&theme, Id::unique("header-tree"), "Settings");
+            if let Some(text) = description {
+                dialog = dialog.description(text);
+            }
+            let mut live = dialog.register(&ctx, open, |_| ());
+            while let Some(event) = ctx.next_input_event() {
+                live.handle(&event);
+            }
+            live.paint(|_| ()).unwrap();
+        });
+        let nodes = &output
+            .platform_output
+            .accesskit_update
+            .as_ref()
+            .unwrap()
+            .nodes;
+        let dialogs: Vec<_> = nodes
+            .iter()
+            .filter(|(_, n)| n.role() == egui::Role::Dialog)
+            .collect();
+        if open {
+            assert_eq!(dialogs.len(), 1);
+            let (_, panel) = dialogs[0];
+            assert!(panel.is_modal());
+            let [title] = panel.labelled_by() else {
+                panic!("missing title relation")
+            };
+            assert!(panel.children().contains(title));
+            let heading = &nodes.iter().find(|(id, _)| id == title).unwrap().1;
+            assert_eq!(heading.role(), egui::Role::Heading);
+            assert_eq!(heading.label(), Some("Settings"));
+            if let Some(previous) = previous_title {
+                assert_eq!(previous, *title);
+            }
+            previous_title = Some(*title);
+            assert_eq!(panel.description(), description);
+            if let Some(text) = description {
+                let [id] = panel.described_by() else {
+                    panic!("missing description relation")
+                };
+                assert!(panel.children().contains(id));
+                assert_eq!(
+                    nodes.iter().find(|(key, _)| key == id).unwrap().1.value(),
+                    Some(text)
+                );
+            } else {
+                assert!(panel.described_by().is_empty());
+            }
+        } else {
+            assert!(dialogs.is_empty());
+            assert!(!nodes.iter().any(|(id, _)| Some(*id) == previous_title));
+        }
+        output.drop_without_applying_deltas();
+    }
+}

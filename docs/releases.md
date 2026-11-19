@@ -17,9 +17,8 @@ All eight controls now have merged component implementations and documented
 evidence. Shared parity documentation and the standalone font test contract
 have landed. Integrated native Gallery acceptance, the native accessibility
 bridge, the complete platform evidence matrix and a clean external consumer
-remain open preparation work. Dialog's known title/description semantics defect
-is tracked in [Issue 29](https://github.com/shermerL/egui-prism/issues/29);
-using that component carries its repair and applicable verification obligation.
+remain open preparation work. Dialog exposes its header in the component accessibility tree. The corresponding
+native-client check remains tracked in [Issue 29](https://github.com/shermerL/egui-prism/issues/29).
 Adding the rest of the shadcn catalog is not a first-release prerequisite. Native
 desktop remains the target; browser delivery and Pages have separate deferred
 Quests. The pinned shadcn browser fixture remains a comparison source.

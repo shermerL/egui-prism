@@ -158,11 +158,10 @@ The OS window close action also exited the process successfully.
 
 This establishes native adapter/tree/action delivery for those cases, not
 VoiceOver speech or navigation. VoiceOver and system focus restoration remain
-unverified; Windows UIA and Linux AT-SPI were not observed. Dialog title and
-description are currently absent from the system tree, tracked separately in
-[issue #29](https://github.com/shermerL/egui-prism/issues/29); the header is painted
-without component semantic nodes. The host does not synthesize missing component
-semantics.
+unverified; Windows UIA and Linux AT-SPI were not observed. That build omitted the Dialog title and description from the system tree.
+Dialog now publishes the heading and optional description in its AccessKit
+tree. Rechecking them in the macOS Gallery with a system AX client remains
+part of [issue #29](https://github.com/shermerL/egui-prism/issues/29).
 
 ## Automated coverage
 

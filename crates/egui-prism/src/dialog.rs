@@ -243,6 +243,49 @@ struct Header {
     centered: bool,
 }
 
+impl Header {
+    fn position(&self, outer: Rect, galley: &Galley, y: f32) -> egui::Pos2 {
+        let x = if self.centered {
+            outer.center().x - galley.rect.center().x
+        } else {
+            outer.left() + INSET - galley.rect.left()
+        };
+        pos2(x, outer.top() + INSET + y - galley.rect.top())
+    }
+
+    fn publish(&self, ui: &Ui, outer: Rect) {
+        let id = ui.unique_id();
+        if !ui.ctx().has_accesskit_node(id) {
+            return;
+        }
+        let title = id.with("title");
+        let description = id.with("description");
+        let register = |id, galley: &Galley, y, role| {
+            let origin = self.position(outer, galley, y);
+            let response = ui.interact(galley.rect.translate(origin.to_vec2()), id, Sense::hover());
+            response.widget_info(|| egui::WidgetInfo::labeled(role, true, galley.text()));
+        };
+        register(title, &self.title, 0.0, egui::Role::Heading);
+        if let Some(text) = &self.description {
+            register(
+                description,
+                text,
+                self.title.size().y + 8.0,
+                egui::Role::Label,
+            );
+        }
+        ui.ctx().accesskit_node_builder(id, |node| {
+            node.set_role(egui::Role::Dialog);
+            node.set_modal();
+            node.set_labelled_by([title.accesskit_id()]);
+            if let Some(text) = &self.description {
+                node.set_description(text.text());
+                node.set_described_by([description.accesskit_id()]);
+            }
+        });
+    }
+}
+
 #[derive(Clone, Copy)]
 struct Geometry {
     outer: Rect,
@@ -628,7 +671,7 @@ impl<R> DialogRegistration<'_, R> {
                     .frame(egui::Frame::NONE)
                     .backdrop_color(Color32::TRANSPARENT)
                     .register(&context, |ui| {
-                        let built = self.build(outer, open, header, &mut content);
+                        let built = self.build(outer, open, header, false, &mut content);
                         ui.set_min_size(outer.size());
                         built
                     });
@@ -694,6 +737,7 @@ impl<R> DialogRegistration<'_, R> {
         outer: Rect,
         interactive: bool,
         header: &Header,
+        publish_header: bool,
         content: impl FnOnce(&mut DialogUi<'_>) -> T,
     ) -> Built<T> {
         let screen = self.local_screen();
@@ -711,6 +755,11 @@ impl<R> DialogRegistration<'_, R> {
         // viewport coordinates. The layer transform is applied exactly once.
         chrome.interact(screen, self.backdrop_id(), Sense::CLICK | Sense::DRAG);
         chrome.interact(outer, self.panel_id(), Sense::CLICK | Sense::DRAG);
+
+        if publish_header {
+            chrome.set_min_size(outer.size());
+            header.publish(&chrome, outer);
+        }
 
         let interior = bounded_inset(outer, INSET);
         let body_top = (outer.top() + INSET + header.height + BODY_GAP)
@@ -777,6 +826,7 @@ impl<R> DialogRegistration<'_, R> {
             self.context.clone(),
             self.owner.with("scroll-ui"),
             UiBuilder::new()
+                .accessibility_parent(self.owner.with("chrome-ui"))
                 .layer_id(self.layer())
                 .max_rect(body)
                 .layout(Layout::top_down(Align::Min)),
@@ -1133,7 +1183,13 @@ impl<R> DialogRegistration<'_, R> {
         self.context.set_transform_layer(self.layer(), transform);
         let painter = self.context.layer_painter(self.layer());
         let shell_slot = painter.add(Shape::Noop);
-        let built = self.build(geometry.outer, self.state.open, header, content);
+        let built = self.build(
+            geometry.outer,
+            self.state.open,
+            header,
+            self.state.open,
+            content,
+        );
 
         if (built.geometry.natural - geometry.natural).length() > 0.01
             || (built.geometry.outer.height() - geometry.outer.height()).abs() > 0.01
@@ -1186,29 +1242,10 @@ impl<R> DialogRegistration<'_, R> {
             ),
         ));
 
-        let header_origin = geometry.outer.min + vec2(INSET, INSET);
-        let text_width = geometry.outer.width() - 2.0 * INSET;
-        let text_position = |galley: &Galley, y: f32| {
-            pos2(
-                if header.centered {
-                    header_origin.x + text_width * 0.5
-                } else {
-                    header_origin.x
-                },
-                y,
-            ) - vec2(
-                if header.centered {
-                    galley.rect.center().x
-                } else {
-                    galley.rect.min.x
-                },
-                galley.rect.min.y,
-            )
-        };
         items.push(shape_item(
             clip,
             Shape::galley(
-                text_position(&header.title, header_origin.y),
+                header.position(geometry.outer, &header.title, 0.0),
                 header.title.clone(),
                 colors.background.foreground,
             ),
@@ -1217,7 +1254,7 @@ impl<R> DialogRegistration<'_, R> {
             items.push(shape_item(
                 clip,
                 Shape::galley(
-                    text_position(description, header_origin.y + header.title.size().y + 8.0),
+                    header.position(geometry.outer, description, header.title.size().y + 8.0),
                     description.clone(),
                     colors.muted.foreground,
                 ),

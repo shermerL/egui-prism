@@ -81,6 +81,12 @@ setting does not resize a modal's viewport.
 
 ## Evidence and limits
 
+While open, Dialog exposes a modal AccessKit node named by its heading. An
+optional description is readable and associated with that node. Body controls
+and Close retain their own action identities. A component test covers the
+relations, optional text and removal on close. The macOS system-client check
+for [issue #29](https://github.com/shermerL/egui-prism/issues/29) remains open.
+
 On 2026-11-10, the native Gallery was exercised on macOS with the Metal backend
 against the pinned Chrome reference fixture. Observed main flows included
 independent A/B instances, Apply without closing, Done, Escape, X, primary
