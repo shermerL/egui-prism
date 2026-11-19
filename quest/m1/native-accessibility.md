@@ -20,6 +20,25 @@ Remaining acceptance, owned by the Gallery maintainer and a validation executor 
 
 Record PASS, FAIL, NOT RUN or BLOCKED for each evidence row and an owner for every outstanding row. Refresh only evidence affected by subsequent host/component changes. No platform permission changes, substitute semantic tree or custom action dispatcher are part of this work. M1 Gallery aggregates the final platform matrix.
 
+### Deferred Dialog header verification
+
+[Issue #29](https://github.com/shermerL/egui-prism/issues/29) tracks the missing
+Dialog header in the macOS accessibility tree. The candidate from
+[PR #46](https://github.com/shermerL/egui-prism/pull/46) is preserved at
+[`19e0a29`](https://github.com/shermerL/egui-prism/commit/19e0a298bc0ae8bcd35f0f881236af79440de1c2).
+All 23 Dialog tests passed on that implementation, including the heading and
+description relations, stable title identity and removal after close. The
+Gallery started on macOS 26.6.2 with Apple M3 and Metal. The system AX client
+lacked accessibility permission. Native header verification is pending.
+
+When the maintainer resumes this work, build the retained candidate and use
+a trusted macOS accessibility client to open Dialog A. Verify its accessible
+name, the description “Actions belong to the application.” and the Close,
+Apply and Done buttons. Close the dialog and verify that the heading leaves
+the system tree. Record the client, OS, revision and observed result in
+`docs/gallery.md`. If the observation matches, integrate the verified change
+and close #29. Otherwise record the observed difference on the issue.
+
 ## Waiting
 
 - Maintainer: complete one VoiceOver interaction on the recorded current candidate build: navigate to Interaction, announce and activate A once, confirm disabled actions cannot activate, then open and close Dialog A and check focus restoration. Automated GUI control was unavailable; the direct AX client verified delivery but cannot establish VoiceOver announcements/navigation. Record the result in docs/gallery.md. Windows/Linux observations remain separate platform gaps.
